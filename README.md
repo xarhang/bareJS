@@ -10,7 +10,7 @@ BareJS is an ultra-high-performance web engine built on the Bun runtime, designe
 
 ## 📊 Performance Benchmarks
 
-Performance comparison between **BareJS**, **Elysia**, and **Hono** running on GitHub Actions (Ubuntu-latest) hardware.
+Performance comparison between **BareJS**, **Elysia**, and **Hono**.
 
 ### 🚀 Latest Benchmark Results
 *Awaiting automated update...*
@@ -21,7 +21,7 @@ Performance comparison between **BareJS**, **Elysia**, and **Hono** running on G
 | Elysia | -- ns/iter | --x slower |
 | Hono | -- ns/iter | --x slower |
 > [!IMPORTANT]
-> The table above is automatically updated via `scripts/update-readme.ts`. It only overwrites content between the `BENCHMARK_START` and `BENCHMARK_END` tags.
+> The table above is automatically updated via `scripts/update-readme.ts`.
 
 ---
 

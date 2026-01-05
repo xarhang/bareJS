@@ -1,20 +1,18 @@
 import { readFileSync, writeFileSync } from 'fs';
 
 try {
-    // 1. Load results
     const results = JSON.parse(readFileSync('result.json', 'utf8'));
     const bareJS = results.find((r: any) => r.name.includes('BareJS'))?.value;
     const elysia = results.find((r: any) => r.name === 'Elysia')?.value;
     const hono = results.find((r: any) => r.name === 'Hono')?.value;
 
     if (typeof bareJS !== 'number' || typeof elysia !== 'number' || typeof hono !== 'number') {
-        throw new Error('Benchmark values are missing or invalid in result.json');
+        throw new Error('Could not find benchmark numbers in result.json');
     }
 
-    // 2. Prepare the Table
-    const table = `
+    const tableContent = `
 ### 🚀 Latest Benchmark Results
-*Last updated: ${new Date().toUTCString()} (GitHub Actions)*
+*Last updated: ${new Date().toUTCString()}*
 
 | Framework | Latency (Avg) | Speed Ratio |
 | :--- | :--- | :--- |
@@ -26,34 +24,29 @@ try {
 > 📈 **Performance Dashboard:** View historical charts [here](https://xarhang.github.io/bareJS/dev/benchmarks/)
 `;
 
-    // 3. Read and Update README
     const readmePath = 'README.md';
-    const readmeContent = readFileSync(readmePath, 'utf8');
+    let content = readFileSync(readmePath, 'utf8');
 
     const startTag = '';
     const endTag = '';
 
-    // Regex Explanation:
-    // ([\s\S]*?) -> Capture everything before the tag
-    // ${startTag}[\s\S]*?${endTag} -> Match the tags and whatever is currently inside them
-    // ([\s\S]*) -> Capture everything after the tags
-    const regex = new RegExp(`([\\s\\S]*?)${startTag}[\\s\\S]*?${endTag}([\\s\\S]*)`);
-
-    if (!regex.test(readmeContent)) {
-        throw new Error('Could not find the benchmark tags in your README.md. Ensure they exist exactly as written.');
+    // Check if both tags exist
+    if (!content.includes(startTag) || !content.includes(endTag)) {
+        console.error("❌ ERROR: Could not find markers in README.md");
+        console.log("Please ensure your README has these EXACT tags:");
+        console.log(startTag);
+        console.log(endTag);
+        process.exit(1);
     }
 
-    // Replace the entire file content with: [Before] + [Tags + New Table] + [After]
-    const updatedContent = readmeContent.replace(regex, `$1${startTag}\n${table}\n${endTag}$2`);
+    // Surgical replacement using Regex
+    const regex = new RegExp(`${startTag}[\\s\\S]*?${endTag}`, 'g');
+    const newContent = content.replace(regex, `${startTag}${tableContent}${endTag}`);
 
-    writeFileSync(readmePath, updatedContent);
-    console.log('✅ README.md updated surgically. All other content preserved.');
+    writeFileSync(readmePath, newContent);
+    console.log('✅ README.md surgically updated!');
 
-} catch (error) {
-    if (error instanceof Error) {
-        console.error('❌ Update failed:', error.message);
-    } else {
-        console.error('❌ Unexpected error occurred');
-    }
+} catch (err: any) {
+    console.error('❌ Failed to update README:', err.message);
     process.exit(1);
 }

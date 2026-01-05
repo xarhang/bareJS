@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2 
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
@@ -23,21 +23,28 @@ jobs:
 
       - name: Run and Process Benchmark
         run: |
-          bun benchmarks/index.ts --json > raw_result.json
+          # 1. รัน benchmark และใช้ grep เพื่อกรองเอาเฉพาะบรรทัดที่เป็น JSON จริงๆ
+          # วิธีนี้จะตัดพวก log "Benchmarking..." ออกไป ป้องกัน jq parse error
+          bun benchmarks/index.ts --json | grep '^{"benchmarks":' > raw_result.json
           
+          # 2. แปลงผลจาก mitata ให้เป็นรูปแบบ Custom Benchmark ที่ Action รองรับ
+          # ดึงชื่อ (name) และค่าเฉลี่ย (stats.avg) มาสร้างเป็น JSON array
           cat raw_result.json | jq '[.benchmarks[] | {name: .name, unit: "ns/iter", value: .stats.avg}]' > result.json
           
+          # 3. แสดงผลเพื่อตรวจสอบความถูกต้องในหน้า Console
+          echo "Processed JSON for GitHub Action:"
           cat result.json
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
+          # ใช้ customSmallerIsBetter เพราะค่าที่เราส่งไปคือ Latency (นาโนวินาที) ยิ่งน้อยยิ่งดี
           tool: 'customSmallerIsBetter'
           output-file-path: result.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           comment-always: true
-          name: "BareJS Performance Comparison"
+          name: "BareJS vs Giants (Latency)"
           gh-pages-branch: gh-pages
           alert-threshold: '200%'
           fail-on-alert: false

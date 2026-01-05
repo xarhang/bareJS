@@ -5,15 +5,14 @@
 
 BareJS isn't just another framework; it's a high-speed engine engineered to outpace the fastest tools in the Bun ecosystem by utilizing **Static Code Injection** and **Zero-Allocation** routing.
 
-## 📊 Performance Benchmark
-BareJS is designed for maximum throughput. In our latest head-to-head test against ElysiaJS:
+## Performance 📊
+Benchmark run on 12th Gen Intel(R) Core(TM) i7-12700 (Bun 1.3.0)
 
-| Framework | Requests/sec | Avg Latency |
-|-----------|--------------|-------------|
-| **BareJS** | **7,416** | **1,335ms** |
-| ElysiaJS  | 4,760        | 2,001ms     |
-
-> **Result:** BareJS is **55.79% FASTER** than the competition.
+| Framework | Avg Latency | Comparison |
+|-----------|-------------|------------|
+| **BareJS**| **613.76 ns** | **🚀 Baseline** |
+| Elysia    | 1.39 µs     | 2.2x Slower |
+| Hono      | 2.56 µs     | 4.1x Slower |
 
 ---
 

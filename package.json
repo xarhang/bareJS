@@ -6,7 +6,9 @@
   "types": "src/bare.ts",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "bench": "bun run benchmarks/index.ts",
+    "dev": "bun --watch src/bare.ts"
   },
   "keywords": [
     "bun",
@@ -18,5 +20,10 @@
   "license": "MIT",
   "devDependencies": {
     "@types/bun": "latest"
+  },
+  "dependencies": {
+    "elysia": "^1.4.21",
+    "hono": "^4.11.3",
+    "mitata": "^1.0.34"
   }
 }

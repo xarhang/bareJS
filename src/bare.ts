@@ -12,13 +12,50 @@ export class BareJS {
   private globalMiddlewares: Middleware[] = [];
   private compiledFetch?: (req: Request) => Promise<Response>;
 
+  public post = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "POST", path, handlers: h }); return this; };
+  public put = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "PUT", path, handlers: h }); return this; };
+  public patch = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "PATCH", path, handlers: h }); return this; };
+  public delete = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "DELETE", path, handlers: h }); return this; };
   public get = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "GET", path, handlers: h }); return this; };
-  public use = (m: Middleware) => { this.globalMiddlewares.push(m); return this; };
+  public use = (...m: Middleware[]) => { this.globalMiddlewares.push(...m); return this; }
+  public fetch = (req: Request): Promise<Response> | Response => {
+    if (!this.compiledFetch) this.compile();
+    return this.compiledFetch!(req);
+  }
+  // private compile() {
+  //   let fnBody = "const gMW = this.globalMiddlewares; const allRoutes = this.routes; const EMPTY_PARAMS = Object.freeze({}); return async (req) => { const url = req.url; const pathStart = url.indexOf('/', 8); const path = pathStart === -1 ? '/' : url.substring(pathStart); const method = req.method;";
+  //   // (Logic การ Compile เหมือนที่คุยกันไว้)
+  //   fnBody += "return new Response('404', { status: 404 }); };";
+  //   this.compiledFetch = new Function(fnBody).bind(this)();
+  // }
 
   private compile() {
-    let fnBody = "const gMW = this.globalMiddlewares; const allRoutes = this.routes; const EMPTY_PARAMS = Object.freeze({}); return async (req) => { const url = req.url; const pathStart = url.indexOf('/', 8); const path = pathStart === -1 ? '/' : url.substring(pathStart); const method = req.method;";
-    // (Logic การ Compile เหมือนที่คุยกันไว้)
-    fnBody += "return new Response('404', { status: 404 }); };";
+    let fnBody = `
+      const gMW = this.globalMiddlewares;
+      const EMPTY_PARAMS = Object.freeze({});
+      return async (req) => {
+        const url = req.url;
+        const pathStart = url.indexOf('/', 8);
+        const path = pathStart === -1 ? '/' : url.substring(pathStart);
+        const method = req.method;
+    `;
+
+    
+    for (let i = 0; i < this.routes.length; i++) {
+      const route = this.routes[i];
+
+      if (route) {
+        fnBody += `
+          if (method === '${route.method}' && path === '${route.path}') {
+            const ctx = { req, params: EMPTY_PARAMS, json: (d) => Response.json(d) };
+            // รัน Handler ตัวแรกของ Route นี้
+            return this.routes[${i}].handlers[0](ctx);
+          }
+        `;
+      }
+    }
+
+    fnBody += "return new Response('404 Not Found', { status: 404 }); };";
     this.compiledFetch = new Function(fnBody).bind(this)();
   }
 

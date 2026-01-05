@@ -1,0 +1,34 @@
+name: Performance Benchmark
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  benchmark:
+    name: Run Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run Benchmarks
+        run: |
+          # รัน server benchmark ในพื้นหลัง
+          bun benchmarks/index.ts & 
+          # รอให้ server พร้อม
+          sleep 5 
+          # ใช้ bombardier ยิงและเก็บผลเป็น JSON
+          docker run --net=host alpine/bombardier -c 50 -d 10s -l http://localhost:3000/bench > result.json
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'customBiggerIsBetter'
+          output-file-path: result.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          # แสดงผลในหน้า GitHub Pages (Optional)
+          comment-always: true

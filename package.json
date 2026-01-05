@@ -1,14 +1,14 @@
 {
   "name": "barejs",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "author": "xarhang",
   "description": "High-performance JIT-specialized web framework for Bun",
   "main": "./src/bare.ts",
   "types": "./src/bare.ts",
   "type": "module",
- "exports": {
-  ".": "./src/bare.ts",
-  "./middleware": "./src/validators.ts"
+  "exports": {
+    ".": "./src/bare.ts",
+    "./middleware": "./src/validators.ts"
   },
   "sideEffects": false,
   "repository": {

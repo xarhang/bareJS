@@ -14,17 +14,17 @@ group("Web Framework Speed Test", () => {
 
   const elysia = new Elysia().get("/", () => payload);
   const hono = new Hono().get("/", (c) => c.json(payload));
-
+const req = new Request("http://localhost/");
   bench("BareJS (Your Engine)", async () => {
-    await bare.fetch(new Request("http://localhost/"));
+    await bare.fetch(req);
   });
 
   bench("Elysia", async () => {
-    await elysia.handle(new Request("http://localhost/"));
+    await elysia.handle(req);
   });
 
   bench("Hono", async () => {
-    await hono.fetch(new Request("http://localhost/"));
+    await hono.fetch(req);
   });
 });
 

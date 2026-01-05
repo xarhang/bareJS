@@ -158,7 +158,7 @@ app.post('/native', native({ properties: { id: { type: 'number' } } }), (ctx) =>
 * [x] **JIT Static Routing**:  lookup via compiled static maps.
 * [x] **Validation Integration**: Support for TypeBox, Zod, and Native JSON.
 * [x] **Full Plugin System**: Modular extensibility with zero overhead.
-* [ ] **Dynamic Path JIT**: Compiled Regex for parameterized routes (e.g., `/user/:id`).
+* [x] **Dynamic Path JIT**: Compiled Regex for parameterized routes (e.g., `/user/:id`).
 * [ ] **Native WebSocket Support**: High-speed binary streaming.
 
 ---

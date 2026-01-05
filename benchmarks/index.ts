@@ -13,7 +13,7 @@ group("Web Framework Speed Test", () => {
   const hono = new Hono().get("/", (c) => c.json(payload));
 const req = new Request("http://localhost/");
   bench("BareJS", async () => {
-    await bare.fetch(req);
+    await bare.fetch(req, null);
   });
 
   bench("Elysia", async () => {

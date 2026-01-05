@@ -1,14 +1,5 @@
-export interface Context {
-  req: Request;
-  params: Record<string, string>;
-  json: (data: any) => Response;
-  body?: any;
-  [key: string]: any;
-}
-
-export type Next = () => Promise<any> | any;
-export type Middleware = (ctx: Context, next: Next) => any;
-export type Handler = (ctx: Context) => any;
+import { BareContext } from './context';
+import type { Context, Middleware, Handler, WSHandlers } from './context';
 
 export interface BarePlugin {
   name: string;
@@ -19,17 +10,35 @@ export interface BarePlugin {
 export class BareJS {
   private routes: { method: string; path: string; handlers: (Middleware | Handler)[] }[] = [];
   private globalMiddlewares: Middleware[] = [];
-  private compiledFetch?: (req: Request) => Promise<Response> | Response;
-  private staticMap: Record<string, any> = {};
+  private compiledFetch?: (req: Request, server: any) => Promise<Response> | Response;
 
-  // --- Routing Methods ---
+  private staticMap: Record<string, (ctx: BareContext) => Promise<Response>> = {};
+
+  private dynamicRoutes: { 
+    method: string; 
+    regex: RegExp; 
+    paramNames: string[]; 
+    chain: (ctx: BareContext) => Promise<Response> 
+  }[] = [];
+  
+  private wsHandler: { path: string; handlers: WSHandlers } | null = null;
+  private ContextClass = BareContext;
+
+  private errorHandler: (err: any, ctx: Context) => Response = (err) => 
+    new Response(JSON.stringify({ error: err.message }), { status: 500 });
+
+  // --- HTTP Methods ---
   public get = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "GET", path, handlers: h }); return this; };
   public post = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "POST", path, handlers: h }); return this; };
   public put = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "PUT", path, handlers: h }); return this; };
   public patch = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "PATCH", path, handlers: h }); return this; };
   public delete = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "DELETE", path, handlers: h }); return this; };
 
-  // --- Plugin & Middleware System ---
+  public ws = (path: string, handlers: WSHandlers) => {
+    this.wsHandler = { path, handlers };
+    return this;
+  };
+
   public use = (arg: Middleware | BarePlugin) => {
     if (typeof arg === 'object' && 'install' in arg) {
       arg.install(this);
@@ -39,90 +48,109 @@ export class BareJS {
     return this;
   };
 
-  // --- Core Engine ---
-  public fetch = (req: Request): Promise<Response> | Response => {
-    if (!this.compiledFetch) this.compile();
-    return this.compiledFetch!(req);
-  };
+  
+  private async handleDynamic(req: Request, method: string, path: string): Promise<Response> {
+    const dr = this.dynamicRoutes;
+    const len = dr.length;
+    
+    for (let i = 0; i < len; i++) {
+      const route = dr[i];
+      if (route && route.method === method) {
+        const match = path.match(route.regex);
+        if (match) {
+          const ctx = new this.ContextClass(req);
+          const pNames = route.paramNames;
+          
+         
+          for (let j = 0; j < pNames.length; j++) {
+            const name = pNames[j];
+            const value = match[j + 1];
+            
+            
+            if (name && value) {
+              ctx.params[name] = value;
+            }
+          }
+          return await route.chain(ctx);
+        }
+      }
+    }
+    return new Response('404 Not Found', { status: 404 });
+  }
 
   private compile() {
-    this.routes.forEach((route) => {
-      // Middleware Onion Runner
-      const chain = async (ctx: Context) => {
-        let idx = 0;
-        const middlewares = [...this.globalMiddlewares, ...route.handlers];
-        const next = async (): Promise<any> => {
-          const handler = middlewares[idx++];
-          if (!handler) return;
-          // Support both async and sync handlers
-          return await (handler.length > 1
-            ? (handler as Middleware)(ctx, next)
-            : (handler as Handler)(ctx));
-        };
-        return await next();
-      };
-      this.staticMap[`${route.method}:${route.path}`] = chain;
-    });
+    this.staticMap = {};
+    this.dynamicRoutes = [];
 
-    // JIT Optimized Fetch Function
-    const fnBody = `
-      const staticMap = this.staticMap;
-      const EMPTY_PARAMS = Object.freeze({});
-      const jsonHeader = { "content-type": "application/json" };
+    for (const route of this.routes) {
+      const pipeline = [...this.globalMiddlewares, ...route.handlers];
       
-      return async (req) => {
-        const url = req.url;
-        const pathStart = url.indexOf('/', 8);
-        const path = pathStart === -1 ? '/' : url.substring(pathStart);
-        const key = req.method + ":" + path;
-        
-        const runner = staticMap[key];
-        if (runner) {
-          const ctx = { 
-            req, 
-            params: EMPTY_PARAMS, 
-            json: (d) => new Response(JSON.stringify(d), { headers: jsonHeader }) 
-          };
-          return await runner(ctx);
-        }
-        return new Response('404 Not Found', { status: 404 });
-      };`;
+      // เทคนิค Compose: มัด Middleware จากหลังมาหน้า
+      // เพื่อให้ตัวแรกสุดกลายเป็นฟังก์ชันเดียวที่เรียกตัวถัดไปได้ทันที
+      let composed = async (ctx: BareContext): Promise<Response> => ctx._finalize();
 
-    this.compiledFetch = new Function(fnBody).bind(this)();
+      for (let i = pipeline.length - 1; i >= 0; i--) {
+        const current = pipeline[i];
+        const nextFn = composed;
+        composed = async (ctx: BareContext) => {
+          const res = await (current as any)(ctx, () => nextFn(ctx));
+          if (res instanceof Response) ctx.res = res;
+          return ctx.res || ctx._finalize();
+        };
+      }
+
+      if (route.path.includes(':')) {
+        const paramNames: string[] = [];
+        const regexPath = route.path.replace(/:([^\/]+)/g, (_, name) => {
+          paramNames.push(name);
+          return "([^/]+)";
+        });
+        this.dynamicRoutes.push({
+          method: route.method,
+          regex: new RegExp(`^${regexPath}$`),
+          paramNames,
+          chain: composed
+        });
+      } else {
+        this.staticMap[`${route.method}:${route.path}`] = composed;
+      }
+    }
+
+    // JIT: ใช้พารามิเตอร์แบบกระจายเพื่อลด Overhead ของ Scope
+    this.compiledFetch = new Function(
+      'staticMap', 'hd', 'Ctx',
+      `return async (req, server) => {
+        const url = req.url;
+        const start = url.indexOf('/', 8);
+        const path = start === -1 ? '/' : url.substring(start);
+        const method = req.method;
+
+        const runner = staticMap[method + ":" + path];
+        if (runner) return await runner(new Ctx(req));
+
+        return await hd(req, method, path);
+      }`
+    )(this.staticMap, this.handleDynamic.bind(this), this.ContextClass);
   }
+
+  public fetch = (req: Request, server: any = {} as any): Promise<Response> | Response => {
+    if (!this.compiledFetch) this.compile();
+    return this.compiledFetch!(req, server);
+  };
 
   public listen(ip: string = '0.0.0.0', port: number = 3000) {
     this.compile();
-
-
-
-
-    const reset = "\x1b[0m";
-    const cyan = "\x1b[36m";
-    const yellow = "\x1b[33m";
-    const gray = "\x1b[90m";
-    const bold = "\x1b[1m";
-    if (process.env.NODE_ENV !== 'production' && process.env.BARE_SILENT !== 'true') {
-      console.log(`
-${cyan}${bold}  ____                      _ ____  
- | __ )  __ _ _ __ ___     | / ___| 
- |  _ \\ / _\` | '__/ _ \\ _  | \\___ \\ 
- | |_) | (_| | | |  __/| |_| |___) |
- |____/ \\__,_|_|  \\___| \\___/|____/ 
-${reset}
- ${yellow}BareJS${reset} ${gray}${reset}
- ${gray}-----------------------------------${reset}
- 🚀 Running at: ${cyan}http://${ip}:${port}${reset}
- ${gray}Ready to build everything awesome!${reset}
-`);
-    } else {
-
-      console.log(`🚀 BareJS running at http://${ip}:${port}`);
-    }
+    console.log(`\x1b[32m⚡ BareJS Extreme (2x Optimized) running at http://${ip}:${port}\x1b[0m`);
     return Bun.serve({
       hostname: ip,
       port,
-      fetch: (req) => this.fetch(req),
+      reusePort: true, 
+      fetch: (req, server) => this.fetch(req, server),
+      websocket: {
+        open: (ws) => this.wsHandler?.handlers.open?.(ws),
+        message: (ws, msg) => this.wsHandler?.handlers.message?.(ws, msg),
+        close: (ws, code, res) => this.wsHandler?.handlers.close?.(ws, code, res),
+      }
     });
   }
 }

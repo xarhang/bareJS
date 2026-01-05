@@ -33,14 +33,21 @@ const results: any = await run();
 
 import { writeFileSync } from "fs";
 
-const rawBenches = results.benchmarks || (results.groups && results.groups[0]?.benchmarks) || [];
-
-const formatted = rawBenches.map((b: any) => ({
-  name: String(b.name),               
-  unit: "ns/iter",
-  value: Number(b.stats?.avg || 0)     
-}));
+const formatted = results.benchmarks.map((b: any) => {
+  // ดึงค่าสถิติจาก run แรก (Mitata 1.3.0 เก็บไว้ใน runs[0])
+  const stats = b.runs && b.runs[0] ? b.runs[0].stats : null;
+  
+  return {
+    // ใช้ alias เป็นชื่อหลัก
+    name: String(b.alias || "Unknown"),
+    unit: "ns/iter",
+    // ดึง avg ออกมาจาก stats
+    value: stats ? Number(stats.avg) : 0
+  };
+});
 
 writeFileSync("result.json", JSON.stringify(formatted, null, 2));
-console.log("✅ Fixed result.json content:");
+
+
+console.log("✅ Deep Probe - result.json content:");
 console.log(JSON.stringify(formatted, null, 2));

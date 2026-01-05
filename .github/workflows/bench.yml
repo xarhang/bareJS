@@ -21,34 +21,10 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run and Process Benchmark
+      - name: Run Benchmark
         run: |
-          # 1. รัน benchmark และเก็บ output ทั้งหมดไว้ในไฟล์เดียว
-          # เราใช้ความสามารถของ Bun ในการรันไฟล์ script สั้นๆ เพื่อดึง JSON ออกมาให้สะอาดที่สุด
-          bun benchmarks/index.ts --json > raw_output.txt
-          
-          # 2. ใช้ Node/Bun script สั้นๆ เพื่ออ่านไฟล์และดึงเฉพาะส่วนที่เป็น JSON
-          # วิธีนี้ชัวร์กว่า grep เพราะมันหาตำแหน่ง { และ } จริงๆ
-          bun -e "
-            const fs = require('fs');
-            const data = fs.readFileSync('raw_output.txt', 'utf8');
-            const jsonStart = data.indexOf('{\"benchmarks\":');
-            if (jsonStart === -1) {
-              console.error('Could not find JSON in output');
-              process.exit(1);
-            }
-            const rawJson = JSON.parse(data.substring(jsonStart));
-            const formatted = rawJson.benchmarks.map(b => ({
-              name: b.name,
-              unit: 'ns/iter',
-              value: b.stats.avg
-            }));
-            fs.writeFileSync('result.json', JSON.stringify(formatted, null, 2));
-          "
-          
-          # 3. แสดงผลเพื่อยืนยันว่า JSON ถูกต้อง
-          echo "✅ Processed JSON for GitHub Action:"
-          cat result.json
+          # รันเฉลี่ยๆ ปกติ โค้ดในไฟล์จะสร้าง result.json ให้เอง
+          bun benchmarks/index.ts
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
@@ -60,5 +36,3 @@ jobs:
           comment-always: true
           name: "BareJS Performance (Latency)"
           gh-pages-branch: gh-pages
-          alert-threshold: '200%'
-          fail-on-alert: false

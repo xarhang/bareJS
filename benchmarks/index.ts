@@ -28,4 +28,17 @@ const req = new Request("http://localhost/");
   });
 });
 
-await run();
+
+const results: any = await run(); 
+
+import { writeFileSync } from "fs";
+
+
+const formatted = results.benchmarks.map((b: any) => ({
+  name: b.name,
+  unit: "ns/iter",
+  value: b.stats?.avg ?? 0
+}));
+
+writeFileSync("result.json", JSON.stringify(formatted, null, 2));
+console.log("✅ Benchmark result saved to result.json");

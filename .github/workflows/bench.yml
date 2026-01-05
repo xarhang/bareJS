@@ -21,11 +21,15 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Clean Git State
+        run: |
+          git checkout bun.lock || true
+          git checkout bun.lockb || true
+
       - name: Run Benchmark
         run: |
           bun benchmarks/index.ts
-          git checkout .
-          git clean -fd
+          ls -l result.json
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
@@ -37,4 +41,3 @@ jobs:
           comment-always: true
           name: "BareJS Performance (Latency)"
           gh-pages-branch: gh-pages
-          skip-fetch-gh-pages: false

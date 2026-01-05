@@ -1,16 +1,20 @@
-// scripts/update-readme.ts
 import { readFileSync, writeFileSync } from 'fs';
 
 try {
-  const results = JSON.parse(readFileSync('result.json', 'utf8'));
+    // 1. Load results
+    const results = JSON.parse(readFileSync('result.json', 'utf8'));
+    const bareJS = results.find((r: any) => r.name.includes('BareJS'))?.value;
+    const elysia = results.find((r: any) => r.name === 'Elysia')?.value;
+    const hono = results.find((r: any) => r.name === 'Hono')?.value;
 
-  const bareJS = results.find((r: any) => r.name.includes('BareJS')).value;
-  const elysia = results.find((r: any) => r.name === 'Elysia').value;
-  const hono = results.find((r: any) => r.name === 'Hono').value;
+    if (typeof bareJS !== 'number' || typeof elysia !== 'number' || typeof hono !== 'number') {
+        throw new Error('Benchmark values are missing or invalid in result.json');
+    }
 
-  const table = `
+    // 2. Prepare the English table
+    const table = `
 ### 🚀 Latest Benchmark Results
-*Last updated: ${new Date().toUTCString()}*
+*Last updated: ${new Date().toUTCString()} (GitHub Actions)*
 
 | Framework | Latency (Avg) | Speed Ratio |
 | :--- | :--- | :--- |
@@ -22,31 +26,41 @@ try {
 > 📈 **Performance Dashboard:** View historical charts [here](https://xarhang.github.io/bareJS/dev/benchmarks/)
 `;
 
-  const readmePath = 'README.md';
-  const readmeContent = readFileSync(readmePath, 'utf8');
+    // 3. Update README
+    const readmePath = 'README.md';
+    const readmeContent = readFileSync(readmePath, 'utf8');
 
-  const startTag = '';
-  const endTag = '';
+    const startTag = '';
+    const endTag = '';
 
-  // ตรวจสอบว่ามี Tag ครบไหม
-  if (!readmeContent.includes(startTag) || !readmeContent.includes(endTag)) {
-    throw new Error('❌ Missing benchmark tags in README.md');
-  }
+    // Split logic with explicit safety
+    const parts = readmeContent.split(startTag);
+    if (parts.length < 2) throw new Error(`Missing ${startTag}`);
 
-  // แยกส่วนหัวและส่วนท้าย เพื่อรักษากลางไว้
-  const before = readmeContent.split(startTag)[0];
-  const after = readmeContent.split(endTag)[1];
+    const contentBefore = parts[0];
+    const rest = parts[1];
 
-  // รวมไฟล์ใหม่: (เนื้อหาเดิมส่วนบน) + (Tag เปิด) + (ตารางใหม่) + (Tag ปิด) + (เนื้อหาเดิมส่วนล่าง)
-  const newContent = `${before}${startTag}\n${table}\n${endTag}${after}`;
+    if (!rest || !rest.includes(endTag)) {
+        throw new Error(`Missing ${endTag}`);
+    }
 
-  writeFileSync(readmePath, newContent);
-  console.log('✅ README.md updated successfully while preserving other content!');
+    const contentAfter = rest.split(endTag)[1];
+    
+    // Final check for contentAfter to satisfy TS
+    if (contentAfter === undefined) {
+        throw new Error('Failed to parse content after the benchmark tag');
+    }
+
+    const finalContent = `${contentBefore}${startTag}\n${table}\n${endTag}${contentAfter}`;
+
+    writeFileSync(readmePath, finalContent);
+    console.log('✅ README.md successfully updated and type-checked!');
+
 } catch (error) {
-  if (error instanceof Error) {
-    console.error('❌ Update failed:', error.message);
-  } else {
-    console.error('❌ Update failed:', String(error));
-  }
-  process.exit(1);
+    if (error instanceof Error) {
+        console.error('❌ Update failed:', error.message);
+    } else {
+        console.error('❌ Unexpected error occurred');
+    }
+    process.exit(1);
 }

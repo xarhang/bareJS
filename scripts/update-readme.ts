@@ -1,14 +1,14 @@
 import { readFileSync, writeFileSync } from 'fs';
 
 try {
-  // 1. Load results with safety checks
+  // 1. Load results
   const results = JSON.parse(readFileSync('result.json', 'utf8'));
   const bareJS = results.find((r: any) => r.name.includes('BareJS'))?.value;
   const elysia = results.find((r: any) => r.name === 'Elysia')?.value;
   const hono = results.find((r: any) => r.name === 'Hono')?.value;
 
   if (typeof bareJS !== 'number' || typeof elysia !== 'number' || typeof hono !== 'number') {
-    throw new Error('Benchmark data is missing in result.json');
+    throw new Error('Benchmark data is missing or invalid in result.json');
   }
 
   // 2. Prepare the Table
@@ -30,28 +30,22 @@ try {
   const startTag = '';
   const endTag = '';
 
-  // FIX: Use destructuring to ensure variables are defined
-  const [before, rest] = content.split(startTag);
-  
-  // If 'rest' is undefined, the start tag wasn't found
-  if (rest === undefined) {
-    throw new Error(`Tag ${startTag} not found`);
+  // Find index of tags
+  const startIdx = content.indexOf(startTag);
+  const endIdx = content.indexOf(endTag);
+
+  if (startIdx === -1 || endIdx === -1) {
+    throw new Error(`Markers not found. Check if ${startTag} and ${endTag} exist in README.md`);
   }
 
-  const afterParts = rest.split(endTag);
-  const after = afterParts[1];
+  // Slice the file: [BEFORE TAGS] + [NEW TABLE] + [AFTER TAGS]
+  const before = content.substring(0, startIdx + startTag.length);
+  const after = content.substring(endIdx);
 
-  // If 'after' is undefined, the end tag wasn't found
-  if (after === undefined) {
-    throw new Error(`Tag ${endTag} not found`);
-  }
-
-  // Re-assemble the file: 
-  // [Everything before tags] + [Start Tag] + [New Table] + [End Tag] + [Everything after tags]
-  const finalContent = `${before}${startTag}\n${tableContent}\n${endTag}${after}`;
+  const finalContent = `${before}\n${tableContent}\n${after}`;
 
   writeFileSync(readmePath, finalContent);
-  console.log('✅ README updated successfully with no duplicates.');
+  console.log('✅ README updated successfully!');
 
 } catch (err) {
   if (err instanceof Error) {

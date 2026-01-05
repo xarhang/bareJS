@@ -115,20 +115,28 @@ app.listen('0.0.0.0', 3000);
 
 Every handler receives a `Context` object, providing a high-speed interface to the request:
 
-* `ctx.req`: The [Native Bun Request](https://www.google.com/search?q=https://bun.sh/docs/api/http%23request).
-* `ctx.json(data)`: Optimized JSON response helper with pre-defined headers.
-* `ctx.body`: The validated JSON payload (available when using validators).
-* `ctx.params`: Route parameters (e.g., `/user/:id`).
+* `ctx.req`: The Native Bun Request.
+* `ctx.json(data)`: High-speed JSON helper with pre-defined headers.
+* `ctx.params`: Object containing route parameters (e.g., { id: "123" }).
+* `ctx.body`: Validated payload (populated by typebox, zod, or native).
+* `ctx.status(code)`: Chainable status setter (e.g., ctx.status(201).json(...)).
+* `ctx.setResHeader(key, value)`: Direct response header manipulation.
 
 ### 2. Middleware (The Onion Model)
 
-BareJS supports an asynchronous recursive pipeline, allowing you to wrap logic before and after the handler.
+BareJS supports an asynchronous recursive pipeline, allowing you to wrap logic before and after the handler. Using Context from the main package ensures full type safety.
 
 ```typescript
-app.use(async (ctx, next) => {
+import { type Context, type Next } from 'barejs';
+
+app.use(async (ctx: Context, next: Next) => {
   const start = performance.now();
+  
   const response = await next(); // Proceed to next middleware or handler
-  console.log(`Latency: ${(performance.now() - start).toFixed(2)}ms`);
+  
+  const duration = (performance.now() - start).toFixed(2);
+  console.log(`Latency: ${duration}ms`);
+  
   return response;
 });
 
@@ -136,21 +144,44 @@ app.use(async (ctx, next) => {
 
 ### 3. Full Plugin System
 
-Encapsulate complex logic into reusable modules that plug directly into the engine lifecycle.
+Encapsulate complex logic into reusable modules. Plugins have direct access to the BareJS instance during the installation phase.
 
 ```typescript
+import { type Context, type Next, type BareJS } from 'barejs';
+
 const databasePlugin = {
   name: 'barejs-db',
   version: '1.0.0',
   install: (app: BareJS) => {
-    app.use(async (ctx, next) => {
-      ctx.db = "CONNECTED";
+    app.use(async (ctx: Context, next: Next) => {
+      ctx.db = "CONNECTED"; // Attach custom properties to context
       return await next();
     });
   }
 };
 
 app.use(databasePlugin);
+
+```
+
+### 4. Native WebSocket Support (MAX Speed)
+
+BareJS leverages Bun's native WebSocket implementation, allowing you to handle real-time binary and text streams with minimal overhead.
+
+```typescript
+import { BareJS } from 'barejs';
+
+const app = new BareJS();
+
+app.ws('/chat', {
+  open: (ws) => console.log('Client connected!'),
+  message: (ws, msg) => {
+    ws.send(`Echo: ${msg}`);
+  },
+  close: (ws, code, reason) => console.log('Closed')
+});
+
+app.listen();
 
 ```
 
@@ -161,20 +192,27 @@ app.use(databasePlugin);
 BareJS allows you to use different validators for different routes, focusing on high-speed schema checks.
 
 ```typescript
-import { typebox, zod, native } from 'barejs/middleware';
+import { BareJS, typebox, zod, native, type Context } from 'barejs';
 import { Type } from '@sinclair/typebox';
 import { z } from 'zod';
 
-// High Performance: TypeBox
+const app = new BareJS();
+
+// 🚀 Tier 1: High Performance (TypeBox)
+// Best for Bun. Compiled JIT validation.
 const UserSchema = Type.Object({ name: Type.String() });
-app.post('/tb', typebox(UserSchema), (ctx) => ctx.json(ctx.body));
+app.post('/tb', typebox(UserSchema), (ctx: Context) => ctx.json(ctx.body));
 
-// Popular Choice: Zod
+// 💎 Tier 2: Popular Choice (Zod)
+// Flexible and feature-rich.
 const ZodSchema = z.object({ age: z.number() });
-app.post('/zod', zod(ZodSchema), (ctx) => ctx.json(ctx.body));
+app.post('/zod', zod(ZodSchema), (ctx: Context) => ctx.json(ctx.body));
 
-// Zero Dependency: Native
-app.post('/native', native({ properties: { id: { type: 'number' } } }), (ctx) => ctx.json(ctx.body));
+// 🍃 Tier 3: Zero Dependency (Native)
+// Extremely lightweight. Uses built-in typeof checks.
+app.post('/native', native({ properties: { id: { type: 'number' } } }), (ctx: Context) => {
+  return ctx.json(ctx.body);
+});
 
 ```
 

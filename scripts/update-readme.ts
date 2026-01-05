@@ -1,7 +1,6 @@
 import { readFileSync, writeFileSync } from 'fs';
 
 try {
-    // 1. Load results
     const results = JSON.parse(readFileSync('result.json', 'utf8'));
     const bareJS = results.find((r: any) => r.name.includes('BareJS'))?.value;
     const elysia = results.find((r: any) => r.name === 'Elysia')?.value;
@@ -11,7 +10,6 @@ try {
         throw new Error('Benchmark values are missing or invalid in result.json');
     }
 
-    // 2. Prepare the English table
     const table = `
 ### 🚀 Latest Benchmark Results
 *Last updated: ${new Date().toUTCString()} (GitHub Actions)*
@@ -26,35 +24,28 @@ try {
 > 📈 **Performance Dashboard:** View historical charts [here](https://xarhang.github.io/bareJS/dev/benchmarks/)
 `;
 
-    // 3. Update README
     const readmePath = 'README.md';
     const readmeContent = readFileSync(readmePath, 'utf8');
 
     const startTag = '';
     const endTag = '';
 
-    // Split logic with explicit safety
+    // FIX: Using destructuring and explicit check to satisfy TypeScript
     const parts = readmeContent.split(startTag);
-    if (parts.length < 2) throw new Error(`Missing ${startTag}`);
-
     const contentBefore = parts[0];
     const rest = parts[1];
 
-    if (!rest || !rest.includes(endTag)) {
-        throw new Error(`Missing ${endTag}`);
+    // This check tells TypeScript that 'rest' is definitely a string, not undefined
+    if (rest === undefined || !rest.includes(endTag)) {
+        throw new Error(`Required tags ${startTag} or ${endTag} are missing or improperly placed in README.md`);
     }
 
-    const contentAfter = rest.split(endTag)[1];
-    
-    // Final check for contentAfter to satisfy TS
-    if (contentAfter === undefined) {
-        throw new Error('Failed to parse content after the benchmark tag');
-    }
+    const contentAfter = rest.split(endTag)[1] || '';
 
     const finalContent = `${contentBefore}${startTag}\n${table}\n${endTag}${contentAfter}`;
 
     writeFileSync(readmePath, finalContent);
-    console.log('✅ README.md successfully updated and type-checked!');
+    console.log('✅ README.md updated successfully!');
 
 } catch (error) {
     if (error instanceof Error) {

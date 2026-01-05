@@ -24,23 +24,21 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run Benchmark Engine
+      - name: Run Benchmark
         run: |
           bun benchmarks/index.ts
-          ls -l result.json
-
-      - name: Prepare Workspace for Git Switch
-        run: |
           mv result.json /tmp/result.json
+
+      - name: Clean Git State
+        run: |
           git reset --hard
           git clean -fd
-          mv /tmp/result.json result.json
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: 'customSmallerIsBetter'
-          output-file-path: result.json
+          output-file-path: /tmp/result.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           comment-always: true

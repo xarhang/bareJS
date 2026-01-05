@@ -3,9 +3,6 @@ import { BareJS } from "../src/bare";
 import { Elysia } from "elysia";
 import { Hono } from "hono";
 
-// Setup servers... (โค้ดเหมือนเดิม)
-// แต่เปลี่ยนจากการ listen ค้างไว้ เป็นการใช้เครื่องมือวัดผลโดยตรง:
-
 group("Web Framework Speed Test", () => {
   const payload = { message: "bench" };
   
@@ -34,14 +31,14 @@ const results: any = await run();
 import { writeFileSync } from "fs";
 
 const formatted = results.benchmarks.map((b: any) => {
-  // ดึงค่าสถิติจาก run แรก (Mitata 1.3.0 เก็บไว้ใน runs[0])
+  
   const stats = b.runs && b.runs[0] ? b.runs[0].stats : null;
   
   return {
-    // ใช้ alias เป็นชื่อหลัก
+    
     name: String(b.alias || "Unknown"),
     unit: "ns/iter",
-    // ดึง avg ออกมาจาก stats
+    
     value: stats ? Number(stats.avg) : 0
   };
 });

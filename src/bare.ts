@@ -29,35 +29,58 @@ export class BareJS {
   //   this.compiledFetch = new Function(fnBody).bind(this)();
   // }
 
-  private compile() {
+ private compile() {
+    // 1. แยก Static Routes ออกมาทำ Map เพื่อความเร็วสูงสุด O(1)
+    const staticMap: Record<string, any> = {};
+    
+    this.routes.forEach((route, index) => {
+        // สร้าง Chain สำหรับ Middleware + Handler
+        const chain = (ctx: Context) => {
+            let idx = 0;
+            const middlewares = [...this.globalMiddlewares, ...route.handlers];
+            
+            const next = (): any => {
+                const handler = middlewares[idx++];
+                if (!handler) return;
+                return handler(ctx, next);
+            };
+            return next();
+        };
+        
+        staticMap[`${route.method}:${route.path}`] = chain;
+    });
+
+    // 2. สร้าง Function Body
     let fnBody = `
-      const gMW = this.globalMiddlewares;
+      const staticMap = this.staticMap;
       const EMPTY_PARAMS = Object.freeze({});
-      return async (req) => {
+      const jsonHeader = { "content-type": "application/json" };
+
+      return (req) => {
         const url = req.url;
         const pathStart = url.indexOf('/', 8);
         const path = pathStart === -1 ? '/' : url.substring(pathStart);
-        const method = req.method;
+        const key = req.method + ":" + path;
+        
+        // Lookup Route ใน O(1)
+        const runner = staticMap[key];
+        if (runner) {
+          const ctx = { 
+            req, 
+            params: EMPTY_PARAMS, 
+            json: (d) => new Response(JSON.stringify(d), { headers: jsonHeader }) 
+          };
+          return runner(ctx);
+        }
+
+        return new Response('404 Not Found', { status: 404 });
+      };
     `;
 
     
-    for (let i = 0; i < this.routes.length; i++) {
-      const route = this.routes[i];
-
-      if (route) {
-        fnBody += `
-          if (method === '${route.method}' && path === '${route.path}') {
-            const ctx = { req, params: EMPTY_PARAMS, json: (d) => Response.json(d) };
-            // รัน Handler ตัวแรกของ Route นี้
-            return this.routes[${i}].handlers[0](ctx);
-          }
-        `;
-      }
-    }
-
-    fnBody += "return new Response('404 Not Found', { status: 404 }); };";
+    (this as any).staticMap = staticMap;
     this.compiledFetch = new Function(fnBody).bind(this)();
-  }
+}
 
   listen(port = 3000) {
     this.compile();

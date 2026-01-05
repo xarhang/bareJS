@@ -53,8 +53,8 @@ bun run benchmarks/index.ts
 
 ## 🏗 Roadmap
 
-* [ ] Middleware Pattern Support
-* [ ] High-Speed Static Routing
+* [x] Middleware Pattern Support (Chain Execution)
+* [x] High-Speed Static Routing (O(1) Lookup Table)
 * [ ] Schema Validation Integration
 * [ ] Full Documentation
 

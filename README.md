@@ -1,9 +1,28 @@
 # 🚀 BareJS
-BareJS is an ultra-high-performance web engine built on the Bun runtime, designed for minimalism and the lowest possible latency.
+### The Ultra-Low Latency JIT Web Engine for Bun
+
+BareJS is a minimalist, high-performance web engine architected for the **Bun** ecosystem. By utilizing a **Just-In-Time (JIT) Route Compilation** strategy and an asynchronous **Onion-Model** pipeline, BareJS achieves near-native throughput, outperforming traditional frameworks by eliminating runtime routing overhead.
 
 ![Benchmark Status](https://github.com/xarhang/bareJS/actions/workflows/bench.yml/badge.svg)
 [![Performance Dashboard](https://img.shields.io/badge/Performance-Dashboard-blueviolet?style=flat-square&logo=speedtest)](https://xarhang.github.io/bareJS/dev/benchmarks/)
 [![Bun Version](https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=flat-square&logo=bun)](https://bun.sh)
+[![NPM Version](https://img.shields.io/npm/v/barejs.svg?style=flat-square)](https://www.npmjs.com/package/barejs)
+
+---
+
+## 🏛 Architectural Engineering
+
+Unlike traditional frameworks that iterate through arrays or regex patterns on every request, BareJS utilizes a **Static Compilation Phase**.
+
+
+
+### The JIT Lifecycle
+When `app.listen()` is invoked, the engine:
+1. **Analyzes** the complete route tree and global middleware stack.
+2. **Serializes** the execution logic into a flat, optimized JavaScript function.
+3. **Binds** the function using `new Function()`, allowing the **JavaScriptCore (JSC)** engine to perform aggressive inline caching and speculative optimizations.
+
+---
 
 ---
 
@@ -26,7 +45,8 @@ Performance comparison between **BareJS**, **Elysia**, and **Hono**.
 
 ---
 
-✨ **Features**
+
+### ✨ **Features**
 
 * **Ultra Low Latency:** Optimized to minimize processing overhead.
 * **Zero Dependency:** Built natively for security and raw speed.
@@ -35,49 +55,87 @@ Performance comparison between **BareJS**, **Elysia**, and **Hono**.
 
 ---
 
-## 📖 Documentation
+## 📦 Installation
 
-### ⚡ The Core Engine
-
-BareJS uses a **Static Route Compiler**. When you call `app.listen()`, BareJS transforms your routes into an optimized lookup table. This ensures  routing complexity, meaning your app stays fast whether you have 10 routes or 10,000.
-
-### 🏗️ Request Context
-
-Every handler receives a `Context` object:
-
-* `ctx.req`: The native Bun `Request`.
-* `ctx.params`: Route parameters (e.g., `/user/:id`).
-* `ctx.json(data)`: High-speed JSON response helper.
-* `ctx.body`: The validated JSON payload (available when using validators).
+```bash
+bun add barejs
+```
 
 ---
 
-## 🛠 Usage Examples
+## ⚡ Quick Start
 
-### 1. Basic Server
+Create an `index.ts` and get your server running in seconds:
 
 ```typescript
 import { BareJS } from 'barejs';
 
 const app = new BareJS();
 
+// Simple Route
 app.get('/ping', (ctx) => ctx.json({ message: 'pong' }));
 
+// Start Server
 app.listen('0.0.0.0', 3000);
 
 ```
+---
 
-### 2. Validation (Choose Your Weapon)
+## 📖 Manual & Documentation
 
-BareJS allows you to use different validators for different routes.
+### 1. Request Context (`ctx`)
+
+Every handler receives a `Context` object, providing a high-speed interface to the request:
+
+* `ctx.req`: The [Native Bun Request](https://www.google.com/search?q=https://bun.sh/docs/api/http%23request).
+* `ctx.json(data)`: Optimized JSON response helper with pre-defined headers.
+* `ctx.body`: The validated JSON payload (available when using validators).
+* `ctx.params`: Route parameters (e.g., `/user/:id`).
+
+### 2. Middleware (The Onion Model)
+
+BareJS supports an asynchronous recursive pipeline, allowing you to wrap logic before and after the handler.
 
 ```typescript
-import { BareJS } from 'barejs';
+app.use(async (ctx, next) => {
+  const start = performance.now();
+  const response = await next(); // Proceed to next middleware or handler
+  console.log(`Latency: ${(performance.now() - start).toFixed(2)}ms`);
+  return response;
+});
+
+```
+
+### 3. Full Plugin System
+
+Encapsulate complex logic into reusable modules that plug directly into the engine lifecycle.
+
+```typescript
+const databasePlugin = {
+  name: 'barejs-db',
+  version: '1.0.0',
+  install: (app: BareJS) => {
+    app.use(async (ctx, next) => {
+      ctx.db = "CONNECTED";
+      return await next();
+    });
+  }
+};
+
+app.use(databasePlugin);
+
+```
+
+---
+
+## 🛡️ Schema Validation
+
+BareJS allows you to use different validators for different routes, focusing on high-speed schema checks.
+
+```typescript
 import { typebox, zod, native } from 'barejs/middleware';
 import { Type } from '@sinclair/typebox';
 import { z } from 'zod';
-
-const app = new BareJS();
 
 // High Performance: TypeBox
 const UserSchema = Type.Object({ name: Type.String() });
@@ -87,41 +145,30 @@ app.post('/tb', typebox(UserSchema), (ctx) => ctx.json(ctx.body));
 const ZodSchema = z.object({ age: z.number() });
 app.post('/zod', zod(ZodSchema), (ctx) => ctx.json(ctx.body));
 
-// No Dependencies: Native
+// Zero Dependency: Native
 app.post('/native', native({ properties: { id: { type: 'number' } } }), (ctx) => ctx.json(ctx.body));
 
 ```
 
 ---
 
-## 🛠 Getting Started
-
-### Prerequisites
-
-* **Bun** v1.0.0 or higher
-
-### Installation
-
-```bash
-bun install barejs
-
-```
-
-### Running Benchmarks Locally
-
-```bash
-bun run bench
-
-```
-
 ## 🏗 Roadmap
 
-* [x] Middleware Pattern Support (Chain Execution)
-* [x] High-Speed Static Routing ( Lookup Table)
-* [x] Schema Validation Integration
-* [x] Modular Validator Support (TypeBox, Zod, Native)
-* [ ] Full Plugin System
-
-**Maintained by xarhang**
+* [x] **Middleware Support**: Async/Await "Onion" execution chain.
+* [x] **JIT Static Routing**:  lookup via compiled static maps.
+* [x] **Validation Integration**: Support for TypeBox, Zod, and Native JSON.
+* [x] **Full Plugin System**: Modular extensibility with zero overhead.
+* [ ] **Dynamic Path JIT**: Compiled Regex for parameterized routes (e.g., `/user/:id`).
+* [ ] **Native WebSocket Support**: High-speed binary streaming.
 
 ---
+
+## 💎 Credits & Dependencies
+
+* **[Bun](https://bun.sh/)**: The foundational runtime for BareJS.
+* **[TypeBox](https://github.com/sinclairzx81/typebox)** & **[Zod](https://zod.dev/)**: For high-speed type safety.
+* **Inspiration**: Architectural patterns from **Koa** and **ElysiaJS**.
+
+**Maintained by [xarhang**](https://www.google.com/search?q=https://github.com/xarhang)
+**License: MIT**
+```

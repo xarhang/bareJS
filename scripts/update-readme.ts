@@ -1,3 +1,4 @@
+// scripts/update-readme.ts
 import { readFileSync, writeFileSync } from 'fs';
 
 try {
@@ -9,7 +10,7 @@ try {
 
   const table = `
 ### 🚀 Latest Benchmark Results
-*Last updated: ${new Date().toUTCString()} (Running on GitHub Actions)*
+*Last updated: ${new Date().toUTCString()}*
 
 | Framework | Latency (Avg) | Speed Ratio |
 | :--- | :--- | :--- |
@@ -18,7 +19,7 @@ try {
 | Hono | ${hono.toFixed(2)} ns/iter | ${(hono / bareJS).toFixed(2)}x slower |
 
 > [!TIP]
-> View performance history and charts [here](https://xarhang.github.io/bareJS/dev/benchmarks/)
+> 📈 **Performance Dashboard:** View historical charts [here](https://xarhang.github.io/bareJS/dev/benchmarks/)
 `;
 
   const readmePath = 'README.md';
@@ -27,14 +28,25 @@ try {
   const startTag = '';
   const endTag = '';
 
-  const newContent = readmeContent.replace(
-    new RegExp(`${startTag}[\\s\\S]*${endTag}`),
-    `${startTag}\n${table}\n${endTag}`
-  );
+  // ตรวจสอบว่ามี Tag ครบไหม
+  if (!readmeContent.includes(startTag) || !readmeContent.includes(endTag)) {
+    throw new Error('❌ Missing benchmark tags in README.md');
+  }
+
+  // แยกส่วนหัวและส่วนท้าย เพื่อรักษากลางไว้
+  const before = readmeContent.split(startTag)[0];
+  const after = readmeContent.split(endTag)[1];
+
+  // รวมไฟล์ใหม่: (เนื้อหาเดิมส่วนบน) + (Tag เปิด) + (ตารางใหม่) + (Tag ปิด) + (เนื้อหาเดิมส่วนล่าง)
+  const newContent = `${before}${startTag}\n${table}\n${endTag}${after}`;
 
   writeFileSync(readmePath, newContent);
-  console.log('✅ README.md has been updated!');
+  console.log('✅ README.md updated successfully while preserving other content!');
 } catch (error) {
-  console.error('❌ Failed to update README:', error);
+  if (error instanceof Error) {
+    console.error('❌ Update failed:', error.message);
+  } else {
+    console.error('❌ Update failed:', String(error));
+  }
   process.exit(1);
 }

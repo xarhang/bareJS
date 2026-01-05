@@ -1,7 +1,9 @@
 
 # 🚀 BareJS
-
 The ultra-fast web engine.
+
+![Benchmark Status](https://github.com/xarhang/bareJS/actions/workflows/bench.yml/badge.svg)
+[![Performance Dashboard](https://img.shields.io/badge/Performance-Dashboard-blueviolet?style=flat-square&logo=speedtest)](https://xarhang.github.io/bareJS/dev/benchmarks/)
 
 ## 📊 Benchmarks
 | Framework | Latency (Avg) | Speed Ratio |

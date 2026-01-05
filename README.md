@@ -21,14 +21,14 @@ BareJS is designed for maximum throughput. In our latest head-to-head test again
 
 ### 1. Installation
 ```bash
-bun add barejs-core
+bun add barejs
 
 ```
 
 ### 2. Basic Usage
 
 ```typescript
-import { BareJS } from "barejs-core";
+import { BareJS } from "barejs";
 
 const app = new BareJS();
 

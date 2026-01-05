@@ -1,6 +1,6 @@
 {
-  "name": "barejs", 
-  "version": "0.1.0",
+  "name": "barejs",
+  "version": "0.1.1",
   "description": "High-performance JIT-specialized web framework for Bun",
   "main": "src/bare.ts",
   "types": "src/bare.ts",
@@ -8,7 +8,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["bun", "framework", "fastest", "jit"],
+  "keywords": [
+    "bun",
+    "framework",
+    "fastest",
+    "jit"
+  ],
   "author": "xarhang",
   "license": "MIT",
   "devDependencies": {

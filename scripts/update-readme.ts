@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'fs';
 
 try {
+    // 1. Load results
     const results = JSON.parse(readFileSync('result.json', 'utf8'));
     const bareJS = results.find((r: any) => r.name.includes('BareJS'))?.value;
     const elysia = results.find((r: any) => r.name === 'Elysia')?.value;
@@ -10,6 +11,7 @@ try {
         throw new Error('Benchmark values are missing or invalid in result.json');
     }
 
+    // 2. Prepare the Table
     const table = `
 ### 🚀 Latest Benchmark Results
 *Last updated: ${new Date().toUTCString()} (GitHub Actions)*
@@ -24,28 +26,28 @@ try {
 > 📈 **Performance Dashboard:** View historical charts [here](https://xarhang.github.io/bareJS/dev/benchmarks/)
 `;
 
+    // 3. Read and Update README
     const readmePath = 'README.md';
     const readmeContent = readFileSync(readmePath, 'utf8');
 
     const startTag = '';
     const endTag = '';
 
-    // FIX: Using destructuring and explicit check to satisfy TypeScript
-    const parts = readmeContent.split(startTag);
-    const contentBefore = parts[0];
-    const rest = parts[1];
+    // Regex Explanation:
+    // ([\s\S]*?) -> Capture everything before the tag
+    // ${startTag}[\s\S]*?${endTag} -> Match the tags and whatever is currently inside them
+    // ([\s\S]*) -> Capture everything after the tags
+    const regex = new RegExp(`([\\s\\S]*?)${startTag}[\\s\\S]*?${endTag}([\\s\\S]*)`);
 
-    // This check tells TypeScript that 'rest' is definitely a string, not undefined
-    if (rest === undefined || !rest.includes(endTag)) {
-        throw new Error(`Required tags ${startTag} or ${endTag} are missing or improperly placed in README.md`);
+    if (!regex.test(readmeContent)) {
+        throw new Error('Could not find the benchmark tags in your README.md. Ensure they exist exactly as written.');
     }
 
-    const contentAfter = rest.split(endTag)[1] || '';
+    // Replace the entire file content with: [Before] + [Tags + New Table] + [After]
+    const updatedContent = readmeContent.replace(regex, `$1${startTag}\n${table}\n${endTag}$2`);
 
-    const finalContent = `${contentBefore}${startTag}\n${table}\n${endTag}${contentAfter}`;
-
-    writeFileSync(readmePath, finalContent);
-    console.log('✅ README.md updated successfully!');
+    writeFileSync(readmePath, updatedContent);
+    console.log('✅ README.md updated surgically. All other content preserved.');
 
 } catch (error) {
     if (error instanceof Error) {

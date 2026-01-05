@@ -40,7 +40,6 @@ Performance comparison between **BareJS**, **Elysia**, and **Hono** running on G
 ### Installation
 ```bash
 bun install
-
 ```
 
 ### Running Benchmarks Locally

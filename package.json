@@ -1,10 +1,15 @@
 {
   "name": "barejs",
   "version": "0.1.2",
+  "author": "xarhang",
   "description": "High-performance JIT-specialized web framework for Bun",
   "main": "src/bare.ts",
   "types": "src/bare.ts",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xarhang/barejs.git"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "bench": "bun run benchmarks/index.ts",
@@ -14,18 +19,23 @@
     "bun",
     "framework",
     "fastest",
-    "jit"
+    "jit",
+    "typebox",
+    "zod"
   ],
-  "author": "xarhang",
   "license": "MIT",
   "dependencies": {
-    "@sinclair/typebox": "^0.31.0",
-    "typebox": "^1.0.73"
+    "@sinclair/typebox": "^0.34.46",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "elysia": "^1.4.21",
     "hono": "^4.11.3",
     "mitata": "^1.0.34"
-  }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ]
 }

@@ -6,8 +6,9 @@ export interface Context {
   [key: string]: any;
 }
 
+export type Next = () => Promise<any> | any;
+export type Middleware = (ctx: Context, next: Next) => any;
 export type Handler = (ctx: Context) => any;
-export type Middleware = (ctx: Context, next: () => Promise<any> | any) => any;
 
 export class BareJS {
   private routes: { method: string; path: string; handlers: (Middleware | Handler)[] }[] = [];
@@ -20,7 +21,7 @@ export class BareJS {
   public patch = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "PATCH", path, handlers: h }); return this; };
   public delete = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "DELETE", path, handlers: h }); return this; };
   public get = (path: string, ...h: (Middleware | Handler)[]) => { this.routes.push({ method: "GET", path, handlers: h }); return this; };
-  public use = (...m: Middleware[]) => { this.globalMiddlewares.push(...m); return this; }
+  public use = (...m: Middleware[]) => { this.globalMiddlewares.push(...m); return this; };
 
   public fetch = (req: Request): Promise<Response> | Response => {
     if (!this.compiledFetch) this.compile();
@@ -32,7 +33,6 @@ export class BareJS {
       const chain = (ctx: Context) => {
         let idx = 0;
         const middlewares = [...this.globalMiddlewares, ...route.handlers];
-        
         const next = (): any => {
           const handler = middlewares[idx++];
           if (!handler) return;
@@ -40,41 +40,35 @@ export class BareJS {
         };
         return next();
       };
-      
       this.staticMap[`${route.method}:${route.path}`] = chain;
     });
 
-    let fnBody = `
+    const fnBody = `
       const staticMap = this.staticMap;
       const EMPTY_PARAMS = Object.freeze({});
       const jsonHeader = { "content-type": "application/json" };
-
       return (req) => {
         const url = req.url;
         const pathStart = url.indexOf('/', 8);
         const path = pathStart === -1 ? '/' : url.substring(pathStart);
         const key = req.method + ":" + path;
-        
         const runner = staticMap[key];
         if (runner) {
-          const ctx = { 
-            req, 
-            params: EMPTY_PARAMS, 
-            json: (d) => new Response(JSON.stringify(d), { headers: jsonHeader }) 
-          };
+          const ctx = { req, params: EMPTY_PARAMS, json: (d) => new Response(JSON.stringify(d), { headers: jsonHeader }) };
           return runner(ctx);
         }
-
         return new Response('404 Not Found', { status: 404 });
-      };
-    `;
-
+      };`;
     this.compiledFetch = new Function(fnBody).bind(this)();
   }
 
-  listen(port = 3000) {
+  listen(ip: string = '0.0.0.0', port: number = 3000) {
     this.compile();
-    console.log(`🚀 BareJS running at http://localhost:${port}`);
-    return Bun.serve({ port, fetch: (req) => this.compiledFetch!(req) });
+    console.log(`🚀 BareJS running at http://${ip}:${port}`);
+    return Bun.serve({
+      hostname: ip,
+      port,
+      fetch: (req) => this.compiledFetch!(req),
+    });
   }
 }

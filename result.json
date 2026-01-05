@@ -2,16 +2,16 @@
   {
     "name": "BareJS (Your Engine)",
     "unit": "ns/iter",
-    "value": 213.31830048680905
+    "value": 392.753827130353
   },
   {
     "name": "Elysia",
     "unit": "ns/iter",
-    "value": 1013.5196961310875
+    "value": 1864.54784492903
   },
   {
     "name": "Hono",
     "unit": "ns/iter",
-    "value": 2248.6070769243593
+    "value": 3707.7867447939416
   }
 ]

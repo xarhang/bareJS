@@ -1,4 +1,7 @@
 // src/bare.ts
+export * from './context';   
+export * from './validators';
+
 import { BareContext } from './context';
 import type { Context, Middleware, Handler, WSHandlers } from './context';
 

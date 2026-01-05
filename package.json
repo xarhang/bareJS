@@ -6,9 +6,9 @@
   "main": "./src/bare.ts",
   "types": "./src/bare.ts",
   "type": "module",
-  "exports": {
-    ".": "./src/bare.ts",
-    "./middleware": "./src/middleware/index.ts"
+ "exports": {
+  ".": "./src/bare.ts",
+  "./middleware": "./src/validators.ts"
   },
   "sideEffects": false,
   "repository": {

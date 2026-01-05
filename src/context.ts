@@ -1,3 +1,5 @@
+
+// src/context.ts
 export interface WSHandlers {
   open?: (ws: any) => void;
   message?: (ws: any, message: string | Buffer) => void;
@@ -5,14 +7,13 @@ export interface WSHandlers {
   drain?: (ws: any) => void;
 }
 
-export type Next = () => Promise<any> | any;
+export type Next = () => any;
 export type Middleware = (ctx: Context, next: Next) => any;
-export type Handler = (ctx: Context) => any;
-
+export type Handler = (ctx: Context, next: Next) => any;
 
 export interface Context {
   req: Request;
-  res: Response; 
+  res?: Response;
   params: Record<string, string>;
   body?: any;
   [key: string]: any;
@@ -22,14 +23,14 @@ export interface Context {
 }
 
 export class BareContext {
-  public res: Response | undefined;
+  public res?: Response;
   public params: Record<string, string> = {};
-  public body: any = undefined;
+  public body: any;
   public _status = 200;
   public _headers: Record<string, string> = {};
-
+  
   constructor(public req: Request) {}
-
+  
   json(data: any) {
     this._headers["Content-Type"] = "application/json";
     this.res = new Response(JSON.stringify(data), {
@@ -37,18 +38,17 @@ export class BareContext {
       headers: this._headers,
     });
   }
-
-  status(code: number): this {
+  
+  status(code: number) {
     this._status = code;
     return this;
   }
-
+  
   setResHeader(k: string, v: string) {
     this._headers[k] = v;
   }
-
-  public _finalize(): Response {
-    if (this.res) return this.res;
-    return new Response(null, { status: this._status, headers: this._headers });
+  
+  _finalize() {
+    return this.res || new Response(null, { status: this._status, headers: this._headers });
   }
 }

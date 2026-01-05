@@ -159,7 +159,7 @@ app.post('/native', native({ properties: { id: { type: 'number' } } }), (ctx) =>
 * [x] **Validation Integration**: Support for TypeBox, Zod, and Native JSON.
 * [x] **Full Plugin System**: Modular extensibility with zero overhead.
 * [x] **Dynamic Path JIT**: Compiled Regex for parameterized routes (e.g., `/user/:id`).
-* [ ] **Native WebSocket Support**: High-speed binary streaming.
+* [x] **Native WebSocket Support**: High-speed binary streaming.
 
 ---
 

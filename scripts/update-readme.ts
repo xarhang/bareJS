@@ -14,7 +14,7 @@ try {
   // 2. Prepare the Table
   const tableContent = `| Framework | Latency (Avg) | Speed Ratio |
 | :--- | :--- | :--- |
-| **BareJS (Your Engine)** | **${bareJS.toFixed(2)} ns/iter** | **Baseline (1.0x)** |
+| **BareJS** | **${bareJS.toFixed(2)} ns/iter** | **Baseline (1.0x)** |
 | Elysia | ${elysia.toFixed(2)} ns/iter | ${(elysia / bareJS).toFixed(2)}x slower |
 | Hono | ${hono.toFixed(2)} ns/iter | ${(hono / bareJS).toFixed(2)}x slower |`;
 

@@ -17,7 +17,7 @@ Performance comparison between **BareJS**, **Elysia**, and **Hono**.
 <!-- MARKER: PERFORMANCE_TABLE_START -->
 | Framework | Latency (Avg) | Speed Ratio |
 | :--- | :--- | :--- |
-| **BareJS (Your Engine)** | **-- ns/iter** | **Baseline (1.0x)** |
+| **BareJS** | **-- ns/iter** | **Baseline (1.0x)** |
 | Elysia | -- ns/iter | --x slower |
 | Hono | -- ns/iter | --x slower |
 <!-- MARKER: PERFORMANCE_TABLE_END -->

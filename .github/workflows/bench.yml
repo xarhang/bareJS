@@ -23,28 +23,42 @@ jobs:
 
       - name: Run and Process Benchmark
         run: |
-          # 1. รัน benchmark และใช้ grep เพื่อกรองเอาเฉพาะบรรทัดที่เป็น JSON จริงๆ
-          # วิธีนี้จะตัดพวก log "Benchmarking..." ออกไป ป้องกัน jq parse error
-          bun benchmarks/index.ts --json | grep '^{"benchmarks":' > raw_result.json
+          # 1. รัน benchmark และเก็บ output ทั้งหมดไว้ในไฟล์เดียว
+          # เราใช้ความสามารถของ Bun ในการรันไฟล์ script สั้นๆ เพื่อดึง JSON ออกมาให้สะอาดที่สุด
+          bun benchmarks/index.ts --json > raw_output.txt
           
-          # 2. แปลงผลจาก mitata ให้เป็นรูปแบบ Custom Benchmark ที่ Action รองรับ
-          # ดึงชื่อ (name) และค่าเฉลี่ย (stats.avg) มาสร้างเป็น JSON array
-          cat raw_result.json | jq '[.benchmarks[] | {name: .name, unit: "ns/iter", value: .stats.avg}]' > result.json
+          # 2. ใช้ Node/Bun script สั้นๆ เพื่ออ่านไฟล์และดึงเฉพาะส่วนที่เป็น JSON
+          # วิธีนี้ชัวร์กว่า grep เพราะมันหาตำแหน่ง { และ } จริงๆ
+          bun -e "
+            const fs = require('fs');
+            const data = fs.readFileSync('raw_output.txt', 'utf8');
+            const jsonStart = data.indexOf('{\"benchmarks\":');
+            if (jsonStart === -1) {
+              console.error('Could not find JSON in output');
+              process.exit(1);
+            }
+            const rawJson = JSON.parse(data.substring(jsonStart));
+            const formatted = rawJson.benchmarks.map(b => ({
+              name: b.name,
+              unit: 'ns/iter',
+              value: b.stats.avg
+            }));
+            fs.writeFileSync('result.json', JSON.stringify(formatted, null, 2));
+          "
           
-          # 3. แสดงผลเพื่อตรวจสอบความถูกต้องในหน้า Console
-          echo "Processed JSON for GitHub Action:"
+          # 3. แสดงผลเพื่อยืนยันว่า JSON ถูกต้อง
+          echo "✅ Processed JSON for GitHub Action:"
           cat result.json
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          # ใช้ customSmallerIsBetter เพราะค่าที่เราส่งไปคือ Latency (นาโนวินาที) ยิ่งน้อยยิ่งดี
           tool: 'customSmallerIsBetter'
           output-file-path: result.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           comment-always: true
-          name: "BareJS vs Giants (Latency)"
+          name: "BareJS Performance (Latency)"
           gh-pages-branch: gh-pages
           alert-threshold: '200%'
           fail-on-alert: false

@@ -1,6 +1,6 @@
 {
   "name": "barejs",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "author": "xarhang",
   "description": "High-performance JIT-specialized web framework for Bun",
   "main": "src/bare.ts",

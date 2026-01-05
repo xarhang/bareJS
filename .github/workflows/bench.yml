@@ -23,8 +23,9 @@ jobs:
 
       - name: Run Benchmark
         run: |
-          # รันเฉลี่ยๆ ปกติ โค้ดในไฟล์จะสร้าง result.json ให้เอง
           bun benchmarks/index.ts
+          git checkout .
+          git clean -fd
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
@@ -36,3 +37,4 @@ jobs:
           comment-always: true
           name: "BareJS Performance (Latency)"
           gh-pages-branch: gh-pages
+          skip-fetch-gh-pages: false

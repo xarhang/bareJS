@@ -1,16 +1,18 @@
 import { readFileSync, writeFileSync } from 'fs';
 
 try {
-    const results = JSON.parse(readFileSync('result.json', 'utf8'));
-    const bareJS = results.find((r: any) => r.name.includes('BareJS'))?.value;
-    const elysia = results.find((r: any) => r.name === 'Elysia')?.value;
-    const hono = results.find((r: any) => r.name === 'Hono')?.value;
+  // 1. Load results with safety checks
+  const results = JSON.parse(readFileSync('result.json', 'utf8'));
+  const bareJS = results.find((r: any) => r.name.includes('BareJS'))?.value;
+  const elysia = results.find((r: any) => r.name === 'Elysia')?.value;
+  const hono = results.find((r: any) => r.name === 'Hono')?.value;
 
-    if (typeof bareJS !== 'number' || typeof elysia !== 'number' || typeof hono !== 'number') {
-        throw new Error('Could not find benchmark numbers in result.json');
-    }
+  if (typeof bareJS !== 'number' || typeof elysia !== 'number' || typeof hono !== 'number') {
+    throw new Error('Benchmark data is missing in result.json');
+  }
 
-    const tableContent = `
+  // 2. Prepare the Table
+  const tableContent = `
 ### 🚀 Latest Benchmark Results
 *Last updated: ${new Date().toUTCString()}*
 
@@ -19,34 +21,41 @@ try {
 | **BareJS (Your Engine)** | **${bareJS.toFixed(2)} ns/iter** | **Baseline (1.0x)** |
 | Elysia | ${elysia.toFixed(2)} ns/iter | ${(elysia / bareJS).toFixed(2)}x slower |
 | Hono | ${hono.toFixed(2)} ns/iter | ${(hono / bareJS).toFixed(2)}x slower |
-
-> [!TIP]
-> 📈 **Performance Dashboard:** View historical charts [here](https://xarhang.github.io/bareJS/dev/benchmarks/)
 `;
 
-    const readmePath = 'README.md';
-    let content = readFileSync(readmePath, 'utf8');
+  // 3. Update README
+  const readmePath = 'README.md';
+  const content = readFileSync(readmePath, 'utf8');
 
-    const startTag = '';
-    const endTag = '';
+  const startTag = '';
+  const endTag = '';
 
-    // Check if both tags exist
-    if (!content.includes(startTag) || !content.includes(endTag)) {
-        console.error("❌ ERROR: Could not find markers in README.md");
-        console.log("Please ensure your README has these EXACT tags:");
-        console.log(startTag);
-        console.log(endTag);
-        process.exit(1);
-    }
+  // FIX: Use destructuring to ensure variables are defined
+  const [before, rest] = content.split(startTag);
+  
+  // If 'rest' is undefined, the start tag wasn't found
+  if (rest === undefined) {
+    throw new Error(`Tag ${startTag} not found`);
+  }
 
-    // Surgical replacement using Regex
-    const regex = new RegExp(`${startTag}[\\s\\S]*?${endTag}`, 'g');
-    const newContent = content.replace(regex, `${startTag}${tableContent}${endTag}`);
+  const afterParts = rest.split(endTag);
+  const after = afterParts[1];
 
-    writeFileSync(readmePath, newContent);
-    console.log('✅ README.md surgically updated!');
+  // If 'after' is undefined, the end tag wasn't found
+  if (after === undefined) {
+    throw new Error(`Tag ${endTag} not found`);
+  }
 
-} catch (err: any) {
-    console.error('❌ Failed to update README:', err.message);
-    process.exit(1);
+  // Re-assemble the file: 
+  // [Everything before tags] + [Start Tag] + [New Table] + [End Tag] + [Everything after tags]
+  const finalContent = `${before}${startTag}\n${tableContent}\n${endTag}${after}`;
+
+  writeFileSync(readmePath, finalContent);
+  console.log('✅ README updated successfully with no duplicates.');
+
+} catch (err) {
+  if (err instanceof Error) {
+    console.error('❌ Error:', err.message);
+  }
+  process.exit(1);
 }

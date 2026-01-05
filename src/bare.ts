@@ -55,8 +55,8 @@ export class BareJS {
           const handler = middlewares[idx++];
           if (!handler) return;
           // Support both async and sync handlers
-          return await (handler.length > 1 
-            ? (handler as Middleware)(ctx, next) 
+          return await (handler.length > 1
+            ? (handler as Middleware)(ctx, next)
             : (handler as Handler)(ctx));
         };
         return await next();
@@ -93,7 +93,32 @@ export class BareJS {
 
   public listen(ip: string = '0.0.0.0', port: number = 3000) {
     this.compile();
-    console.log(`🚀 BareJS running at http://${ip}:${port}`);
+
+
+
+
+    const reset = "\x1b[0m";
+    const cyan = "\x1b[36m";
+    const yellow = "\x1b[33m";
+    const gray = "\x1b[90m";
+    const bold = "\x1b[1m";
+    if (process.env.NODE_ENV !== 'production' && process.env.BARE_SILENT !== 'true') {
+      console.log(`
+${cyan}${bold}  ____                      _ ____  
+ | __ )  __ _ _ __ ___     | / ___| 
+ |  _ \\ / _\` | '__/ _ \\ _  | \\___ \\ 
+ | |_) | (_| | | |  __/| |_| |___) |
+ |____/ \\__,_|_|  \\___| \\___/|____/ 
+${reset}
+ ${yellow}BareJS${reset} ${gray}${reset}
+ ${gray}-----------------------------------${reset}
+ 🚀 Running at: ${cyan}http://${ip}:${port}${reset}
+ ${gray}Ready to build everything awesome!${reset}
+`);
+    } else {
+
+      console.log(`🚀 BareJS running at http://${ip}:${port}`);
+    }
     return Bun.serve({
       hostname: ip,
       port,

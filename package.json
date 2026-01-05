@@ -1,11 +1,16 @@
 {
   "name": "barejs",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "author": "xarhang",
   "description": "High-performance JIT-specialized web framework for Bun",
-  "main": "src/bare.ts",
-  "types": "src/bare.ts",
+  "main": "./src/bare.ts",
+  "types": "./src/bare.ts",
   "type": "module",
+  "exports": {
+    ".": "./src/bare.ts",
+    "./middleware": "./src/middleware/index.ts"
+  },
+  "sideEffects": false,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xarhang/barejs.git"
@@ -13,7 +18,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "bench": "bun run benchmarks/index.ts",
-    "dev": "bun --watch src/bare.ts"
+    "dev": "bun --watch src/bare.ts",
+    "build": "bun ./scripts/build.ts",
+    "release": "bun run build && npm version patch && npm publish --access public"
   },
   "keywords": [
     "bun",
@@ -24,18 +31,30 @@
     "zod"
   ],
   "license": "MIT",
-  "dependencies": {
+  "peerDependencies": {
     "@sinclair/typebox": "^0.34.46",
-    "zod": "^4.3.5"
+    "zod": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@sinclair/typebox": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@sinclair/typebox": "^0.34.46",
+    "zod": "^3.23.8",
     "@types/bun": "latest",
     "elysia": "^1.4.21",
     "hono": "^4.11.3",
-    "mitata": "^1.0.34"
+    "mitata": "^1.0.34",
+    "typescript": "latest"
   },
   "files": [
     "src",
+    "dist",
     "README.md",
     "LICENSE"
   ]

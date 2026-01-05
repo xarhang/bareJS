@@ -29,16 +29,18 @@ const req = new Request("http://localhost/");
 });
 
 
-const results: any = await run(); 
+const results: any = await run();
 
 import { writeFileSync } from "fs";
 
+const rawBenches = results.benchmarks || (results.groups && results.groups[0]?.benchmarks) || [];
 
-const formatted = results.benchmarks.map((b: any) => ({
-  name: b.name,
+const formatted = rawBenches.map((b: any) => ({
+  name: String(b.name),               
   unit: "ns/iter",
-  value: b.stats?.avg ?? 0
+  value: Number(b.stats?.avg || 0)     
 }));
 
 writeFileSync("result.json", JSON.stringify(formatted, null, 2));
-console.log("✅ Benchmark result saved to result.json");
+console.log("✅ Fixed result.json content:");
+console.log(JSON.stringify(formatted, null, 2));

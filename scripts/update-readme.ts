@@ -23,10 +23,11 @@ try {
 | Hono | ${hono.toFixed(2)} ns/iter | ${(hono / bareJS).toFixed(2)}x slower |
 `;
 
-  // 3. Update README
+  /// 3. Update README
   const readmePath = 'README.md';
   const content = readFileSync(readmePath, 'utf8');
 
+  // ใส่ชื่อ Tag ให้ตรงกับที่พิมพ์ไว้ใน README.md เป๊ะๆ
   const startTag = '';
   const endTag = '';
 

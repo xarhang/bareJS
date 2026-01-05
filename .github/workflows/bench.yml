@@ -13,23 +13,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+
+      - uses: oven-sh/setup-bun@v2 
         with:
           bun-version: latest
 
       - name: Install dependencies
         run: bun install
 
-      - name: Run Benchmark
-        run: bun benchmarks/index.ts --json > result.json
+      - name: Run and Process Benchmark
+        run: |
+          bun benchmarks/index.ts --json > raw_result.json
+          
+          cat raw_result.json | jq '[.benchmarks[] | {name: .name, unit: "ns/iter", value: .stats.avg}]' > result.json
+          
+          cat result.json
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          tool: 'mitata'
+          tool: 'customSmallerIsBetter'
           output-file-path: result.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           comment-always: true
-          name: "BareJS Speed vs Others"
+          name: "BareJS Performance Comparison"
           gh-pages-branch: gh-pages
+          alert-threshold: '200%'
+          fail-on-alert: false

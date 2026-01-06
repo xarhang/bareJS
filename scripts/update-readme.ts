@@ -1,4 +1,3 @@
-// All comments in English
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 const FILE = 'result.json';
@@ -22,32 +21,42 @@ try {
   const e = findValue('Elysia');
   const h = findValue('Hono');
 
-  const fmt = (v: number) => v > 1000 ? `${(v/1000).toFixed(2)} µs` : `${v.toFixed(2)} ns`;
+  const fmt = (v: number) => v > 1000 ? `${(v / 1000).toFixed(2)} µs` : `${v.toFixed(2)} ns`;
 
   const table = `| Framework | Latency | Speed |
 | :--- | :--- | :--- |
 | **BareJS** | **${fmt(b)}** | **Baseline** |
-| Elysia | ${fmt(e)} | ${(e/b).toFixed(2)}x slower |
-| Hono | ${fmt(h)} | ${(h/b).toFixed(2)}x slower |`;
+| Elysia | ${fmt(e)} | ${(e / b).toFixed(2)}x slower |
+| Hono | ${fmt(h)} | ${(h / b).toFixed(2)}x slower |`;
 
   let readme = readFileSync(README, 'utf8');
 
-  // FIX: Use specific markers instead of matching the whole file
   const startTag = '<!-- MARKER: PERFORMANCE_TABLE_START -->';
   const endTag = '<!-- MARKER: PERFORMANCE_TABLE_END -->';
 
-  // This Regex looks for the tags and matches everything inside them
-  const markerRegex = new RegExp(`${startTag}[\\s\\S]*${endTag}`);
-  const replacement = `${startTag}\n\n${table}\n\n${endTag}`;
+  const startIndex = readme.indexOf(startTag);
+  const endIndex = readme.indexOf(endTag);
 
-  if (readme.includes(startTag) && readme.includes(endTag)) {
-    readme = readme.replace(markerRegex, replacement);
-    writeFileSync(README, readme);
-    console.log("✅ README updated safely.");
+
+  if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
+    const before = readme.substring(0, startIndex + startTag.length);
+    const after = readme.substring(endIndex);
+
+    const newContent = `${before}\n\n${table}\n\n${after}`;
+
+    writeFileSync(README, newContent);
+    console.log("✅ README updated successfully between markers.");
   } else {
-    // If tags are missing, don't overwrite! Append to the end instead.
-    console.warn("⚠️ Markers not found. Appending table to end of file to prevent data loss.");
-    writeFileSync(README, `${readme}\n\n${startTag}\n\n${table}\n\n${endTag}`);
+
+    console.warn("⚠️ [Warning]: Cannot find valid markers in README.md");
+
+    if (startIndex === -1) console.log(`   Missing: ${startTag}`);
+    if (endIndex === -1) console.log(`   Missing: ${endTag}`);
+    if (startIndex >= endIndex && startIndex !== -1) {
+      console.log("   Error: Start tag is placed AFTER End tag!");
+    }
+
+    console.log("💡 Action: Please check if README.md has both markers correctly.");
   }
 } catch (e: any) {
   console.error("Update failed:", e.message);

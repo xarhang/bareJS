@@ -1,6 +1,5 @@
 
-import { Context, type Middleware, type WSHandlers } from './context';
-
+import { Context, type Middleware, type Handler, type WSHandlers } from './context';
 export * from './context';
 export * from './validators';
 import type { Server, ServerWebSocket } from "bun";
@@ -26,15 +25,42 @@ export class BareJS {
   private pool: Context[] = Array.from({ length: 1024 }, () => new Context());
 
   
-  public use(arg: Middleware | BarePlugin) {
+ public use(arg: Middleware | { install: (app: BareJS) => void }) {
     if (arg && typeof arg === 'object' && 'install' in arg) {
       arg.install(this);
-    } else if (typeof arg === 'function') {
+    } else {
       this.globalMiddlewares.push(arg as Middleware);
     }
     return this;
   }
 
+private compileHandler(handler: Handler, middlewares: Middleware[]) {
+    // This is the core JIT function. It wraps everything into one fast call.
+    return (ctx: Context) => {
+      let index = -1;
+      const runner = async (idx: number): Promise<any> => {
+        if (idx <= index) throw new Error('next() called multiple times');
+        index = idx;
+        
+        const fn = idx === middlewares.length ? handler : middlewares[idx];
+        
+        if (!fn) return;
+
+        // Support both (ctx, next) and (req, params, next)
+        return (fn as any).length > 2 
+          ? (fn as any)(ctx.req, ctx.params, () => runner(idx + 1))
+          : (fn as any)(ctx, () => runner(idx + 1));
+      };
+
+      return runner(0).then((result) => {
+        // If the handler returned a raw object, wrap it with the status from Context
+        if (result && result.constructor === Object) {
+          return Response.json(result, { status: ctx._status });
+        }
+        return result;
+      });
+    };
+  }
   public get = (path: string, ...h: any[]) => { this.routes.push({ method: "GET", path, handlers: h }); return this; };
   public post = (path: string, ...h: any[]) => { this.routes.push({ method: "POST", path, handlers: h }); return this; };
   public put = (path: string, ...h: any[]) => { this.routes.push({ method: "PUT", path, handlers: h }); return this; };

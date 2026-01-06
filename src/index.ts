@@ -2,7 +2,10 @@
 
 // Core Class & Plugin Interface
 export { BareJS } from './bare';
-export type { BarePlugin } from './bare';
+// export type { BarePlugin } from './bare';
+export interface BarePlugin {
+  install: (app: any) => void;
+}
 
 // Context, Types & WebSocket
 export type { 

@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { writeFileSync, readFileSync, existsSync } from "fs";
 
 /**
- * Interface for Type Safety
+ * Interface to prevent 'any' types and satisfy TypeScript
  */
 interface BenchResult {
   name: string;
@@ -14,68 +14,83 @@ interface BenchResult {
 }
 
 /**
- * Setup Data & Workload
- * To beat Elysia by 55%, we match the 3-middleware workload
+ * Setup Workload
+ * To achieve the 55% lead, we match the middleware count across frameworks.
  */
 const payload = { message: "bench" };
 const req = new Request("http://localhost/user/123");
 
+// 1. BareJS Setup
 const bare = new BareJS();
 const bareMW = (req: Request, params: Record<string, string>, next: () => any) => next();
 bare.use(bareMW).use(bareMW).use(bareMW);
 bare.get("/user/:id", () => payload); 
 
+// 2. Elysia Setup
 const elysia = new Elysia()
   .onBeforeHandle(() => {})
   .onBeforeHandle(() => {})
   .onBeforeHandle(() => {})
   .get("/user/:id", () => payload);
 
+// 3. Hono Setup
 const hono = new Hono();
 const honoMW = async (_c: any, next: any) => await next();
 hono.use("*", honoMW).use("*", honoMW).use("*", honoMW);
 hono.get("/user/:id", (c) => c.json(payload));
 
 /**
- * Helper: Find value without using "!" (Non-null assertion)
- * Ensures 100% Type Safety
+ * Helper: Find framework values with absolute Type Safety
+ * No "!" operator used.
  */
-function findFrameworkValue(results: BenchResult[], target: string): number {
-  const match = results.find((r: BenchResult) => 
+function findValue(data: BenchResult[], target: string): number {
+  const match = data.find((r: BenchResult) => 
     r.name.toLowerCase().includes(target.toLowerCase())
   );
   
   if (!match) {
-    console.error(`Available benchmarks: ${results.map((r: BenchResult) => r.name).join(", ")}`);
-    throw new Error(`Data for ${target} was not found in results.`);
+    console.error(`Available results: ${data.map(d => d.name).join(", ")}`);
+    throw new Error(`Data for framework "${target}" missing from benchmark output.`);
   }
   
   return match.value;
 }
 
 /**
- * Execution
+ * Main Execution Block
  */
-async function startBench() {
+async function main() {
+  console.log("🚀 Starting Benchmark...");
+  
+  group("Benchmark", () => {
+    bench("BareJS", () => bare.fetch(req));
+    bench("Elysia", () => elysia.handle(req));
+    bench("Hono", () => hono.fetch(req));
+  });
+
+  // Await the run command completely to prevent race conditions in CI
   const results: any = await run();
 
-  // 1. Process Results safely
-  const rawBenchmarks = results?.benchmarks ?? [];
-  const formatted: BenchResult[] = rawBenchmarks.map((b: any): BenchResult => ({
+  if (!results || !results.benchmarks) {
+    console.error("❌ Mitata failed to produce results.");
+    process.exit(1);
+  }
+
+  // Map results to our safe interface
+  const formatted: BenchResult[] = results.benchmarks.map((b: any): BenchResult => ({
     name: String(b.name).trim(),
     value: b.stats?.avg ?? 0
   }));
 
-  // Save raw data for other tools
+  // Save results for reference
   writeFileSync("result.json", JSON.stringify(formatted, null, 2));
 
   try {
-    // 2. Extract Values safely using Type Guard helper
-    const vBare = findFrameworkValue(formatted, 'BareJS');
-    const vElysia = findFrameworkValue(formatted, 'Elysia');
-    const vHono = findFrameworkValue(formatted, 'Hono');
+    const vBare = findValue(formatted, 'BareJS');
+    const vElysia = findValue(formatted, 'Elysia');
+    const vHono = findValue(formatted, 'Hono');
 
-    // 3. Format units (Auto-switch between ns and µs)
+    // Unit formatter: Switch to µs if latency > 1000ns
     const fmt = (ns: number) => ns > 1000 ? `${(ns / 1000).toFixed(2)} µs` : `${ns.toFixed(2)} ns`;
 
     const table = `| Framework | Latency (Avg) | Speed Ratio |
@@ -84,9 +99,12 @@ async function startBench() {
 | Elysia | ${fmt(vElysia)} | ${(vElysia / vBare).toFixed(2)}x slower |
 | Hono | ${fmt(vHono)} | ${(vHono / vBare).toFixed(2)}x slower |`;
 
-    // 4. Update README with Safety logic
+    // Update README.md
     const readmePath = 'README.md';
-    if (!existsSync(readmePath)) return;
+    if (!existsSync(readmePath)) {
+        console.warn("README.md not found, skipping update.");
+        return;
+    }
 
     const content = readFileSync(readmePath, 'utf8');
     const startTag = '';
@@ -94,30 +112,27 @@ async function startBench() {
 
     if (content.includes(startTag) && content.includes(endTag)) {
       const parts = content.split(startTag);
+      const secondPart = parts[1];
       
-      // ตรวจสอบว่ามีเนื้อหาหลัง startTag หรือไม่
-      const secondPart = parts[1]; 
-      if (secondPart) {
+      // Strict null check to satisfy Error 2532
+      if (secondPart !== undefined) {
         const afterPart = secondPart.split(endTag);
-        
-        // ตรวจสอบว่ามีเนื้อหาหลัง endTag หรือไม่ (แก้ Error บรรทัด 97)
         const finalSuffix = afterPart[1];
+        
         if (finalSuffix !== undefined) {
           const updatedContent = `${parts[0]}${startTag}\n\n${table}\n\n${endTag}${finalSuffix}`;
           writeFileSync(readmePath, updatedContent);
-          console.log('🚀 BareJS Benchmarks updated in README!');
-        } else {
-          console.error('❌ Error: End tag marker is malformed.');
+          console.log("✅ README updated successfully!");
         }
       }
     } else {
-      console.warn('⚠️ Warning: Markers not found in README.md. Skip update.');
+      console.warn("⚠️ Markers not found in README.md");
     }
 
   } catch (err) {
-    console.error('❌ Error updating results:', err instanceof Error ? err.message : err);
+    console.error("❌ Error processing results:", err instanceof Error ? err.message : err);
     process.exit(1);
   }
 }
 
-startBench();
+main();

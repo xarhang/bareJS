@@ -1,47 +1,27 @@
 // All comments in English
-import { run, bench, group } from "mitata";
+import { run, bench } from "mitata";
 import { BareJS } from "../src/index";
 import { Elysia } from "elysia";
 import { Hono } from "hono";
 import { writeFileSync, readFileSync, existsSync } from "fs";
 
-/**
- * Interface to prevent 'any' types and satisfy TypeScript
- */
 interface BenchResult {
   name: string;
   value: number;
 }
 
-/**
- * Setup Workload
- * To achieve the 55% lead, we match the middleware count across frameworks.
- */
 const payload = { message: "bench" };
 const req = new Request("http://localhost/user/123");
 
-// 1. BareJS Setup
+// Framework Instances
 const bare = new BareJS();
-const bareMW = (req: Request, params: Record<string, string>, next: () => any) => next();
-bare.use(bareMW).use(bareMW).use(bareMW);
 bare.get("/user/:id", () => payload); 
 
-// 2. Elysia Setup
-const elysia = new Elysia()
-  .onBeforeHandle(() => {})
-  .onBeforeHandle(() => {})
-  .onBeforeHandle(() => {})
-  .get("/user/:id", () => payload);
-
-// 3. Hono Setup
-const hono = new Hono();
-const honoMW = async (_c: any, next: any) => await next();
-hono.use("*", honoMW).use("*", honoMW).use("*", honoMW);
-hono.get("/user/:id", (c) => c.json(payload));
+const elysia = new Elysia().get("/user/:id", () => payload);
+const hono = new Hono().get("/user/:id", (c) => c.json(payload));
 
 /**
- * Helper: Find framework values with absolute Type Safety
- * No "!" operator used.
+ * Strict Type Guard for finding values
  */
 function findValue(data: BenchResult[], target: string): number {
   const match = data.find((r: BenchResult) => 
@@ -49,40 +29,40 @@ function findValue(data: BenchResult[], target: string): number {
   );
   
   if (!match) {
-    console.error(`Available results: ${data.map(d => d.name).join(", ")}`);
-    throw new Error(`Data for framework "${target}" missing from benchmark output.`);
+    const available = data.map(d => `"${d.name}"`).join(", ");
+    throw new Error(`Framework "${target}" not found. Available: [${available}]`);
   }
   
   return match.value;
 }
 
-/**
- * Main Execution Block
- */
 async function main() {
-  console.log("🚀 Starting Benchmark...");
+  console.log("🚀 Starting Performance Benchmark...");
   
-  group("Benchmark", () => {
-    bench("BareJS", () => bare.fetch(req));
-    bench("Elysia", () => elysia.handle(req));
-    bench("Hono", () => hono.fetch(req));
-  });
+  // Register benchmarks
+  bench("BareJS", () => bare.fetch(req));
+  bench("Elysia", () => elysia.handle(req));
+  bench("Hono", () => hono.fetch(req));
 
-  // Await the run command completely to prevent race conditions in CI
+  // 1. Await full completion
   const results: any = await run();
 
   if (!results || !results.benchmarks) {
-    console.error("❌ Mitata failed to produce results.");
+    console.error("❌ Benchmark failed: No results returned from Mitata.");
     process.exit(1);
   }
 
-  // Map results to our safe interface
-  const formatted: BenchResult[] = results.benchmarks.map((b: any): BenchResult => ({
-    name: String(b.name).trim(),
-    value: b.stats?.avg ?? 0
-  }));
+  // 2. Safe mapping with name-extraction fallback
+  const formatted: BenchResult[] = results.benchmarks.map((b: any): BenchResult => {
+    // Some Mitata versions store names in b.name, others in b.alias or b.id
+    const rawName = b.name ?? b.alias ?? b.id ?? "Unknown";
+    return {
+      name: String(rawName).trim(),
+      value: b.stats?.avg ?? 0
+    };
+  });
 
-  // Save results for reference
+  // Write for persistence
   writeFileSync("result.json", JSON.stringify(formatted, null, 2));
 
   try {
@@ -90,7 +70,6 @@ async function main() {
     const vElysia = findValue(formatted, 'Elysia');
     const vHono = findValue(formatted, 'Hono');
 
-    // Unit formatter: Switch to µs if latency > 1000ns
     const fmt = (ns: number) => ns > 1000 ? `${(ns / 1000).toFixed(2)} µs` : `${ns.toFixed(2)} ns`;
 
     const table = `| Framework | Latency (Avg) | Speed Ratio |
@@ -99,12 +78,9 @@ async function main() {
 | Elysia | ${fmt(vElysia)} | ${(vElysia / vBare).toFixed(2)}x slower |
 | Hono | ${fmt(vHono)} | ${(vHono / vBare).toFixed(2)}x slower |`;
 
-    // Update README.md
+    // 3. Update README using safe split logic
     const readmePath = 'README.md';
-    if (!existsSync(readmePath)) {
-        console.warn("README.md not found, skipping update.");
-        return;
-    }
+    if (!existsSync(readmePath)) return;
 
     const content = readFileSync(readmePath, 'utf8');
     const startTag = '';
@@ -112,25 +88,21 @@ async function main() {
 
     if (content.includes(startTag) && content.includes(endTag)) {
       const parts = content.split(startTag);
-      const secondPart = parts[1];
+      const afterStart = parts[1];
       
-      // Strict null check to satisfy Error 2532
-      if (secondPart !== undefined) {
-        const afterPart = secondPart.split(endTag);
-        const finalSuffix = afterPart[1];
+      if (afterStart !== undefined) {
+        const subParts = afterStart.split(endTag);
+        const finalSuffix = subParts[1];
         
         if (finalSuffix !== undefined) {
-          const updatedContent = `${parts[0]}${startTag}\n\n${table}\n\n${endTag}${finalSuffix}`;
-          writeFileSync(readmePath, updatedContent);
-          console.log("✅ README updated successfully!");
+          const newReadme = `${parts[0]}${startTag}\n\n${table}\n\n${endTag}${finalSuffix}`;
+          writeFileSync(readmePath, newReadme);
+          console.log("✅ Benchmark data successfully injected into README.md");
         }
       }
-    } else {
-      console.warn("⚠️ Markers not found in README.md");
     }
-
   } catch (err) {
-    console.error("❌ Error processing results:", err instanceof Error ? err.message : err);
+    console.error("❌ CI Error:", err instanceof Error ? err.message : err);
     process.exit(1);
   }
 }

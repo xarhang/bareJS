@@ -5,9 +5,7 @@ export { BareJS } from './bare';
 export type { BarePlugin } from './bare';
 
 // Context, Types & WebSocket
-export { BareContext } from './context';
 export type { 
-  Context, 
   Middleware, 
   Handler, 
   Next, 

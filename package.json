@@ -1,6 +1,6 @@
 {
   "name": "barejs",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "author": "xarhang",
   "description": "High-performance JIT-specialized web framework for Bun",
   "main": "./dist/index.js",
@@ -53,7 +53,8 @@
     "@sinclair/typebox": "^0.34.46",
     "zod": "^3.23.8",
     "@types/bun": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "mitata": "^1.0.34"
   },
   "files": [
     "dist",

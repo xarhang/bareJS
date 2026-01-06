@@ -1,4 +1,4 @@
-import type { Context, Next } from './context';
+import type {  Next } from './context';
 import { join, normalize, sep } from 'path';
 
 /**
@@ -6,7 +6,7 @@ import { join, normalize, sep } from 'path';
  * Optimized for Bun with zero-copy file streaming
  */
 export const staticFile = (root: string = 'public', options = { index: 'index.html' }) => {
-  return async (ctx: Context, next: Next) => {
+  return async (ctx: any, next: Next) => {
     // 1. Only allow GET and HEAD methods for security
     if (ctx.req.method !== 'GET' && ctx.req.method !== 'HEAD') {
       return next();

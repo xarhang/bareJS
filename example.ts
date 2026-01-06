@@ -1,40 +1,57 @@
+// All comments in English
 import { BareJS } from './src/bare';
-import type { Context } from './src/context';
 import { typebox, native } from './src/validators';
 import * as TB from '@sinclair/typebox';
 import { logger } from './src/logger';
+// Import types for explicit annotation
+import type { Context } from './src/context';
+
 const app = new BareJS();
+
+// Global Middleware
 app.use(logger);
+
 // Create Schema with TypeBox
 const UserSchema = TB.Type.Object({
   name: TB.Type.String(),
   age: TB.Type.Number()
 });
 
-// ✅ Route 1: Using TypeBox Validator (Fastest for Bun)
-app.post('/users-tb', typebox(UserSchema), (ctx: Context) => {
-  return ctx.json({ message: "Saved via TypeBox", user: ctx.body });
+// ✅ Route 1: Using TypeBox Validator
+// Annotating 'req' as Context (which is an alias for Request)
+app.post('/users-tb', typebox(UserSchema), (req: Context) => {
+  return { 
+    message: "Saved via TypeBox", 
+    user: (req as any).parsedBody 
+  };
 });
 
-
-// ✅ Route 2: Using Native Validator (Safe alternative if TypeBox has issues)
-app.post('/users-native', native(UserSchema), (ctx: Context) => {
-  return ctx.json({ message: "Saved via Native", user: ctx.body });
+// ✅ Route 2: Using Native Validator
+app.post('/users-native', native(UserSchema), (req: Context) => {
+  return { 
+    message: "Saved via Native", 
+    user: (req as any).parsedBody 
+  };
 });
 
-// ✅ Route 3: No Validator (Pure speed, 0 ns overhead)
-app.get('/', (ctx: Context) => ctx.json({ message: `Welcome to BareJS!` }));
-app.get('/ping', (ctx: Context) => ctx.json({ message: "pong" }));
-// Dynamic Path
-app.get('/user/:id', (ctx: Context) => {
-  const userId = ctx.params.id;
-  return ctx.json({ user: userId, status: 'active' });
+// ✅ Route 3: Pure speed
+app.get('/', () => ({ message: "Welcome to BareJS!" }));
+
+app.get('/ping', () => ({ message: "pong" }));
+
+// ✅ Dynamic Path: Explicitly type 'req' and 'params'
+app.get('/user/:id', (req: Context, params: Record<string, string>) => {
+  const userId = params.id;
+  return { user: userId, status: 'active' };
 });
 
-// Multiple Params
-app.get('/post/:category/:id', (ctx: Context) => {
-  return ctx.json(ctx.params); // { category: 'tech', id: '1' }
+// ✅ Multiple Params: Explicitly type 'req' and 'params'
+app.get('/post/:category/:id', (req: Context, params: Record<string, string>) => {
+  return params; 
 });
 
+// Use process.env for deployment as requested
+const HOST = process.env.HOST || "10.62.0.72";
+const PORT = parseInt(process.env.PORT || "3000");
 
-app.listen("10.62.0.72")
+app.listen(HOST, PORT);

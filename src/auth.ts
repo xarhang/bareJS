@@ -1,4 +1,4 @@
-import type { Context, Next } from './context';
+import type {  Next } from './context';
 
 /**
  * UTILS: Internal Crypto Helpers using Native Web Crypto
@@ -25,7 +25,7 @@ const verifyData = async (data: string, signature: string, secret: string): Prom
  * 1. BARE TOKEN AUTH (High Performance JWT-like)
  */
 export const bareAuth = (secret: string) => {
-  return async (ctx: Context, next: Next) => {
+  return async (ctx: any, next: Next) => {
     const authHeader = ctx.req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return ctx.status(401).json({ status: 'error', message: 'Bearer token required' });
@@ -61,7 +61,7 @@ export const bareAuth = (secret: string) => {
  * 2. BASIC AUTH
  */
 export const basicAuth = (credentials: { user: string; pass: string }) => {
-  return async (ctx: Context, next: Next) => {
+  return async (ctx: any, next: Next) => {
     const authHeader = ctx.req.headers.get('Authorization');
     if (!authHeader?.startsWith('Basic ')) {
       return ctx.status(401).json({ status: 'error', message: 'Basic Auth required' });

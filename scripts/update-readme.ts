@@ -42,10 +42,12 @@ try {
     const before = readme.substring(0, startIndex + startTag.length);
     const after = readme.substring(endIndex);
 
-    const newContent = `${before}\n\n${table}\n\n${after}`;
+
+    const lastUpdate = `\n> Last Updated: ${new Date().toISOString()}\n`;
+    const newContent = `${before}\n\n${table}${lastUpdate}\n${after}`;
 
     writeFileSync(README, newContent);
-    console.log("✅ README updated successfully between markers.");
+    console.log("✅ README updated and synced.");
   } else {
 
     console.warn("⚠️ [Warning]: Cannot find valid markers in README.md");

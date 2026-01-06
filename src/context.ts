@@ -1,4 +1,4 @@
-export type Next = () => any;
+export type Next = () => Promise<any> | any;
 
 export class Context {
   public req!: Request;
@@ -6,7 +6,7 @@ export class Context {
   public _status: number = 200;
   public store: any = Object.create(null);
   
-  // ✅ Added 'body' for TypeBox/Validation support
+  // ✅ Added body to ensure TypeBox/Validators can store data
   public body: any = null;
 
   public reset(req: Request, params: Record<string, string>) {
@@ -14,7 +14,7 @@ export class Context {
     this.params = params;
     this._status = 200;
     this.store = Object.create(null);
-    this.body = null; // Clean up for the next use in pool
+    this.body = null; 
     return this;
   }
 
@@ -23,7 +23,6 @@ export class Context {
     return this; 
   }
 
-  // ✅ Added 'json' helper (Zero-cost: just returns the object)
   public json(data: any) {
     return data;
   }
@@ -32,11 +31,21 @@ export class Context {
   public get(k: string) { return this.store[k]; }
 }
 
-// ✅ Improved Middleware type to support both (ctx) and (req, params) styles
-export type Handler = (c: Context, next: Next) => any;
-export type Middleware = 
-  | ((ctx: Context, next: Next) => any)
-  | ((req: Request, params: Record<string, string>, next: Next) => any);
+// export type Handler = (c: Context) => any;
+
+// ✅ Features Kept: Supports both (ctx, next) and (req, params, next)
+// export type Middleware = 
+//   | ((ctx: Context, next: Next) => any)
+//   | ((req: Request, params: Record<string, string>, next: Next) => any)
+//   | ((req: Request, next: Next) => any)
+//   | ((ctx: Context, next: Next) => Promise<any> | any);
+export type Middleware = (
+  ctx: any,       // จะเป็น Context หรือ Request ก็ได้
+  next: any,      // จะเป็น Next หรือ Params ก็ได้
+  third?: Next    // สำหรับแบบ (req, params, next)
+) => Promise<any> | any;
+
+export type Handler = (ctx: any) => Promise<any> | any;
 
 export interface WSHandlers {
   open?: (ws: any) => void;

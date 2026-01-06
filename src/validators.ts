@@ -1,23 +1,18 @@
 // All comments in English
 import * as Compiler from '@sinclair/typebox/compiler';
-import type { Middleware } from './context';
+import type { Context, Middleware } from './context';
 
-/**
- * Fast JSON Response helper for validators to maintain Zero-Object speed
- */
 const errorJSON = (data: any, status = 400) => new Response(JSON.stringify(data), {
   status,
   headers: { 'Content-Type': 'application/json' }
 });
 
-/**
- * TypeBox Validator (JIT Compiled)
- */
 export const typebox = (schema: any) => {
   const check = Compiler.TypeCompiler.Compile(schema);
-  const mw: Middleware = async (req, _, next) => {
+  
+  return async (ctx: Context, next: any) => {
     try {
-      const body = await req.json();
+      const body = await ctx.req.json();
       if (!check.Check(body)) {
         const error = check.Errors(body).First();
         return errorJSON({
@@ -27,13 +22,14 @@ export const typebox = (schema: any) => {
           path: error?.path || 'body'
         });
       }
-      (req as any).parsedBody = body;
-      return next();
+      
+      ctx.body = body; 
+      // ✅ FIX TS2722: Check if next exists before calling
+      return next ? next() : undefined;
     } catch {
       return errorJSON({ status: 'error', message: 'Invalid JSON payload' });
     }
   };
-  return mw;
 };
 
 /**
@@ -44,8 +40,12 @@ export const native = (schema: any) => {
   const keys = Object.keys(props);
   const kLen = keys.length;
   
-  const mw: Middleware = async (req, _, next) => {
+  const mw: Middleware = async (ctx: any, next?: any) => {
     try {
+      // Handle both (ctx, next) and (req, params, next) styles
+      const isCtx = ctx instanceof Object && 'req' in ctx;
+      const req = isCtx ? ctx.req : ctx;
+
       const body = await req.json() as any;
       for (let i = 0; i < kLen; i++) {
         const k = keys[i]!;
@@ -58,8 +58,11 @@ export const native = (schema: any) => {
           });
         }
       }
-      (req as any).parsedBody = body;
-      return next();
+      
+      if (isCtx) ctx.body = body;
+      
+      // ✅ FIX TS2722: Check next
+      return next ? next() : undefined;
     } catch { 
       return errorJSON({ status: 'error', message: 'Invalid JSON payload' }); 
     }
@@ -71,8 +74,11 @@ export const native = (schema: any) => {
  * Zod Validator
  */
 export const zod = (schema: any) => {
-  const mw: Middleware = async (req, _, next) => {
+  const mw: Middleware = async (ctx: any, next?: any) => {
     try {
+      const isCtx = ctx instanceof Object && 'req' in ctx;
+      const req = isCtx ? ctx.req : ctx;
+
       const body = await req.json();
       const result = schema.safeParse(body);
       if (!result.success) {
@@ -82,8 +88,11 @@ export const zod = (schema: any) => {
           errors: result.error.format()
         });
       }
-      (req as any).parsedBody = result.data;
-      return next();
+      
+      if (isCtx) ctx.body = result.data;
+      
+      // ✅ FIX TS2722: Check next
+      return next ? next() : undefined;
     } catch { 
       return errorJSON({ status: 'error', message: 'Invalid JSON payload' }); 
     }

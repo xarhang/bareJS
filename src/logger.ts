@@ -4,7 +4,7 @@ export const logger: Middleware = async (req, params, next) => {
   const start = performance.now();
   const path = new URL(req.url).pathname;
 
-  const response = await next();
+  const response = await next?.();
 
   const duration = (performance.now() - start).toFixed(2);
   const status = response instanceof Response ? response.status : 200;

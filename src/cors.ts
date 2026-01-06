@@ -16,7 +16,7 @@ export const cors = (options: { origin?: string; methods?: string } = {}) => {
       });
     }
 
-    const res = await next();
+    const res = await next?.();
     if (res instanceof Response) {
       res.headers.set('Access-Control-Allow-Origin', origin);
       res.headers.set('Access-Control-Allow-Methods', methods);

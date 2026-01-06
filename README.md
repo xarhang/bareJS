@@ -3,26 +3,19 @@
 
 BareJS is a minimalist, high-performance web engine architected for the **Bun** ecosystem. By utilizing a **Just-In-Time (JIT) Route Compilation** strategy and an asynchronous **Onion-Model** pipeline, BareJS achieves near-native throughput, outperforming traditional frameworks by eliminating runtime routing overhead.
 
-![Benchmark Status](https://github.com/xarhang/bareJS/actions/workflows/bench.yml/badge.svg)
-[![Performance Dashboard](https://img.shields.io/badge/Performance-Dashboard-blueviolet?style=flat-square&logo=speedtest)](https://xarhang.github.io/bareJS/dev/benchmarks/)
-[![Bun Version](https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=flat-square&logo=bun)](https://bun.sh)
-[![NPM Version](https://img.shields.io/npm/v/barejs.svg?style=flat-square)](https://www.npmjs.com/package/barejs)
-
 ---
 
 ## 🏛 Architectural Engineering
 
 Unlike traditional frameworks that iterate through arrays or regex patterns on every request, BareJS utilizes a **Static Compilation Phase**.
 
-
-
 ### The JIT Lifecycle
+
 When `app.listen()` is invoked, the engine:
+
 1. **Analyzes** the complete route tree and global middleware stack.
 2. **Serializes** the execution logic into a flat, optimized JavaScript function.
 3. **Binds** the function using `new Function()`, allowing the **JavaScriptCore (JSC)** engine to perform aggressive inline caching and speculative optimizations.
-
----
 
 ---
 
@@ -45,173 +38,115 @@ Performance comparison between **BareJS**, **Elysia**, and **Hono**.
 
 ---
 
-
-### ✨ **Features**
-
-* **Ultra Low Latency:** Optimized to minimize processing overhead.
-* **Zero Dependency:** Built natively for security and raw speed.
-* **Optimized for Bun:** Leverages native Bun APIs for maximum performance.
-* **Memory Efficient:** Minimal heap usage and clean garbage collection.
-
----
-
 ## 📦 Installation
 
 ```bash
 bun add barejs
+
 ```
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick Start (All-in-One)
 
-Create an `index.ts` and get your server running in seconds:
+BareJS provides everything you need in a single entry point. No more messy imports.
 
 ```typescript
-import { BareJS, type Context, typebox } from 'barejs';
+import { 
+  BareJS, 
+  typebox, 
+  logger, 
+  cors, 
+  staticFile, 
+  bareAuth, 
+  type Context 
+} from 'barejs';
 import * as TB from '@sinclair/typebox';
 
 const app = new BareJS();
 
-// Create Schema with TypeBox
+// 1. Global Middlewares
+app.use(logger); // Beautiful terminal logs
+app.use(cors());   // Enable CORS for all origins
+app.use(staticFile('public')); // Serve images/css from /public
+
+// 2. Schema Validation (TypeBox)
 const UserSchema = TB.Type.Object({
   name: TB.Type.String(),
   age: TB.Type.Number()
 });
 
-// ✅ Route 1: Using TypeBox Validator (Fastest for Bun)
-app.post('/users-tb', typebox(UserSchema), (ctx: Context) => {
-  return ctx.json({ message: "Saved via TypeBox", user: ctx.body });
+// 3. Protected Route with Native Auth (Bun.crypto)
+app.get('/admin', bareAuth('MY_SECRET'), (ctx: Context) => {
+  return ctx.json({ 
+    message: "Welcome Admin", 
+    user: ctx.get('user') 
+  });
 });
 
-
-// ✅ Route 2: Using Native Validator (Safe alternative if TypeBox has issues)
-app.post('/users-native', native(UserSchema), (ctx: Context) => {
-  return ctx.json({ message: "Saved via Native", user: ctx.body });
+// 4. Standard Route
+app.post('/users', typebox(UserSchema), (ctx: Context) => {
+  return ctx.status(201).json({ 
+    message: "User Created", 
+    data: ctx.body 
+  });
 });
 
-// ✅ Route 3: No Validator (Pure speed, 0 ns overhead)
-app.get('/ping', (ctx: Context) => ctx.json({ message: "pong" }));
-// Dynamic Path
-app.get('/user/:id', (ctx: Context) => {
-  const userId = ctx.params.id;
-  return ctx.json({ user: userId, status: 'active' });
-});
-
-// Multiple Params
-app.get('/post/:category/:id', (ctx: Context) => {
-  return ctx.json(ctx.params); // { category: 'tech', id: '1' }
-});
-
-
-app.listen('0.0.0.0', 3000);
-
-```
----
-
-## 📖 Manual & Documentation
-
-### 1. Request Context (`ctx`)
-
-Every handler receives a `Context` object, providing a high-speed interface to the request:
-
-* `ctx.req`: The Native Bun Request.
-* `ctx.json(data)`: High-speed JSON helper with pre-defined headers.
-* `ctx.params`: Object containing route parameters (e.g., { id: "123" }).
-* `ctx.body`: Validated payload (populated by typebox, zod, or native).
-* `ctx.status(code)`: Chainable status setter (e.g., ctx.status(201).json(...)).
-* `ctx.setResHeader(key, value)`: Direct response header manipulation.
-
-### 2. Middleware (The Onion Model)
-
-BareJS supports an asynchronous recursive pipeline, allowing you to wrap logic before and after the handler. Using Context from the main package ensures full type safety.
-
-```typescript
-import { type Context, type Next } from 'barejs';
-
-app.use(async (ctx: Context, next: Next) => {
-  const start = performance.now();
-  
-  const response = await next(); // Proceed to next middleware or handler
-  
-  const duration = (performance.now() - start).toFixed(2);
-  console.log(`Latency: ${duration}ms`);
-  
-  return response;
-});
-
-```
-
-### 3. Full Plugin System
-
-Encapsulate complex logic into reusable modules. Plugins have direct access to the BareJS instance during the installation phase.
-
-```typescript
-import { type Context, type Next, type BareJS } from 'barejs';
-
-const databasePlugin = {
-  name: 'barejs-db',
-  version: '1.0.0',
-  install: (app: BareJS) => {
-    app.use(async (ctx: Context, next: Next) => {
-      ctx.db = "CONNECTED"; // Attach custom properties to context
-      return await next();
-    });
-  }
-};
-
-app.use(databasePlugin);
-
-```
-
-### 4. Native WebSocket Support (MAX Speed)
-
-BareJS leverages Bun's native WebSocket implementation, allowing you to handle real-time binary and text streams with minimal overhead.
-
-```typescript
-import { BareJS } from 'barejs';
-
-const app = new BareJS();
-
-app.ws('/chat', {
-  open: (ws) => console.log('Client connected!'),
-  message: (ws, msg) => {
-    ws.send(`Echo: ${msg}`);
-  },
-  close: (ws, code, reason) => console.log('Closed')
-});
-
-app.listen();
+app.listen(3000);
 
 ```
 
 ---
 
-## 🛡️ Schema Validation
+## 📖 Deep Dive: Full Option Manual
 
-BareJS allows you to use different validators for different routes, focusing on high-speed schema checks.
+### 1. Essential Middlewares
+
+BareJS comes with built-in high-performance middlewares:
+
+* **`logger`**: Prints colored logs with response time (ms).
+* **`cors(options?)`**: Configurable CORS headers.
+* **`staticFile(root)`**: High-speed static file serving using `Bun.file()` (Zero-copy).
+
+### 2. Native Authentication (`bareAuth`)
+
+No need for `jsonwebtoken` or `jose`. BareJS uses **Bun's Native Crypto API** for signing and verifying tokens.
 
 ```typescript
-import { BareJS, typebox, zod, native, type Context } from 'barejs';
-import { Type } from '@sinclair/typebox';
-import { z } from 'zod';
+import { bareAuth, createToken } from 'barejs';
 
-const app = new BareJS();
+// Generate a token (e.g., in a login route)
+const token = await createToken({ id: 1, role: 'admin' }, 'SECRET_KEY');
 
-// 🚀 Tier 1: High Performance (TypeBox)
-// Best for Bun. Compiled JIT validation.
-const UserSchema = Type.Object({ name: Type.String() });
-app.post('/tb', typebox(UserSchema), (ctx: Context) => ctx.json(ctx.body));
+// Protect routes
+app.get('/secure', bareAuth('SECRET_KEY'), (ctx) => {
+  const user = ctx.get('user'); // Access decoded payload
+  return { hello: user.role };
+});
 
-// 💎 Tier 2: Popular Choice (Zod)
-// Flexible and feature-rich.
-const ZodSchema = z.object({ age: z.number() });
-app.post('/zod', zod(ZodSchema), (ctx: Context) => ctx.json(ctx.body));
+```
 
-// 🍃 Tier 3: Zero Dependency (Native)
-// Extremely lightweight. Uses built-in typeof checks.
-app.post('/native', native({ properties: { id: { type: 'number' } } }), (ctx: Context) => {
-  return ctx.json(ctx.body);
+### 3. Schema Validation Tiers
+
+Choose the validator that fits your needs. `typebox` is recommended for maximum performance.
+
+```typescript
+import { typebox, zod, native } from 'barejs';
+
+app.post('/tb', typebox(Schema), handler); // JIT-Compiled (Fastest)
+app.post('/zod', zod(ZodSchema), handler); // Industry Standard
+app.post('/native', native(Schema), handler); // Zero dependencies
+
+```
+
+### 4. Direct Response Control
+
+BareJS context provides a chainable and intuitive API:
+
+```typescript
+app.get('/custom', (ctx) => {
+  ctx.setResHeader('X-Powered-By', 'BareJS');
+  return ctx.status(418).json({ message: "I'm a teapot" });
 });
 
 ```
@@ -220,21 +155,23 @@ app.post('/native', native({ properties: { id: { type: 'number' } } }), (ctx: Co
 
 ## 🏗 Roadmap
 
-* [x] **Middleware Support**: Async/Await "Onion" execution chain.
-* [x] **JIT Static Routing**:  lookup via compiled static maps.
-* [x] **Validation Integration**: Support for TypeBox, Zod, and Native JSON.
-* [x] **Full Plugin System**: Modular extensibility with zero overhead.
-* [x] **Dynamic Path JIT**: Compiled Regex for parameterized routes (e.g., `/user/:id`).
-* [x] **Native WebSocket Support**: High-speed binary streaming.
+* [x] **Middleware Onion Model**: Async execution chain.
+* [x] **JIT Static Routing**: Zero-overhead route lookup.
+* [x] **Native Auth**: HMAC-SHA256 signing via Bun.crypto.
+* [x] **Zero-Copy Static Server**: Direct `sendfile` via Bun.file.
+* [x] **Full Plugin System**: Modular extensibility.
+* [ ] **Auto-Generated Swagger**: OpenAPI documentation support.
+* [ ] **Native Database Drivers**: Optimized Drizzle/Prisma integration.
 
 ---
 
 ## 💎 Credits & Dependencies
 
-* **[Bun](https://bun.sh/)**: The foundational runtime for BareJS.
-* **[TypeBox](https://github.com/sinclairzx81/typebox)** & **[Zod](https://zod.dev/)**: For high-speed type safety.
-* **Inspiration**: Architectural patterns from **Koa** and **ElysiaJS**.
+* **[Bun](https://bun.sh/)**: The foundational runtime.
+* **[TypeBox](https://github.com/sinclairzx81/typebox)**: High-speed validation.
+* **[Inspiration]**: Architectural patterns from **Koa** and **ElysiaJS**.
 
 **Maintained by [xarhang**](https://www.google.com/search?q=https://github.com/xarhang)
 **License: MIT**
-```
+
+---

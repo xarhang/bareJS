@@ -2,9 +2,9 @@ import { BareJS } from './src/bare';
 import type { Context } from './src/context';
 import { typebox, native } from './src/validators';
 import * as TB from '@sinclair/typebox';
-
+import { logger } from './src/logger';
 const app = new BareJS();
-
+app.use(logger);
 // Create Schema with TypeBox
 const UserSchema = TB.Type.Object({
   name: TB.Type.String(),
@@ -23,6 +23,7 @@ app.post('/users-native', native(UserSchema), (ctx: Context) => {
 });
 
 // ✅ Route 3: No Validator (Pure speed, 0 ns overhead)
+app.get('/', (ctx: Context) => ctx.json({ message: `Welcome to BareJS!` }));
 app.get('/ping', (ctx: Context) => ctx.json({ message: "pong" }));
 // Dynamic Path
 app.get('/user/:id', (ctx: Context) => {
@@ -36,4 +37,4 @@ app.get('/post/:category/:id', (ctx: Context) => {
 });
 
 
-app.listen('0.0.0.0', 3000);
+app.listen("10.62.0.72")

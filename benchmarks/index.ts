@@ -3,11 +3,9 @@ import { run, bench, group } from "mitata";
 import { BareJS } from "../src/index";
 import { Elysia } from "elysia";
 import { Hono } from "hono";
-import { writeFileSync, readFileSync, existsSync } from "fs";
+import { writeFileSync, readFileSync } from "fs";
 
-/**
- * Setup Data
- */
+// Setup Data
 const payload = { message: "bench" };
 const req = new Request("http://localhost/user/123");
 
@@ -27,9 +25,6 @@ const honoMW = async (_c: any, next: any) => await next();
 hono.use("*", honoMW).use("*", honoMW).use("*", honoMW);
 hono.get("/user/:id", (c) => c.json(payload));
 
-/**
- * Execution
- */
 group("Benchmark", () => {
   bench("BareJS", () => bare.fetch(req));
   bench("Elysia", () => elysia.handle(req));
@@ -38,35 +33,30 @@ group("Benchmark", () => {
 
 const results: any = await run();
 
-// 1. Safety check for Mitata output
-if (!results || !results.benchmarks) {
-  console.error("❌ Error: Benchmark failed to produce results.");
-  process.exit(1);
-}
-
+// 1. Extract and format results safely
 const formatted = results.benchmarks.map((b: any) => ({
   name: String(b.name),
   value: b.stats?.avg ?? 0
 }));
 
+// Save for GitHub Action Benchmark tool
 writeFileSync("result.json", JSON.stringify(formatted, null, 2));
 
-/**
- * Update README Logic (integrated for safety)
- */
 try {
-  const getVal = (name: string): number => {
-    const res = formatted.find((r: any) => r.name.toLowerCase().includes(name.toLowerCase()));
-    if (!res || typeof res.value !== 'number') {
-      throw new Error(`Data for ${name} is missing.`);
-    }
-    return res.value;
+  // 2. Helper to find values using case-insensitive partial match
+  const getVal = (target: string): number => {
+    const entry = formatted.find((r: any) => 
+      r.name.toLowerCase().includes(target.toLowerCase())
+    );
+    if (!entry) throw new Error(`Data for ${target} is missing.`);
+    return entry.value as number;
   };
 
   const vBare = getVal('BareJS');
   const vElysia = getVal('Elysia');
   const vHono = getVal('Hono');
 
+  // Convert ns to µs for human-readable display if values are high
   const fmt = (ns: number) => ns > 1000 ? `${(ns / 1000).toFixed(2)} µs` : `${ns.toFixed(2)} ns`;
 
   const table = `| Framework | Latency (Avg) | Speed Ratio |
@@ -75,23 +65,22 @@ try {
 | Elysia | ${fmt(vElysia)} | ${(vElysia / vBare).toFixed(2)}x slower |
 | Hono | ${fmt(vHono)} | ${(vHono / vBare).toFixed(2)}x slower |`;
 
+  // 3. Update README safely using split/join to avoid index errors
   const readmePath = 'README.md';
-  if (!existsSync(readmePath)) throw new Error("README.md not found");
-  
   const content = readFileSync(readmePath, 'utf8');
   const startTag = '';
   const endTag = '';
 
-  const parts = content.split(startTag);
-  if (parts.length < 2) throw new Error("Start marker missing");
-  
-  const afterEnd = parts[1]!.split(endTag);
-  if (afterEnd.length < 2) throw new Error("End marker missing");
+  if (!content.includes(startTag) || !content.includes(endTag)) {
+    throw new Error("Markers not found in README.md");
+  }
 
-  const finalContent = `${parts[0]}${startTag}\n\n${table}\n\n${endTag}${afterEnd[1]}`;
+  const parts = content.split(startTag);
+  const afterEnd = parts[1]!.split(endTag)[1];
+  const finalContent = `${parts[0]}${startTag}\n\n${table}\n\n${endTag}${afterEnd}`;
 
   writeFileSync(readmePath, finalContent);
-  console.log('✅ Benchmark complete & README updated!');
+  console.log('✅ Benchmark and README update successful!');
 
 } catch (err) {
   console.error('❌ Error:', err instanceof Error ? err.message : err);

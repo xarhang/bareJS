@@ -17,9 +17,9 @@ const req = new Request("http://localhost/user/123");
  */
 const bare = new BareJS();
 // High-speed middleware signature: (req, params, next)
-const bareMW = (req: Request, params: Record<string, string>, next: () => any) => next();
+// const bareMW = (req: Request, params: Record<string, string>, next: () => any) => next();
 
-bare.use(bareMW).use(bareMW).use(bareMW);
+// bare.use(bareMW).use(bareMW).use(bareMW);
 // Route uses Auto-JSON inlining
 bare.get("/user/:id", () => payload); 
 
@@ -35,9 +35,9 @@ const elysia = new Elysia()
  */
 const hono = new Hono();
 const honoMW = async (_c: any, next: any) => await next();
-hono.use("*", honoMW);
-hono.use("*", honoMW);
-hono.use("*", honoMW);
+// hono.use("*", honoMW);
+// hono.use("*", honoMW);
+// hono.use("*", honoMW);
 hono.get("/user/:id", (c) => c.json(payload));
 
 /**

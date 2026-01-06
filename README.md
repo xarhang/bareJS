@@ -25,14 +25,14 @@ Performance comparison between **BareJS**, **Elysia**, and **Hono**.
 
 ### 🚀 Latest Benchmark Results
 <!-- MARKER: PERFORMANCE_TABLE_START -->
-*Awaiting automated update...*
+
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **1.04 µs** | **Baseline** |
-| Elysia | 2.12 µs | 2.03x slower |
-| Hono | 3.97 µs | 3.81x slower |
+| **BareJS** | **595.16 ns** | **Baseline** |
+| Elysia | 1.84 µs | 3.10x slower |
+| Hono | 3.55 µs | 5.96x slower |
 
-> Last Updated: Tue, 06 Jan 2026 13:27:36 GMT
+> Last Updated: Tue, 06 Jan 2026 16:03:09 GMT
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 

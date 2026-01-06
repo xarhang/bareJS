@@ -24,10 +24,8 @@ When `app.listen()` is invoked, the engine:
 Performance comparison between **BareJS**, **Elysia**, and **Hono**.
 
 ### 🚀 Latest Benchmark Results
-*Awaiting automated update...*
-
 <!-- MARKER: PERFORMANCE_TABLE_START -->
-
+*Awaiting automated update...*
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
 | **BareJS** | **1.04 µs** | **Baseline** |

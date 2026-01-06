@@ -1,29 +1,37 @@
 {
   "compilerOptions": {
-    // Environment setup & latest features
+    /* Environment setup & latest features */
     "lib": ["ESNext"],
     "target": "ESNext",
-    "module": "Preserve",
+    "module": "ESNext",
     "moduleDetection": "force",
     "jsx": "react-jsx",
     "allowJs": true,
 
-    // Bundler mode
+    /* Bundler mode & Release settings */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "noEmit": true,
+    
+    /* The FIX for Build Errors */
+    "noEmit": false,                // Allow tsc to generate files
+    "declaration": true,           // Generate .d.ts files
+    "emitDeclarationOnly": true,   // ONLY generate .d.ts (let Bun handle .js)
+    "outDir": "./dist",            // Put types in dist folder
+    "declarationDir": "./dist/types", // Optional: organize types further
 
-    // Best practices
+    /* Best practices */
     "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
 
-    // Some stricter flags (disabled by default)
+    /* Maintenance */
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "benchmarks", "tests"]
 }

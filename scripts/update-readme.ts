@@ -37,7 +37,7 @@ try {
   const startIndex = readme.indexOf(startTag);
   const endIndex = readme.indexOf(endTag);
 
-
+  console.log(`Current Bench - BareJS: ${b}, Elysia: ${e}, Hono: ${h}`);
   if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
     const before = readme.substring(0, startIndex + startTag.length);
     const after = readme.substring(endIndex);

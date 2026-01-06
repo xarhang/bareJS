@@ -22,14 +22,14 @@ BareJS is designed to be the definitive baseline for speed in the JavaScript eco
 
 ### 📈 Global Latency Comparison (Lower is Better)
 <!-- MARKER: PERFORMANCE_TABLE_START -->
-| Framework | Latency (avg) | Overhead vs Native Bun | Speed Ratio | Status |
-| --- | --- | --- | --- | --- |
-| **🚀 BareJS** | **571.00 ns** | **+18.9%** | **Baseline** | 🚀 Optimal |
-| Elysia | 1.84 µs | +283.3% | 3.22x slower | ⚠️ High |
-| Hono | 3.55 µs | +639.5% | 6.21x slower | ⚠️ High |
 
-> **Analysis**: Based on the "How to beat Elysia by 55%" optimization research, BareJS manages to process requests at a rate that approaches the theoretical limit of the Bun runtime.
-> Last Updated: Tue, 06 Jan 2026 16:03:09 GMT
+| Framework | Latency | Speed |
+| :--- | :--- | :--- |
+| **BareJS** | **538.73 ns** | **Baseline** |
+| Elysia | 2.26 µs | 4.19x slower |
+| Hono | 4.02 µs | 7.46x slower |
+
+> Last Updated: Tue, 06 Jan 2026 19:23:27 GMT
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 

@@ -1,38 +1,26 @@
-import type {  Next } from './context';
-import { join, normalize, sep } from 'path';
+import { join, normalize } from 'node:path';
 
-/**
- * Static File Serving Middleware
- * Optimized for Bun with zero-copy file streaming
- */
-export const staticFile = (root: string = 'public', options = { index: 'index.html' }) => {
-  return async (ctx: any, next: Next) => {
+export const staticFile = (root: string = 'public') => {
+  return async (ctx: any, next: any) => {
+    // 1. Log that the middleware actually started
+    // console.log(`📡 [Static] Checking disk for: ${ctx.req.url}`);
+
     if (ctx.req.method !== 'GET' && ctx.req.method !== 'HEAD') return next();
 
     const url = new URL(ctx.req.url);
-    // Remove leading slash so join() doesn't get confused
     const pathName = decodeURIComponent(url.pathname).replace(/^\//, '');
 
-    // Prevent Directory Traversal
-    const safePath = normalize(pathName).replace(/^(\.\.(\/|\\|$))+/, '');
-    
-    // Resolve absolute path
-    let filePath = join(process.cwd(), root, safePath);
+    // Resolve path (Windows compatible)
+    const filePath = join(process.cwd(), root, pathName);
+    const file = Bun.file(filePath);
 
-    let file = Bun.file(filePath);
-
-    // If it's a directory or file doesn't exist, try index.html
-    if (!(await file.exists())) {
-        const indexFile = join(filePath, options.index);
-        const indexExists = await Bun.file(indexFile).exists();
-        
-        if (indexExists) {
-            file = Bun.file(indexFile);
-        } else {
-            return next(); // Real 404 behavior
-        }
+    if (await file.exists()) {
+      // console.log(`✅ [Static] Found file: ${filePath}`);
+      return new Response(file);
     }
 
-    return new Response(file);
+    // 2. Log if the file was NOT found before moving to 404
+    // console.log(`❌ [Static] Not found on disk: ${filePath}`);
+    return next();
   };
 };

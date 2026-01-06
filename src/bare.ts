@@ -24,7 +24,7 @@
 //   private poolIdx = 0;
 //   private pool: Context[] = Array.from({ length: 1024 }, () => new Context());
 
-  
+
 //  public use(arg: Middleware | { install: (app: BareJS) => void }) {
 //     if (arg && typeof arg === 'object' && 'install' in arg) {
 //       arg.install(this);
@@ -68,7 +68,7 @@
 //           params[d.p[k]!] = match[k + 1];
 //         }
 
-       
+
 //         const ctx = this.pool[this.poolIdx++ & 1023]!.reset(req, params);
 //         return d.c(ctx); 
 //       }
@@ -83,9 +83,9 @@
 //       const runner = async (idx: number): Promise<any> => {
 //         if (idx <= index) throw new Error('next() called multiple times');
 //         index = idx;
-        
+
 //         const fn = idx === middlewares.length ? handler : middlewares[idx];
-        
+
 //         if (!fn) return;
 
 //         // Support both (ctx, next) and (req, params, next)
@@ -182,10 +182,10 @@
 //   }
 // }
 
-
 // All comments in English
 import { Context, type Middleware, type Handler, type WSHandlers, type Next } from './context';
 import { typebox, zod, native } from './validators';
+import { join } from 'node:path';
 
 // Exporting Types and Context
 export * from './context';
@@ -212,25 +212,25 @@ export class BareJS {
   };
 
   private dynamicRoutes: Array<{ m: string, r: RegExp, p: string[], c: Function }> = [];
-  
+
   // High-Performance Object Pooling State
   private poolIdx = 0;
   private pool: Context[];
   private poolMask: number;
 
+  // Pre-compiled fallback for 404s and Global Middleware execution
+  private defaultHandler: Function = (ctx: Context) => new Response('404 Not Found', { status: 404 });
+
   constructor(options?: { poolSize?: number }) {
-    // Priority: Code Option > Environment Variable > Default (1024)
     let size = options?.poolSize || Number(process.env.BARE_POOL_SIZE) || 1024;
 
-    // Ensure size is a Power of 2 for Bitwise Optimization (e.g., 1024, 2048, 4096)
+    // Ensure size is a Power of 2 for Bitwise Optimization
     if ((size & (size - 1)) !== 0) {
       size = Math.pow(2, Math.ceil(Math.log2(size)));
     }
 
     this.poolMask = size - 1;
     this.pool = Array.from({ length: size }, () => new Context());
-    
-    // console.log(`[BAREJS] 🏊 Pool initialized (Size: ${size}, Mask: ${this.poolMask})`);
   }
 
   public get server(): Server<any> | null { return this._server; }
@@ -250,7 +250,7 @@ export class BareJS {
 
     return (ctx: Context) => {
       let index = -1;
-      
+
       const runner = (idx: number): any => {
         if (idx <= index) throw new Error('next() called multiple times');
         index = idx;
@@ -258,7 +258,6 @@ export class BareJS {
         const fn = pipeline[idx];
         if (!fn) return;
 
-        // Optimized call signature check
         return (fn as any).length > 2
           ? (fn as any)(ctx.req, ctx.params, () => runner(idx + 1))
           : (fn as any)(ctx, () => runner(idx + 1));
@@ -266,7 +265,7 @@ export class BareJS {
 
       const result = runner(0);
 
-      // Fast-path: Synchronous Result (Zero Microtask overhead)
+      // Fast-path: Synchronous Result
       if (!(result instanceof Promise)) {
         if (result && result.constructor === Object) {
           return Response.json(result, { status: ctx._status });
@@ -274,7 +273,7 @@ export class BareJS {
         return result;
       }
 
-      // Slow-path: Asynchronous Result (Awaitable)
+      // Slow-path: Asynchronous Result
       return result.then((res) => {
         if (res && res.constructor === Object) {
           return Response.json(res, { status: ctx._status });
@@ -289,7 +288,7 @@ export class BareJS {
   public put = (path: string, ...h: any[]) => { this.routes.push({ method: "PUT", path, handlers: h }); return this; };
   public patch = (path: string, ...h: any[]) => { this.routes.push({ method: "PATCH", path, handlers: h }); return this; };
   public delete = (path: string, ...h: any[]) => { this.routes.push({ method: "DELETE", path, handlers: h }); return this; };
-  
+
   public ws = (path: string, handlers: WSHandlers) => {
     this.wsHandler = { path, handlers };
     return this;
@@ -301,13 +300,13 @@ export class BareJS {
     const path = pathStart === -1 ? '/' : url.slice(pathStart);
     const method = req.method;
 
-    // 🏎️ Static O(1) Lookup with Bitwise Masking
+    // 1. Static O(1) Lookup
     const handler = this.router[method]?.[path];
     if (handler) {
       return handler(this.pool[this.poolIdx++ & this.poolMask]!.reset(req, {}));
     }
 
-    // 🔍 Dynamic RegExp Lookup
+    // 2. Dynamic RegExp Lookup
     for (let i = 0, l = this.dynamicRoutes.length; i < l; i++) {
       const d = this.dynamicRoutes[i]!;
       if (d.m === method && d.r.test(path)) {
@@ -316,17 +315,19 @@ export class BareJS {
         for (let k = 0; k < d.p.length; k++) {
           params[d.p[k]!] = match[k + 1];
         }
-        return d.c(this.pool[this.poolIdx++ & this.poolMask]!.reset(req, params)); 
+        return d.c(this.pool[this.poolIdx++ & this.poolMask]!.reset(req, params));
       }
     }
 
-    return new Response('404 Not Found', { status: 404 });
+    // 3. Fallback: Executes Global Middlewares (Logger, StaticFile) + 404
+    return this.defaultHandler(this.pool[this.poolIdx++ & this.poolMask]!.reset(req, {}));
   };
 
   public compile() {
+    // Compile registered routes
     for (const route of this.routes) {
       const pipeline = [...this.globalMiddlewares, ...route.handlers];
-      const handler = pipeline.pop(); 
+      const handler = pipeline.pop();
       const middlewares = pipeline as Middleware[];
       const compiled = this.compileHandler(handler, middlewares);
 
@@ -338,6 +339,12 @@ export class BareJS {
         this.router[route.method]![route.path] = compiled;
       }
     }
+
+    // PRE-COMPILE the Fallback Handler (Critical for 404 Middleware execution)
+    this.defaultHandler = this.compileHandler(
+      (ctx: Context) => new Response('404 Not Found', { status: 404 }),
+      this.globalMiddlewares
+    );
   }
 
   public async listen(arg1?: number | string, arg2?: number | string) {

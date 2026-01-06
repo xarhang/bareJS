@@ -23,7 +23,6 @@ if (result.success) {
 
 // 3. Generate Type Definitions for the entire project
 // เราจะใช้ tsc จัดการทุกไฟล์ใน src เพื่อให้ได้ Type ครบถ้วน
-await $`bun x tsc --declaration --emitDeclarationOnly --outDir dist --module esnext --target esnext --moduleResolution bundler --skipLibCheck`;
-
+await $`bun x tsc`;
 // 4. Rename index.d.ts if needed (or ensure it points correctly)
 console.log("🚀 BareJS is ready to fly!");

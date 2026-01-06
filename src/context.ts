@@ -8,7 +8,7 @@ export type Middleware = (
   params: Record<string, string>, 
   next: Next
 ) => any;
-// All comments in English
+
 export type Next = () => any;
 
 /**

@@ -9,7 +9,8 @@ export type {
   Middleware, 
   Handler, 
   Next, 
-  WSHandlers 
+  WSHandlers ,
+  Context
 } from './context';
 
 // Validation Middlewares

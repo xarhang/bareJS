@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767716421669,
+  "lastUpdate": 1767722693887,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -428,6 +428,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3946.998682766191,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "xarhang@hotmail.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "xarhang@hotmail.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "e0fdb9aec1b67493d22dbf96a4dd8f01071ab51f",
+          "message": "bug: fix build and use ctx",
+          "timestamp": "2026-01-07T01:03:26+07:00",
+          "tree_id": "6da6a007b727ce5c88d64899ee0467a562518dfb",
+          "url": "https://github.com/xarhang/bareJS/commit/e0fdb9aec1b67493d22dbf96a4dd8f01071ab51f"
+        },
+        "date": 1767722693138,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 495.78352888448495,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2278.9974032354285,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 4100.585718986509,
             "unit": "undefined"
           }
         ]

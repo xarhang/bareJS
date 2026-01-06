@@ -30,11 +30,11 @@ Performance comparison between **BareJS**, **Elysia**, and **Hono**.
 
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **1.51 µs** | **Baseline** |
-| Elysia | 1.86 µs | 1.23x slower |
-| Hono | 3.56 µs | 2.35x slower |
+| **BareJS** | **1.04 µs** | **Baseline** |
+| Elysia | 2.12 µs | 2.03x slower |
+| Hono | 3.97 µs | 3.81x slower |
 
-> Last Updated: Tue, 06 Jan 2026 13:19:18 GMT
+> Last Updated: Tue, 06 Jan 2026 13:27:36 GMT
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 

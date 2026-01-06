@@ -54,7 +54,9 @@
     "zod": "^3.23.8",
     "@types/bun": "latest",
     "typescript": "latest",
-    "mitata": "^1.0.34"
+    "mitata": "^1.0.34",
+    "elysia": "latest",
+    "hono": "latest"
   },
   "files": [
     "dist",

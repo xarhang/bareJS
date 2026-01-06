@@ -28,8 +28,14 @@ jobs:
 
       - name: Run Benchmark Engine
         run: |
-          bun benchmarks/index.ts
-          cp result.json /tmp/result.json
+          # Ensure we run the benchmark which generates result.json
+          bun run bench 
+          if [ -f result.json ]; then
+            cp result.json /tmp/result.json
+          else
+            echo "Error: result.json not found!"
+            exit 1
+          fi
 
       - name: Update README.md File
         run: |

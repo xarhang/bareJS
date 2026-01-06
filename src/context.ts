@@ -1,32 +1,27 @@
-
-/**
- * High-performance Middleware signature
- * Arguments are passed directly to avoid object allocation overhead.
- */
-export type Middleware = (
-  req: Request, 
-  params: Record<string, string>, 
-  next: Next
-) => any;
-
+// All comments in English
 export type Next = () => any;
 
-/**
- * The Elysia-style Context
- * Extends the native Request with params and high-speed state
- */
-export type Context = Request & {
-  params: Record<string, string>;
-  set: (key: string, value: any) => void;
-  get: <T>(key: string) => T;
-  // Metadata for internal use
-  store: Map<string, any>;
-};
+export class Context {
+  public req!: Request;
+  public params!: Record<string, string>;
+  public _status: number = 200;
+  public store: any = Object.create(null);
 
-/**
- * Unified Handler type for auto-inference
- */
+  public reset(req: Request, params: Record<string, string>) {
+    this.req = req;
+    this.params = params;
+    this._status = 200;
+    this.store = Object.create(null); 
+    return this;
+  }
+
+  public status(code: number) { this._status = code; return this; }
+  public set(k: string, v: any) { this.store[k] = v; }
+  public get(k: string) { return this.store[k]; }
+}
+
 export type Handler = (c: Context, next: Next) => any;
+export type Middleware = (req: Request, params: Record<string, string>, next: Next) => any;
 
 export interface WSHandlers {
   open?: (ws: any) => void;

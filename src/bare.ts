@@ -1,139 +1,112 @@
-// All comments in English
+
+import { Context, type Middleware, type WSHandlers } from './context';
+
 export * from './context';
 export * from './validators';
-
-import type { Middleware, WSHandlers } from './context';
 import type { Server, ServerWebSocket } from "bun";
-
 export interface BarePlugin {
-  name: string;
-  version: string;
   install: (app: BareJS) => void;
 }
-
 export class BareJS {
-  private routes: Array<{ method: string; path: string; handlers: Array<any> }> = [];
+  private routes: Array<{ method: string; path: string; handlers: any[] }> = [];
   private globalMiddlewares: Array<Middleware> = [];
-  private compiledFetch?: Function;
+  private _server: Server<any> | null = null;
 
   private _reusePort: boolean = true;
-  // ✅ Explicitly provide the generic argument to satisfy strict TS rules
-  private _server: Server<any> | null = null; 
-
-  private staticMap: Map<string, Function> = new Map();
-  private dynamicRoutes: Array<{
-    m: string;
-    r: RegExp;
-    p: string[];
-    c: Function;
-  }> = [];
-
-  private wsHandler: { path: string; handlers: WSHandlers } | null = null;
-
   public get server(): Server<any> | null { return this._server; }
   public set server(value: Server<any> | null) { this._server = value; }
+  private wsHandler: { path: string; handlers: WSHandlers } | null = null;
+
+  private router: Record<string, Record<string, Function>> = {
+    GET: {}, POST: {}, PUT: {}, PATCH: {}, DELETE: {}
+  };
+
+  private dynamicRoutes: Array<{ m: string, r: RegExp, p: string[], c: Function }> = [];
+  private poolIdx = 0;
+  private pool: Context[] = Array.from({ length: 1024 }, () => new Context());
+
+  
+  public use(arg: Middleware | BarePlugin) {
+    if (arg && typeof arg === 'object' && 'install' in arg) {
+      arg.install(this);
+    } else if (typeof arg === 'function') {
+      this.globalMiddlewares.push(arg as Middleware);
+    }
+    return this;
+  }
 
   public get = (path: string, ...h: any[]) => { this.routes.push({ method: "GET", path, handlers: h }); return this; };
   public post = (path: string, ...h: any[]) => { this.routes.push({ method: "POST", path, handlers: h }); return this; };
   public put = (path: string, ...h: any[]) => { this.routes.push({ method: "PUT", path, handlers: h }); return this; };
   public patch = (path: string, ...h: any[]) => { this.routes.push({ method: "PATCH", path, handlers: h }); return this; };
   public delete = (path: string, ...h: any[]) => { this.routes.push({ method: "DELETE", path, handlers: h }); return this; };
-
   public ws = (path: string, handlers: WSHandlers) => {
     this.wsHandler = { path, handlers };
     return this;
-  };
+  }
 
-  public reusePort = (enabled: boolean) => {
-    this._reusePort = enabled;
-    return this;
-  };
+  public fetch = (req: Request, server?: Server<any>): any => {
+    const url = req.url;
+    const pathStart = url.indexOf('/', 8);
+    const path = pathStart === -1 ? '/' : url.slice(pathStart);
+    const method = req.method;
 
-  public use = (arg: Middleware | BarePlugin) => {
-    if (typeof arg === 'object' && 'install' in arg) {
-      arg.install(this);
-    } else {
-      this.globalMiddlewares.push(arg as Middleware);
+    // 1. Static Lookup (FASTEST)
+    const handler = this.router[method]?.[path];
+    if (handler) {
+      return handler(this.pool[this.poolIdx++ & 1023]!.reset(req, {}));
     }
-    return this;
+
+    // 2. Dynamic Lookup (Fixing this part)
+    for (let i = 0; i < this.dynamicRoutes.length; i++) {
+      const d = this.dynamicRoutes[i]!;
+      if (d.m === method && d.r.test(path)) {
+        const match = d.r.exec(path)!;
+        const params = Object.create(null);
+
+        // Extract params
+        for (let k = 0; k < d.p.length; k++) {
+          params[d.p[k]!] = match[k + 1];
+        }
+
+       
+        const ctx = this.pool[this.poolIdx++ & 1023]!.reset(req, params);
+        return d.c(ctx); 
+      }
+    }
+
+    return new Response('404 Not Found', { status: 404 });
   };
 
-  private compile() {
-    this.staticMap.clear();
-    this.dynamicRoutes.length = 0;
-
-    for (let i = 0; i < this.routes.length; i++) {
-      const route = this.routes[i]!;
+  public compile() {
+    for (const route of this.routes) {
       const pipeline = [...this.globalMiddlewares, ...route.handlers];
       const pLen = pipeline.length;
 
-      const composed = (req: Request, params: Record<string, string>): any => {
-        let idx = 0;
-        const next = (): any => {
-          if (idx < pLen) {
-            const result = pipeline[idx++]!(req, params, next);
-            if (result && result.constructor === Object) {
-              return new Response(JSON.stringify(result), {
-                headers: { 'Content-Type': 'application/json' }
-              });
-            }
-            return result;
-          }
-          return new Response(null, { status: 404 });
+      const build = (idx: number): any => {
+        if (idx === pLen) return () => new Response(null, { status: 404 });
+        const h = pipeline[idx];
+        const next = build(idx + 1);
+
+        return (ctx: Context) => {
+          const res = h.length > 2
+            ? h(ctx.req, ctx.params, () => next(ctx))
+            : h(ctx, () => next(ctx));
+
+          if (res && res.constructor === Object) return Response.json(res, { status: ctx._status });
+          return res;
         };
-        return next();
       };
 
-      if (route.path.indexOf(':') !== -1) {
+      if (route.path.includes(':')) {
         const pNames: string[] = [];
         const regexPath = route.path.replace(/:([^/]+)/g, (_, n) => { pNames.push(n); return "([^/]+)"; });
-        this.dynamicRoutes.push({ m: route.method, r: new RegExp(`^${regexPath}$`), p: pNames, c: composed });
+        this.dynamicRoutes.push({ m: route.method, r: new RegExp(`^${regexPath}$`), p: pNames, c: build(0) });
       } else {
-        this.staticMap.set(route.method + route.path, composed);
+        this.router[route.method]![route.path] = build(0);
       }
     }
-
-    /**
-     * ✅ Added <any> to Server type in the fetch signature
-     */
-    this.compiledFetch = (req: Request, server?: Server<any>): any => {
-      if (this.wsHandler && req.headers.get("upgrade") === "websocket") {
-        const s = req.url.indexOf('/', 8);
-        const path = s === -1 ? '/' : req.url.substring(s);
-        if (path === this.wsHandler.path) {
-          if (server?.upgrade(req)) return;
-        }
-      }
-
-      const url = req.url;
-      const s = url.indexOf('/', 8);
-      const path = s === -1 ? '/' : url.substring(s);
-      const method = req.method;
-
-      const runner = this.staticMap.get(method + path);
-      if (runner) return runner(req, {});
-
-      const dRoutes = this.dynamicRoutes;
-      for (let j = 0; j < dRoutes.length; j++) {
-        const d = dRoutes[j]!;
-        if (d.m === method) {
-          const m = d.r.exec(path);
-          if (m) {
-            const params: Record<string, string> = {};
-            for (let k = 0; k < d.p.length; k++) params[d.p[k]!] = m[k + 1]!;
-            return d.c(req, params);
-          }
-        }
-      }
-      return new Response('404 Not Found', { status: 404 });
-    };
   }
-
-  // ✅ Maintain consistency in the public fetch method
-  public fetch = (req: Request, server?: Server<any>) => {
-    if (!this.compiledFetch) this.compile();
-    return this.compiledFetch!(req, server);
-  };
 
   public async listen(arg1?: number | string, arg2?: number | string) {
     this.compile();
@@ -153,7 +126,8 @@ export class BareJS {
       hostname: host,
       port: port,
       reusePort: this._reusePort,
-      fetch: (req: Request, server: Server<any>) => this.fetch(req, server),
+      // fetch: (req: Request, server: Server<any>) => this.fetch(req, server),
+      fetch: this.fetch,
     };
 
     if (this.wsHandler) {

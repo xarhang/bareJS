@@ -37,8 +37,8 @@ try {
 
   let readme = readFileSync(README, 'utf8');
 
-  const startTag = '';
-  const endTag = '';
+  const startTag = '<!-- MARKER: PERFORMANCE_TABLE_START -->';
+  const endTag = '<!-- MARKER: PERFORMANCE_TABLE_END -->';
 
   const startIndex = readme.indexOf(startTag);
   const endIndex = readme.indexOf(endTag);

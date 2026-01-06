@@ -7,39 +7,32 @@ import { join, normalize, sep } from 'path';
  */
 export const staticFile = (root: string = 'public', options = { index: 'index.html' }) => {
   return async (ctx: any, next: Next) => {
-    // 1. Only allow GET and HEAD methods for security
-    if (ctx.req.method !== 'GET' && ctx.req.method !== 'HEAD') {
-      return next();
-    }
+    if (ctx.req.method !== 'GET' && ctx.req.method !== 'HEAD') return next();
 
     const url = new URL(ctx.req.url);
-    let path = decodeURIComponent(url.pathname);
+    // Remove leading slash so join() doesn't get confused
+    const pathName = decodeURIComponent(url.pathname).replace(/^\//, '');
 
-    // 2. Prevent Directory Traversal (Security)
-    // Ensures users can't use ../../ to access system files
-    const safePath = normalize(path).replace(/^(\.\.(\/|\\|$))+/, '');
+    // Prevent Directory Traversal
+    const safePath = normalize(pathName).replace(/^(\.\.(\/|\\|$))+/, '');
     
-    // 3. Resolve file path
+    // Resolve absolute path
     let filePath = join(process.cwd(), root, safePath);
 
-    // 4. Handle Directory Access (serving index.html)
-    if (filePath.endsWith(sep) || (await Bun.file(filePath).exists() === false)) {
+    let file = Bun.file(filePath);
+
+    // If it's a directory or file doesn't exist, try index.html
+    if (!(await file.exists())) {
         const indexFile = join(filePath, options.index);
-        if (await Bun.file(indexFile).exists()) {
-            filePath = indexFile;
+        const indexExists = await Bun.file(indexFile).exists();
+        
+        if (indexExists) {
+            file = Bun.file(indexFile);
         } else {
-            // If file doesn't exist, move to next middleware (or 404)
-            return next();
+            return next(); // Real 404 behavior
         }
     }
 
-    const file = Bun.file(filePath);
-
-    // 5. Check existence again for final safety
-    if (await file.exists()) {
-      return new Response(file);
-    }
-
-    return next();
+    return new Response(file);
   };
 };

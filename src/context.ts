@@ -2,7 +2,7 @@
 
 export type Params = Record<string, string>;
 export type Next = () => Promise<any> | any;
-
+export type GroupCallback = (router: any) => void;
 /**
  * 🎯 Hybrid Middleware Signature
  * Supports Context-only (379ns path), Standard Middleware, and Legacy Style.

@@ -181,12 +181,15 @@
 //     return this.server;
 //   }
 // }
+
 // All comments in English
 import { Context, type Middleware, type Handler, type WSHandlers, type Next } from './context';
 import { typebox, zod, native } from './validators';
+import { BareRouter } from './router'; // Import your new router
 
 export * from './context';
 export * from './validators';
+export { BareRouter }; // Export for user use
 export type { Middleware, Handler, WSHandlers, Next };
 
 import type { Server, ServerWebSocket } from "bun";
@@ -195,13 +198,12 @@ export interface BarePlugin {
   install: (app: BareJS) => void;
 }
 
-export class BareJS {
-  private routes: Array<{ method: string; path: string; handlers: any[] }> = [];
-  private globalMiddlewares: Array<Middleware> = [];
+export class BareJS extends BareRouter { // Inherit methods like .get, .post, .group
   private _server: Server<any> | null = null;
   private _reusePort: boolean = true;
   private wsHandler: { path: string; handlers: WSHandlers } | null = null;
 
+  // Jump tables for "Baked" routes
   private router: Record<string, Record<string, Function>> = {
     GET: {}, POST: {}, PUT: {}, PATCH: {}, DELETE: {}
   };
@@ -215,6 +217,7 @@ export class BareJS {
   private defaultHandler: Function = (ctx: Context) => new Response('404 Not Found', { status: 404 });
 
   constructor(options?: { poolSize?: number }) {
+    super(); // Initialize BareRouter
     let size = options?.poolSize || Number(process.env.BARE_POOL_SIZE) || 1024;
     if ((size & (size - 1)) !== 0) {
       size = Math.pow(2, Math.ceil(Math.log2(size)));
@@ -226,11 +229,19 @@ export class BareJS {
   public get server(): Server<any> | null { return this._server; }
   public set server(value: Server<any> | null) { this._server = value; }
 
-  public use(arg: Middleware | { install: (app: BareJS) => void }) {
-    if (arg && typeof arg === 'object' && 'install' in arg) {
+  /**
+   * Overloaded use() to support Middleware, Plugins, and Routers
+   */
+  public use(arg: Middleware | BareRouter | { install: (app: BareJS) => void }) {
+    if (arg instanceof BareRouter) {
+      // Transfer routes from the external router to the main app registry
+      this.routes.push(...arg.routes);
+    } else if (arg && typeof arg === 'object' && 'install' in arg) {
       arg.install(this);
     } else {
-      this.globalMiddlewares.push(arg as Middleware);
+      // Global Middleware (applied to the base group)
+      // Note: In BareRouter, this is groupMiddleware
+      (this as any).groupMiddleware.push(arg as Middleware);
     }
     return this;
   }
@@ -246,6 +257,7 @@ export class BareJS {
         const fn = pipeline[idx];
         if (!fn) return;
 
+        // Optimization: Branchless middleware execution
         if (fn.length === 1) return (fn as any)(ctx);
         if (fn.length > 2) return (fn as any)(ctx.req, ctx.params, () => runner(idx + 1));
         return (fn as any)(ctx, () => runner(idx + 1));
@@ -255,15 +267,6 @@ export class BareJS {
     };
   }
 
-  public get = (path: string, ...handlers: [...Middleware[], Handler]) => { 
-  this.routes.push({ method: "GET", path, handlers }); 
-  return this; 
-};
-  public post = (path: string, ...handlers: [...Middleware[], Handler]) => { this.routes.push({ method: "POST", path, handlers }); return this; };
-  public put = (path: string, ...handlers: [...Middleware[], Handler]) => { this.routes.push({ method: "PUT", path, handlers }); return this; };
-  public patch = (path: string, ...handlers: [...Middleware[], Handler]) => { this.routes.push({ method: "PATCH", path, handlers }); return this; };
-  public delete = (path: string, ...handlers: [...Middleware[], Handler]) => { this.routes.push({ method: "DELETE", path, handlers }); return this; };
-  
   public ws = (path: string, handlers: WSHandlers) => {
     this.wsHandler = { path, handlers };
     return this;
@@ -283,7 +286,7 @@ export class BareJS {
     if (handler) {
       res = handler(ctx.reset(req, {}));
     } else {
-      // 2. Dynamic Lookup (Fixed with your null-check logic)
+      // 2. Dynamic Lookup
       let matched = false;
       const routes = this.dynamicRoutes;
       for (let i = 0, l = routes.length; i < l; i++) {
@@ -295,7 +298,6 @@ export class BareJS {
             for (let k = 0; k < d.p.length; k++) {
                 params[d.p[k]!] = match[k + 1];
             }
-            // Ensure ctx is reset with params before passing to dynamic handler
             res = d.c(ctx.reset(req, params));
             matched = true;
             break;
@@ -305,14 +307,12 @@ export class BareJS {
       if (!matched) res = this.defaultHandler(ctx.reset(req, {}));
     }
 
-    // --- Response Processing ---
     if (res instanceof Response) return res;
 
     const status = ctx._status;
     const h = new Headers();
     const raw = ctx._headers!;
     
-    // Standardize headers (Fixes the 'null' error in tests)
     for (const key in raw) {
       h.set(key.toLowerCase(), raw[key]!); 
     }
@@ -329,9 +329,14 @@ export class BareJS {
     return res instanceof Promise ? res.then(build) : build(res);
   };
 
+  /**
+   * The JIT "Baking" Phase
+   * Converts route definitions into flattened executable functions
+   */
   public compile() {
     for (const route of this.routes) {
-      const pipeline = [...this.globalMiddlewares, ...route.handlers];
+      // Handlers in route already contain group-level middleware from BareRouter._add
+      const pipeline = [...route.handlers];
       const handler = pipeline.pop() || ((ctx: Context) => new Response('Not Found', { status: 404 }));
       const middlewares = pipeline as Middleware[];
       const compiled = this.compileHandler(handler, middlewares);
@@ -341,16 +346,15 @@ export class BareJS {
         const regexPath = route.path.replace(/:([^/]+)/g, (_, n) => { pNames.push(n); return "([^/]+)"; });
         this.dynamicRoutes.push({ m: route.method, r: new RegExp(`^${regexPath}$`), p: pNames, c: compiled });
       } else {
+        if (!this.router[route.method]) this.router[route.method] = {};
         this.router[route.method]![route.path] = compiled;
       }
     }
 
-    /**
-     * ✅ [FIX 6] Default Handler: Compile after global middlewares are registered
-     */
+    // Default 404 handler includes global middleware
     this.defaultHandler = this.compileHandler(
       (ctx: Context) => new Response('404 Not Found', { status: 404 }),
-      this.globalMiddlewares
+      (this as any).groupMiddleware
     );
   }
 

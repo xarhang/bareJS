@@ -22,6 +22,6 @@ export { typebox, native, zod } from './validators';
 export { logger } from './logger';
 export { cors } from './cors';
 export { staticFile } from './static';
-
+export { BareRouter } from './router';
 // Authentication & Security (Bun Native)
 export { bareAuth, createToken, Password } from './auth';

@@ -99,7 +99,45 @@ app.get('/user/:id', (req: Request, params: Params) => {
 app.listen(3000);
 
 ```
+---
+### ⚡ Example: Using Protected & Public Groups
+Since you wanted separate variables for your groups:
 
+```TypeScript
+import { BareJS, BareRouter, type Context } from 'barejs';
+import { bareAuth, createToken } from 'barejs'; // Your new script
+
+const app = new BareJS();
+const SECRET = process.env.JWT_SECRET || "super-secret-key";
+
+// --- 1. Public Auth Router ---
+const authRouter = new BareRouter("/auth");
+
+authRouter.post("/login", async (ctx: Context) => {
+  // Logic to check DB password here...
+  const token = await createToken({ id: 1, name: "Admin" }, SECRET);
+  return { token };
+});
+
+// --- 2. Protected Data Router ---
+// Pass your bareAuth middleware directly to the constructor
+const protectedRoute = new BareRouter("", [bareAuth(SECRET)]);
+
+protectedRoute.group("/api/v1", (v1) => {
+  v1.get("/me", (ctx: Context) => {
+    // ctx.get('user') works because of ctx.set('user', ...) in bareAuth
+    return { user: ctx.get('user') };
+  });
+
+  v1.get("/dashboard", (ctx: Context) => ({ stats: [10, 20, 30] }));
+});
+
+// --- 3. Mount ---
+app.use(authRouter);
+app.use(protectedRoute);
+
+app.listen(3000);
+```
 ---
 
 ## 🔌 Advanced Deployment
@@ -126,8 +164,10 @@ BARE_POOL_SIZE=4096 NODE_ENV=production bun run index.ts
 * [x] Bitwise Masking Optimization
 * [x] JIT Route Compilation
 * [x] Hybrid Handler Signatures (Context & Native)
+* [x] Route Grouping: Zero-overhead route organization via JIT flattening.
+* [x] **Native Cluster Mode Support**: Automatic horizontal scaling across CPU cores.
 * [ ] **Direct Buffer Response**: Aiming for 400ns latency by writing directly to the TCP stream.
-* [-] **Native Cluster Mode Support**: Automatic horizontal scaling across CPU cores.
+
 
 ---
 

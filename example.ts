@@ -40,13 +40,13 @@ app.get('/', () => ({ message: "Welcome to BareJS!" }));
 app.get('/ping', () => {({ message: "pong" })});
 
 // ✅ Dynamic Path: Explicitly type 'req' and 'params'
-app.get('/user/:id', (ctx) => {
+app.get('/user/:id', (ctx: Context) => {
   const userId = ctx.params.id;
   return { user: userId, status: 'active' };
 });
 
 // ✅ Multiple Params: Explicitly type 'req' and 'params'
-app.get('/post/:category/:id', (ctx) => {
+app.get('/post/:category/:id', (ctx: Context) => {
   return ctx.params; 
 });
 

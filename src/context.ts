@@ -12,8 +12,12 @@ export type Middleware =
   | ((ctx: Context, next: Next) => Promise<any> | any)
   | ((req: Request, params: Params, next: Next) => Promise<any> | any);
 
-export type Handler = (ctx: Context) => Promise<any> | any;
+// export type Handler = (ctx: Context) => Promise<any> | any;
+export type ContextHandler = (ctx: Context) => Promise<any> | any;
+export type NativeHandler = (req: Request, params: Params) => Promise<any> | any;
 
+// 2. The Final Handler: This allows either (ctx) OR (req, params)
+export type Handler = ContextHandler | NativeHandler;
 export class Context {
   public req!: Request;
   public params!: Params;
@@ -126,7 +130,7 @@ export class Context {
     this._headers['content-type'] = 'application/json';
     return data;
   }
-  
+
   public text(data: string) {
     this._headers['content-type'] = 'text/plain; charset=utf-8';
     return data;

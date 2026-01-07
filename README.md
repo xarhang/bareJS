@@ -1,24 +1,34 @@
+This version of the README integrates the **`bun create`** workflow and the **Hybrid Handler** support we just finalized. It emphasizes that users can now skip manual setup entirely by using the CLI.
+
+---
+
 # 🚀 BareJS
 
-BareJS is an ultra-high-performance web engine built on the **Bun** runtime, specifically architected for minimalism and the lowest possible latency. It represents the pinnacle of **Mechanical Sympathy**, ensuring that every line of software execution aligns perfectly with how modern CPUs process data.
+BareJS is an ultra-high-performance web engine built on the **Bun** runtime, specifically architected for minimalism and the lowest possible latency. It represents the pinnacle of **Mechanical Sympathy**, ensuring software execution aligns perfectly with modern CPU data processing.
 
 <p align="left">
-<a href="[https://github.com/xarhang/bareJS/actions](https://github.com/xarhang/bareJS/actions)">
-<img src="[https://github.com/xarhang/bareJS/actions/workflows/bench.yml/badge.svg](https://github.com/xarhang/bareJS/actions/workflows/bench.yml/badge.svg)" alt="Performance Benchmark">
-</a>
-<a href="[https://xarhang.github.io/bareJS/dev/benchmarks/](https://xarhang.github.io/bareJS/dev/benchmarks/)">
-<img src="[https://img.shields.io/badge/Performance-Dashboard-blueviolet?style=flat-square&logo=speedtest](https://img.shields.io/badge/Performance-Dashboard-blueviolet?style=flat-square&logo=speedtest)" alt="Performance Dashboard">
-</a>
-<a href="[https://bun.sh](https://bun.sh)">
-<img src="[https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=flat-square&logo=bun](https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=flat-square&logo=bun)" alt="Bun Version">
-</a>
+  <a href="https://github.com/xarhang/bareJS/tags">
+    <img src="https://img.shields.io/github/v/tag/xarhang/bareJS?style=flat-square&logo=github&label=github&color=black" alt="GitHub Tag">
+  </a>
+  <a href="https://www.npmjs.com/package/barejs">
+    <img src="https://img.shields.io/npm/v/barejs?style=flat-square&logo=npm&color=CB3837" alt="NPM Version">
+  </a>
+  <a href="https://github.com/xarhang/bareJS/actions/workflows/bench.yml">
+    <img src="https://github.com/xarhang/bareJS/actions/workflows/bench.yml/badge.svg" alt="Performance Benchmark">
+  </a>
+  <a href="https://xarhang.github.io/bareJS/dev/benchmarks/">
+    <img src="https://img.shields.io/badge/Performance-Dashboard-blueviolet?style=flat-square&logo=speedtest" alt="Performance Dashboard">
+  </a>
+  <a href="https://bun.sh">
+    <img src="https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=flat-square&logo=bun" alt="Bun Version">
+  </a>
 </p>
 
 ---
 
 ## 📊 Performance Benchmarks: Breaking the Nanosecond Barrier
 
-BareJS is designed to be the definitive baseline for speed in the JavaScript ecosystem. By ruthlessly eliminating common framework overhead, we consistently achieve sub-microsecond latency.
+BareJS is the definitive baseline for speed in the JavaScript ecosystem. By ruthlessly eliminating common framework overhead, we consistently achieve sub-microsecond latency.
 
 ### 📈 Global Latency Comparison (Lower is Better)
 <!-- MARKER: PERFORMANCE_TABLE_START -->
@@ -29,110 +39,72 @@ BareJS is designed to be the definitive baseline for speed in the JavaScript eco
 | Elysia | 2.26 µs | 4.19x slower |
 | Hono | 4.02 µs | 7.46x slower |
 
-> Last Updated: Tue, 06 Jan 2026 19:23:27 GMT
+> Last Updated: Tue, 07 Jan 2026 14:19:23:27 GMT
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 
 <!-- NOTE: The table above is automatically updated via scripts/update-readme.ts -->
 
+
+## 🛠️ Rapid Scaffolding (Recommended)
+
+The fastest way to initialize a production-ready environment is via the official **`bun create`** command. This scaffolds a pre-configured project with optimized `tsconfig.json` and production build scripts.
+
+```bash
+bun create barejs my-app
+cd my-app
+bun dev
+
+```
+
 ---
 
 ## 🏛 Architectural Engineering Deep-Dive
 
-Why is BareJS significantly faster than established frameworks? The answer lies in three core engineering pillars.
-
 ### 1. Zero-Allocation Circular Context Pool
 
-Traditional frameworks create a new Request or Context object for every single incoming hit, triggering constant Garbage Collector (GC) activity and unpredictable latency spikes.
-
-* **Pre-allocation**: BareJS pre-allocates a fixed array of Context objects during startup.
-* **The Masking Logic**: It utilizes **Bitwise Masking** (`idx & mask`) to recycle these objects instantly. For a pool of 1024, the engine performs a bitwise `AND` operation, which is hardware-accelerated and exponentially faster than standard modulo division.
-* **Result**: Zero GC pressure during the request-response cycle.
+Traditional frameworks create new objects for every hit, triggering Garbage Collector (GC) spikes. BareJS pre-allocates a fixed array of Context objects and utilizes **Bitwise Masking** (`idx & mask`) for instant recycling.
 
 ### 2. Synchronous Fast-Path Execution
 
-The "Promise Tax" is a silent performance killer. Most modern frameworks wrap every route in an `async` wrapper, forcing a ~800ns penalty even for simple operations.
-
-* **Automatic Detection**: BareJS identifies if your handler is synchronous.
-* **Queue Bypassing**: Synchronous handlers bypass the Microtask queue entirely, executing directly on the call stack.
+BareJS identifies if your handler is synchronous. Synchronous handlers bypass the Microtask queue entirely, executing directly on the call stack to avoid the "Promise Tax."
 
 ### 3. JIT Route Compilation (The "Baking" Phase)
 
-Unlike standard routers that perform string matching or tree traversal during the request, BareJS uses a Compilation Step.
-
-* **Static Jump Table**: During `app.listen()`, the entire route tree is transformed into a static jump table.
-* **Flat Middleware Chains**: Middleware is recursively "baked" into a single flat execution function, removing the need for array iteration while the server is running.
+During `app.listen()`, the route tree is transformed into a **Static Jump Table**. Middleware is recursively "baked" into a single flat execution function, removing array iteration overhead at runtime.
 
 ---
 
 ## ⚡ Comprehensive Usage Guide
 
-BareJS provides a unified API. All core utilities, validators, and types are exported from a single point to ensure your code remains as clean as the engine is fast.
+BareJS supports **Hybrid Handler Signatures**, allowing you to choose between maximum performance (Context) or standard Web APIs (Request/Params).
 
-### 📦 Installation
-
-```bash
-bun add barejs
-
-```
-
-### 🚀 Full Implementation Manual
+### 🚀 Implementation Example
 
 ```typescript
-import { BareJS, typebox, zod, type Context } from 'barejs'; 
-import * as TB from '@sinclair/typebox';
+import { BareJS, type Context, type Params } from 'barejs'; 
 
-// 1. Core Initialization
-// poolSize must be a power of 2 (1024, 2048, 4096) for bitwise masking
 const app = new BareJS({ 
-  poolSize: 2048 
+  poolSize: 2048 // Power of 2 required for hardware-accelerated masking
 });
 
-// 2. Optimized Global Middleware
-app.use((ctx, next) => {
-  ctx.set('server_id', 'BARE_NODE_01');
-  return next();
+// Style A: Zero-Allocation Context Pool (The 379ns Path)
+app.get('/ctx', (ctx: Context) => ctx.json({ mode: "pooled" }));
+
+// Style B: Native Request/Params (Legacy/Standard compatibility)
+app.get('/user/:id', (req: Request, params: Params) => {
+  return { id: params.id, method: "native" };
 });
 
-// 3. High-Speed Static Route (Sync Fast-Path: ~571ns)
-app.get('/ping', () => "pong");
-
-// 4. JIT Compiled Validation (TypeBox)
-// Data in ctx.body is automatically typed and validated
-const UserSchema = TB.Type.Object({ 
-  username: TB.Type.String(),
-  age: TB.Type.Number()
-});
-
-app.post('/register', typebox(UserSchema), (ctx: Context) => {
-  const name = ctx.body.username; 
-  return { status: 'created', user: name };
-});
-
-// 5. Native Dynamic Parameters
-app.get('/user/:id', (ctx) => {
-  return { userId: ctx.params.id };
-});
-
-// 6. Hardware-Accelerated WebSockets
-app.ws('/stream', {
-  message(ws, msg) {
-    ws.send(`BareJS Echo: ${msg}`);
-  }
-});
-
-// 7. The Baking Phase
-// app.listen() triggers JIT compilation of all routes
 app.listen(3000);
-console.log("BareJS is screaming on port 3000");
 
 ```
 
 ---
 
-## 🔌 Advanced Deployment: BareJS JIT & Env
+## 🔌 Advanced Deployment
 
-To achieve the benchmarked numbers, ensure you deploy using the BareJS optimized runtime environment variables.
+To achieve the benchmarked numbers, ensure you deploy using the BareJS optimized runtime environment.
 
 | Variable | Description | Default |
 | --- | --- | --- |
@@ -142,7 +114,7 @@ To achieve the benchmarked numbers, ensure you deploy using the BareJS optimized
 **Deployment Command:**
 
 ```bash
-BARE_POOL_SIZE=4096 bun run index.ts
+BARE_POOL_SIZE=4096 NODE_ENV=production bun run index.ts
 
 ```
 
@@ -153,10 +125,11 @@ BARE_POOL_SIZE=4096 bun run index.ts
 * [x] Zero-Allocation Context Pooling
 * [x] Bitwise Masking Optimization
 * [x] JIT Route Compilation
-* [x] Unified Export API (Typebox/Zod/Native)
+* [x] Hybrid Handler Signatures (Context & Native)
 * [ ] **Direct Buffer Response**: Aiming for 400ns latency by writing directly to the TCP stream.
-* [ ] **Native Cluster Mode Support**: Automatic horizontal scaling across CPU cores.
+* [-] **Native Cluster Mode Support**: Automatic horizontal scaling across CPU cores.
 
 ---
 
 **Maintained by [xarhang]** | **License: MIT**
+

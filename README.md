@@ -1,7 +1,3 @@
-This version of the README integrates the **`bun create`** workflow and the **Hybrid Handler** support we just finalized. It emphasizes that users can now skip manual setup entirely by using the CLI.
-
----
-
 # 🚀 BareJS
 
 BareJS is an ultra-high-performance web engine built on the **Bun** runtime, specifically architected for minimalism and the lowest possible latency. It represents the pinnacle of **Mechanical Sympathy**, ensuring software execution aligns perfectly with modern CPU data processing.

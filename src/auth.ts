@@ -1,5 +1,5 @@
 import type {  AuthUser, Next } from './context';
-
+import { timingSafeEqual } from 'node:crypto';
 /**
  * UTILS: Internal Crypto Helpers using Native Web Crypto
  * Optimized for Bun performance and type safety.
@@ -39,7 +39,7 @@ const verifyData = async (data: string, signature: string, secret: string): Prom
   // Critical: timingSafeEqual requires buffers of identical length
   if (a.byteLength !== b.byteLength) return false;
   
-  return (Bun as any).crypto.timingSafeEqual(a, b);
+  return timingSafeEqual(a, b);
 };
 
 /**
@@ -47,21 +47,18 @@ const verifyData = async (data: string, signature: string, secret: string): Prom
  * High-performance JWT alternative for BareJS
  */
 export const bareAuth = (secret: string) => {
-  return async (ctx: any, next: Next) => {
-    // 1. Extract Header
+  return async (ctx: any, next: any) => { 
     const authHeader = ctx.req.headers.get('Authorization');
     
     if (!authHeader?.startsWith('Bearer ')) {
       return ctx.status(401).json({ status: 'error', message: 'Bearer token required' });
     }
 
-    // 2. Extract Token
     const token = authHeader.split(' ')[1];
     if (!token) {
       return ctx.status(401).json({ status: 'error', message: 'Invalid token format' });
     }
 
-    // 3. Split Payload and Signature
     const parts = token.split('.');
     if (parts.length !== 2) {
       return ctx.status(401).json({ status: 'error', message: 'Malformed token' });
@@ -70,18 +67,27 @@ export const bareAuth = (secret: string) => {
     const [payloadBase64, signature] = parts;
 
     try {
-      // 4. Decode and Verify
       const payloadRaw = Buffer.from(payloadBase64!, 'base64').toString();
       const isValid = await verifyData(payloadRaw, signature!, secret);
 
       if (!isValid) {
         return ctx.status(401).json({ status: 'error', message: 'Invalid signature' });
       }
-      // 5. Attach User to Context
+
       const user: AuthUser = JSON.parse(payloadRaw);
       ctx.set('user', user);
 
-      return next();
+      if (Array.isArray(next)) {
+        if (next.length === 0) return; 
+        const [current, ...rest] = next;
+        return current(ctx, rest); 
+      }
+
+      if (typeof next === 'function') {
+        return next();
+      }
+      return; 
+      
     } catch (e) {
       console.error("[Auth] Verification Error:", e);
       return ctx.status(401).json({ status: 'error', message: 'Token verification failed' });

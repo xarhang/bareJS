@@ -8,8 +8,8 @@ import { writeFileSync } from "fs";
 const payload = { message: "bench" };
 const req = new Request("http://localhost/user/123");
 
-const bare = new BareJS();
-bare.get("/user/:id", () => payload); 
+const bare = new BareJS().get("/user/:id", () => payload);
+// bare.get("/user/:id", () => payload); 
 
 const elysia = new Elysia().get("/user/:id", () => payload);
 const hono = new Hono().get("/user/:id", (c) => c.json(payload));

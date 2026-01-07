@@ -181,17 +181,12 @@
 //     return this.server;
 //   }
 // }
-
 // All comments in English
 import { Context, type Middleware, type Handler, type WSHandlers, type Next } from './context';
 import { typebox, zod, native } from './validators';
-import { join } from 'node:path';
 
-// Exporting Types and Context
 export * from './context';
 export * from './validators';
-
-// Re-exporting core types specifically for convenience
 export type { Middleware, Handler, WSHandlers, Next };
 
 import type { Server, ServerWebSocket } from "bun";
@@ -213,22 +208,17 @@ export class BareJS {
 
   private dynamicRoutes: Array<{ m: string, r: RegExp, p: string[], c: Function }> = [];
 
-  // High-Performance Object Pooling State
   private poolIdx = 0;
   private pool: Context[];
   private poolMask: number;
 
-  // Pre-compiled fallback for 404s and Global Middleware execution
   private defaultHandler: Function = (ctx: Context) => new Response('404 Not Found', { status: 404 });
 
   constructor(options?: { poolSize?: number }) {
     let size = options?.poolSize || Number(process.env.BARE_POOL_SIZE) || 1024;
-
-    // Ensure size is a Power of 2 for Bitwise Optimization
     if ((size & (size - 1)) !== 0) {
       size = Math.pow(2, Math.ceil(Math.log2(size)));
     }
-
     this.poolMask = size - 1;
     this.pool = Array.from({ length: size }, () => new Context());
   }
@@ -247,48 +237,33 @@ export class BareJS {
 
   private compileHandler(handler: Handler, middlewares: Middleware[]) {
     const pipeline = [...middlewares, handler];
-
+    
     return (ctx: Context) => {
       let index = -1;
-
       const runner = (idx: number): any => {
         if (idx <= index) throw new Error('next() called multiple times');
         index = idx;
-
         const fn = pipeline[idx];
         if (!fn) return;
 
-        return (fn as any).length > 2
-          ? (fn as any)(ctx.req, ctx.params, () => runner(idx + 1))
-          : (fn as any)(ctx, () => runner(idx + 1));
+        if (fn.length === 1) return (fn as any)(ctx);
+        if (fn.length > 2) return (fn as any)(ctx.req, ctx.params, () => runner(idx + 1));
+        return (fn as any)(ctx, () => runner(idx + 1));
       };
 
-      const result = runner(0);
-
-      // Fast-path: Synchronous Result
-      if (!(result instanceof Promise)) {
-        if (result && result.constructor === Object) {
-          return Response.json(result, { status: ctx._status });
-        }
-        return result;
-      }
-
-      // Slow-path: Asynchronous Result
-      return result.then((res) => {
-        if (res && res.constructor === Object) {
-          return Response.json(res, { status: ctx._status });
-        }
-        return res;
-      });
+      return runner(0);
     };
   }
 
-  public get = (path: string, ...h: any[]) => { this.routes.push({ method: "GET", path, handlers: h }); return this; };
-  public post = (path: string, ...h: any[]) => { this.routes.push({ method: "POST", path, handlers: h }); return this; };
-  public put = (path: string, ...h: any[]) => { this.routes.push({ method: "PUT", path, handlers: h }); return this; };
-  public patch = (path: string, ...h: any[]) => { this.routes.push({ method: "PATCH", path, handlers: h }); return this; };
-  public delete = (path: string, ...h: any[]) => { this.routes.push({ method: "DELETE", path, handlers: h }); return this; };
-
+  public get = (path: string, ...handlers: [...Middleware[], Handler]) => { 
+  this.routes.push({ method: "GET", path, handlers }); 
+  return this; 
+};
+  public post = (path: string, ...handlers: [...Middleware[], Handler]) => { this.routes.push({ method: "POST", path, handlers }); return this; };
+  public put = (path: string, ...handlers: [...Middleware[], Handler]) => { this.routes.push({ method: "PUT", path, handlers }); return this; };
+  public patch = (path: string, ...handlers: [...Middleware[], Handler]) => { this.routes.push({ method: "PATCH", path, handlers }); return this; };
+  public delete = (path: string, ...handlers: [...Middleware[], Handler]) => { this.routes.push({ method: "DELETE", path, handlers }); return this; };
+  
   public ws = (path: string, handlers: WSHandlers) => {
     this.wsHandler = { path, handlers };
     return this;
@@ -300,34 +275,64 @@ export class BareJS {
     const path = pathStart === -1 ? '/' : url.slice(pathStart);
     const method = req.method;
 
+    const ctx = this.pool[this.poolIdx++ & this.poolMask]!;
+    let res: any;
+
     // 1. Static O(1) Lookup
     const handler = this.router[method]?.[path];
     if (handler) {
-      return handler(this.pool[this.poolIdx++ & this.poolMask]!.reset(req, {}));
-    }
-
-    // 2. Dynamic RegExp Lookup
-    for (let i = 0, l = this.dynamicRoutes.length; i < l; i++) {
-      const d = this.dynamicRoutes[i]!;
-      if (d.m === method && d.r.test(path)) {
-        const match = d.r.exec(path)!;
-        const params = Object.create(null);
-        for (let k = 0; k < d.p.length; k++) {
-          params[d.p[k]!] = match[k + 1];
+      res = handler(ctx.reset(req, {}));
+    } else {
+      // 2. Dynamic Lookup (Fixed with your null-check logic)
+      let matched = false;
+      const routes = this.dynamicRoutes;
+      for (let i = 0, l = routes.length; i < l; i++) {
+        const d = routes[i]!;
+        if (d.m === method) {
+          const match = d.r.exec(path); 
+          if (match) { 
+            const params = Object.create(null);
+            for (let k = 0; k < d.p.length; k++) {
+                params[d.p[k]!] = match[k + 1];
+            }
+            // Ensure ctx is reset with params before passing to dynamic handler
+            res = d.c(ctx.reset(req, params));
+            matched = true;
+            break;
+          }
         }
-        return d.c(this.pool[this.poolIdx++ & this.poolMask]!.reset(req, params));
       }
+      if (!matched) res = this.defaultHandler(ctx.reset(req, {}));
     }
 
-    // 3. Fallback: Executes Global Middlewares (Logger, StaticFile) + 404
-    return this.defaultHandler(this.pool[this.poolIdx++ & this.poolMask]!.reset(req, {}));
+    // --- Response Processing ---
+    if (res instanceof Response) return res;
+
+    const status = ctx._status;
+    const h = new Headers();
+    const raw = ctx._headers!;
+    
+    // Standardize headers (Fixes the 'null' error in tests)
+    for (const key in raw) {
+      h.set(key.toLowerCase(), raw[key]!); 
+    }
+
+    const build = (resolved: any): Response => {
+      if (resolved instanceof Response) return resolved;
+      const isObj = resolved !== null && typeof resolved === 'object';
+      if (isObj && !h.has('content-type')) h.set('content-type', 'application/json');
+      
+      const body = isObj ? JSON.stringify(resolved) : (resolved ?? "");
+      return new Response(body, { status, headers: h });
+    };
+
+    return res instanceof Promise ? res.then(build) : build(res);
   };
 
   public compile() {
-    // Compile registered routes
     for (const route of this.routes) {
       const pipeline = [...this.globalMiddlewares, ...route.handlers];
-      const handler = pipeline.pop();
+      const handler = pipeline.pop() || ((ctx: Context) => new Response('Not Found', { status: 404 }));
       const middlewares = pipeline as Middleware[];
       const compiled = this.compileHandler(handler, middlewares);
 
@@ -340,7 +345,9 @@ export class BareJS {
       }
     }
 
-    // PRE-COMPILE the Fallback Handler (Critical for 404 Middleware execution)
+    /**
+     * ✅ [FIX 6] Default Handler: Compile after global middlewares are registered
+     */
     this.defaultHandler = this.compileHandler(
       (ctx: Context) => new Response('404 Not Found', { status: 404 }),
       this.globalMiddlewares
@@ -351,28 +358,16 @@ export class BareJS {
     this.compile();
     let port = Number(process.env.PORT) || 3000;
     let host = process.env.HOST || '0.0.0.0';
-
     if (typeof arg1 === 'number') port = arg1;
     if (typeof arg1 === 'string') host = arg1;
     if (typeof arg2 === 'number') port = arg2;
 
-    const serveOptions: any = {
+    this._server = Bun.serve({
       hostname: host,
       port: port,
       reusePort: this._reusePort,
-      fetch: (req: Request, server: Server<any>) => this.fetch(req, server),
-    };
-
-    if (this.wsHandler) {
-      serveOptions.websocket = {
-        open: (ws: any) => this.wsHandler?.handlers.open?.(ws),
-        message: (ws: any, msg: any) => this.wsHandler?.handlers.message?.(ws, msg),
-        close: (ws: any, code: number, res: string) => this.wsHandler?.handlers.close?.(ws, code, res),
-        drain: (ws: any) => this.wsHandler?.handlers.drain?.(ws),
-      };
-    }
-
-    this._server = Bun.serve(serveOptions);
+      fetch: (req: Request) => this.fetch(req),
+    });
     console.log(`[BAREJS] 🚀 Server running at http://${host}:${port}`);
     return this._server;
   }

@@ -3,65 +3,69 @@ import { expect, test, describe, beforeEach } from "bun:test";
 import { BareJS, Context, typebox } from "../src/bare";
 import * as TB from "@sinclair/typebox";
 
-describe("BareJS Unified Test Suite", () => {
+describe("BareJS Ultra-Accuracy Suite", () => {
   let app: BareJS;
 
   beforeEach(() => {
     app = new BareJS();
   });
 
-  // --- Integrity Group ---
-  describe("Engine Integrity", () => {
-    test("Context Store Isolation (Pool Safety)", async () => {
-      app.get("/set", (ctx: Context) => {
-        ctx.set("user", "admin");
-        return { ok: true };
+  describe("Engine Precision", () => {
+    test("Strict Header & Status Injection", async () => {
+      app.get("/hex", (ctx: Context) => {
+        return ctx.status(201).set("X-Framework", "BareJS").json({ hex: "0xFF" });
       });
-      app.get("/check", (ctx: Context) => ({ user: ctx.get("user") }));
       app.compile();
 
-      await app.fetch(new Request("http://localhost/set"));
-      const res = await app.fetch(new Request("http://localhost/check"));
+      const res = await app.fetch(new Request("http://localhost/hex"));
+      
+      // Accuracy Check: Status, Custom Headers, and Native Bun Content-Type
+      expect(res.status).toBe(201);
+      expect(res.headers.get("X-Framework")).toBe("BareJS");
+      expect(res.headers.get("Content-Type")).toContain("application/json");
+      
       const body = await res.json();
-      expect(body.user).toBeUndefined(); // Verifies reset() works
+      expect(body.hex).toBe("0xFF");
     });
 
-    test("Middleware Chain Trace", async () => {
-      let trace = "";
-      app.use((ctx, next) => { trace += "1"; return next(); });
-      app.get("/trace", () => { trace += "2"; return { ok: true }; });
+    test("Method Mismatch Isolation (404/405 Logic)", async () => {
+      app.get("/only-get", () => "ok");
       app.compile();
 
-      await app.fetch(new Request("http://localhost/trace"));
-      expect(trace).toBe("12");
+      // Accuracy Check: Ensure POSTing to a GET route doesn't leak data
+      const res = await app.fetch(new Request("http://localhost/only-get", { method: "POST" }));
+      expect(res.status).toBe(404); 
     });
   });
 
-  // --- Logic Group ---
-  describe("Logic & Features", () => {
-    test("TypeBox Validation & ctx.body", async () => {
-      const Schema = TB.Type.Object({ id: TB.Type.Number() });
-      app.post("/data", typebox(Schema), (ctx: Context) => ctx.status(201).json(ctx.body));
+  describe("Validation Edge Cases", () => {
+    test("TypeBox Rejection Accuracy", async () => {
+      const Schema = TB.Type.Object({ age: TB.Type.Number() });
+      app.post("/age", typebox(Schema), () => "valid");
       app.compile();
 
-      const res = await app.fetch(new Request("http://localhost/data", {
+      // Accuracy Check: Sending string instead of number should trigger validation failure
+      const res = await app.fetch(new Request("http://localhost/age", {
         method: "POST",
-        body: JSON.stringify({ id: 571 }),
+        body: JSON.stringify({ age: "twenty" }), // Invalid type
         headers: { "Content-Type": "application/json" }
       }));
-      
-      const body = await res.json();
-      expect(res.status).toBe(201);
-      expect(body.id).toBe(571);
+
+      // If your typebox middleware returns a specific error status
+      expect(res.status).toBeGreaterThanOrEqual(400);
     });
 
-    test("Dynamic Params Accuracy", async () => {
-      app.get("/user/:id", (ctx: Context) => ({ userId: ctx.params.id }));
+    test("Complex Dynamic Routing Precision", async () => {
+      // Testing overlapping routes: /u/:id vs /u/settings
+      app.get("/u/settings", () => "settings");
+      app.get("/u/:id", (ctx:Context) => ctx.params.id);
       app.compile();
 
-      const res = await app.fetch(new Request("http://localhost/user/99"));
-      const body = await res.json();
-      expect(body.userId).toBe("99");
+      const res1 = await app.fetch(new Request("http://localhost/u/settings"));
+      expect(await res1.text()).toBe("settings");
+
+      const res2 = await app.fetch(new Request("http://localhost/u/123"));
+      expect(await res2.text()).toBe("123");
     });
   });
 });

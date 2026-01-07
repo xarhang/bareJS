@@ -37,17 +37,17 @@ app.post('/users-native', native(UserSchema), (req: Context) => {
 // ✅ Route 3: Pure speed
 app.get('/', () => ({ message: "Welcome to BareJS!" }));
 
-app.get('/ping', () => ({ message: "pong" }));
+app.get('/ping', () => {({ message: "pong" })});
 
 // ✅ Dynamic Path: Explicitly type 'req' and 'params'
-app.get('/user/:id', (req: Context, params: Record<string, string>) => {
-  const userId = params.id;
+app.get('/user/:id', (ctx) => {
+  const userId = ctx.params.id;
   return { user: userId, status: 'active' };
 });
 
 // ✅ Multiple Params: Explicitly type 'req' and 'params'
-app.get('/post/:category/:id', (req: Context, params: Record<string, string>) => {
-  return params; 
+app.get('/post/:category/:id', (ctx) => {
+  return ctx.params; 
 });
 
 // Use process.env for deployment as requested

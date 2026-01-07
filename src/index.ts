@@ -1,5 +1,3 @@
-// All comments in English
-
 // Core Class & Plugin Interface
 export { BareJS } from './bare';
 // export type { BarePlugin } from './bare';
@@ -13,7 +11,8 @@ export type {
   Handler, 
   Next, 
   WSHandlers ,
-  Context
+  Context,
+  Params
 } from './context';
 
 // Validation Middlewares

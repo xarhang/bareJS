@@ -181,15 +181,13 @@
 //     return this.server;
 //   }
 // }
-
 // All comments in English
 import { Context, type Middleware, type Handler, type WSHandlers, type Next } from './context';
-// import { typebox, zod, native } from './validators';
-import { BareRouter } from './router'; // Import your new router
+import { BareRouter } from './router'; 
 
 export * from './context';
 export * from './validators';
-export { BareRouter }; // Export for user use
+export { BareRouter }; 
 export type { Middleware, Handler, WSHandlers, Next };
 
 import type { Server, ServerWebSocket } from "bun";
@@ -198,7 +196,7 @@ export interface BarePlugin {
   install: (app: BareJS) => void;
 }
 
-export class BareJS extends BareRouter { // Inherit methods like .get, .post, .group
+export class BareJS extends BareRouter { 
   private _server: Server<any> | null = null;
   private _reusePort: boolean = true;
   private wsHandler: { path: string; handlers: WSHandlers } | null = null;
@@ -210,20 +208,11 @@ export class BareJS extends BareRouter { // Inherit methods like .get, .post, .g
 
   private dynamicRoutes: Array<{ m: string, r: RegExp, p: string[], c: Function }> = [];
 
-  private poolIdx = 0;
-  private pool: Context[];
-  private poolMask: number;
-
+  // 🛡️ REPLACED: Pooling removed to ensure Context Isolation for async operations
   private defaultHandler: Function = (ctx: Context) => new Response('404 Not Found', { status: 404 });
 
-  constructor(options?: { poolSize?: number }) {
-    super(); // Initialize BareRouter
-    let size = options?.poolSize || Number(process.env.BARE_POOL_SIZE) || 1024;
-    if ((size & (size - 1)) !== 0) {
-      size = Math.pow(2, Math.ceil(Math.log2(size)));
-    }
-    this.poolMask = size - 1;
-    this.pool = Array.from({ length: size }, () => new Context());
+  constructor() {
+    super(); 
   }
 
   public get server(): Server<any> | null { return this._server; }
@@ -234,13 +223,10 @@ export class BareJS extends BareRouter { // Inherit methods like .get, .post, .g
    */
   public use(arg: Middleware | BareRouter | { install: (app: BareJS) => void }) {
     if (arg instanceof BareRouter) {
-      // Transfer routes from the external router to the main app registry
       this.routes.push(...arg.routes);
     } else if (arg && typeof arg === 'object' && 'install' in arg) {
       arg.install(this);
     } else {
-      // Global Middleware (applied to the base group)
-      // Note: In BareRouter, this is groupMiddleware
       (this as any).groupMiddleware.push(arg as Middleware);
     }
     return this;
@@ -273,23 +259,28 @@ export class BareJS extends BareRouter { // Inherit methods like .get, .post, .g
   }
 
   public fetch = (req: Request, server?: Server<any>): any => {
+    // 1. High-speed path extraction
     const url = req.url;
     const pathStart = url.indexOf('/', 8);
     const path = pathStart === -1 ? '/' : url.slice(pathStart);
     const method = req.method;
 
-    const ctx = this.pool[this.poolIdx++ & this.poolMask]!;
+    // 2. Fresh Context per request (Fixes Concurrency Bug & TS Error 2554)
+    const ctx = new Context(req); 
     let res: any;
 
-    // 1. Static O(1) Lookup
+    // 3. Static O(1) Lookup (Fastest path)
     const handler = this.router[method]?.[path];
     if (handler) {
-      res = handler(ctx.reset(req, {}));
+      ctx.params = {}; 
+      res = handler(ctx);
     } else {
-      // 2. Dynamic Lookup
+      // 4. Dynamic Lookup (Regex path)
       let matched = false;
       const routes = this.dynamicRoutes;
-      for (let i = 0, l = routes.length; i < l; i++) {
+      const l = routes.length;
+
+      for (let i = 0; i < l; i++) {
         const d = routes[i]!;
         if (d.m === method) {
           const match = d.r.exec(path); 
@@ -298,44 +289,50 @@ export class BareJS extends BareRouter { // Inherit methods like .get, .post, .g
             for (let k = 0; k < d.p.length; k++) {
                 params[d.p[k]!] = match[k + 1];
             }
-            res = d.c(ctx.reset(req, params));
+            ctx.params = params; 
+            res = d.c(ctx);
             matched = true;
             break;
           }
         }
       }
-      if (!matched) res = this.defaultHandler(ctx.reset(req, {}));
+      // 5. Default 404 handler (includes global middlewares)
+      if (!matched) res = this.defaultHandler(ctx);
     }
 
-    if (res instanceof Response) return res;
-
-    const status = ctx._status;
-    const h = new Headers();
-    const raw = ctx._headers!;
-    
-    for (const key in raw) {
-      h.set(key.toLowerCase(), raw[key]!); 
-    }
-
+    // 6. Response Builder (Handles both Sync and Async results)
     const build = (resolved: any): Response => {
+      // If the controller returned a native Response, return it directly
       if (resolved instanceof Response) return resolved;
+
+      const status = ctx._status;
+      const h = new Headers();
+      const raw = ctx._headers!;
+      
+      // Move headers from Context to Native Response
+      for (const key in raw) {
+        h.set(key.toLowerCase(), raw[key]!); 
+      }
+
       const isObj = resolved !== null && typeof resolved === 'object';
-      if (isObj && !h.has('content-type')) h.set('content-type', 'application/json');
+      
+      // Auto-set Content-Type if returning Object and not already set
+      if (isObj && !h.has('content-type')) {
+        h.set('content-type', 'application/json');
+      }
       
       const body = isObj ? JSON.stringify(resolved) : (resolved ?? "");
       return new Response(body, { status, headers: h });
     };
 
+    // Branch based on whether the result is a Promise (Async) or not (Sync)
     return res instanceof Promise ? res.then(build) : build(res);
   };
-
   /**
    * The JIT "Baking" Phase
-   * Converts route definitions into flattened executable functions
    */
   public compile() {
     for (const route of this.routes) {
-      // Handlers in route already contain group-level middleware from BareRouter._add
       const pipeline = [...route.handlers];
       const handler = pipeline.pop() || ((ctx: Context) => new Response('Not Found', { status: 404 }));
       const middlewares = pipeline as Middleware[];
@@ -351,7 +348,6 @@ export class BareJS extends BareRouter { // Inherit methods like .get, .post, .g
       }
     }
 
-    // Default 404 handler includes global middleware
     this.defaultHandler = this.compileHandler(
       (ctx: Context) => new Response('404 Not Found', { status: 404 }),
       (this as any).groupMiddleware

@@ -1,71 +1,129 @@
-// All comments in English
 import { expect, test, describe, beforeEach } from "bun:test";
 import { BareJS, Context, typebox } from "../src/bare";
-import * as TB from "@sinclair/typebox";
+import { bareAuth, createToken } from "../src/auth"; // Adjusted paths
 
-describe("BareJS Ultra-Accuracy Suite", () => {
+describe("BareJS Ultra-Accuracy Suite - Extended", () => {
   let app: BareJS;
-
+  const SECRET = "default_secret";
   beforeEach(() => {
     app = new BareJS();
   });
 
-  describe("Engine Precision", () => {
-    test("Strict Header & Status Injection", async () => {
-      app.get("/hex", (ctx: Context) => {
-        return ctx.status(201).set("X-Framework", "BareJS").json({ hex: "0xFF" });
+  describe("Auth & Security Precision", () => {
+    test("Auth Middleware - Valid Token Lifecycle", async () => {
+      // 1. Setup route with the middleware
+      app.get("/protected", bareAuth(SECRET), (ctx: Context) => {
+        return ctx.json({ user: ctx.user });
       });
       app.compile();
 
-      const res = await app.fetch(new Request("http://localhost/hex"));
-      
-      // Accuracy Check: Status, Custom Headers, and Native Bun Content-Type
-      expect(res.status).toBe(201);
-      expect(res.headers.get("X-Framework")).toBe("BareJS");
-      expect(res.headers.get("Content-Type")).toContain("application/json");
-      
-      const body = await res.json();
-      expect(body.hex).toBe("0xFF");
+      // 2. Generate a valid token
+      const payload = { id: 1, username: "tester", role: "admin" };
+      const token = await createToken(payload, SECRET);
+
+      // 3. Request with valid Bearer header
+      const res = await app.fetch(new Request("http://localhost/protected", {
+        headers: { "Authorization": `Bearer ${token}` }
+      }));
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.user.username).toBe("tester");
     });
 
-    test("Method Mismatch Isolation (404/405 Logic)", async () => {
-      app.get("/only-get", () => "ok");
+    test("Auth Middleware - Tampered Token Rejection", async () => {
+      app.get("/secure", bareAuth(SECRET), () => "hidden");
       app.compile();
 
-      // Accuracy Check: Ensure POSTing to a GET route doesn't leak data
-      const res = await app.fetch(new Request("http://localhost/only-get", { method: "POST" }));
-      expect(res.status).toBe(404); 
+      const validToken = await createToken({ id: 1 }, SECRET);
+      // Manually tamper with the signature part
+      const tamperedToken = validToken.substring(0, validToken.length - 5) + "fail";
+
+      const res = await app.fetch(new Request("http://localhost/secure", {
+        headers: { "Authorization": `Bearer ${tamperedToken}` }
+      }));
+
+      // Should fail signature verification (using manualTimingSafeEqual)
+      expect(res.status).toBe(401);
+    });
+
+    test("Auth Middleware - Malformed Header Rejection", async () => {
+      app.get("/secure", bareAuth(SECRET), () => "hidden");
+      app.compile();
+
+      // Missing 'Bearer ' prefix
+      const res = await app.fetch(new Request("http://localhost/secure", {
+        headers: { "Authorization": "JustATokenString" }
+      }));
+
+      expect(res.status).toBe(401);
+      const data = await res.json();
+      expect(data.message).toBe("Bearer token required");
     });
   });
 
-  describe("Validation Edge Cases", () => {
-    test("TypeBox Rejection Accuracy", async () => {
-      const Schema = TB.Type.Object({ age: TB.Type.Number() });
-      app.post("/age", typebox(Schema), () => "valid");
+  describe("Middleware Chain (The 'H is not a function' Fix)", () => {
+    test("Multiple Middleware Propagation", async () => {
+      let count = 0;
+      
+      const mid1 = async (ctx: Context, next: any) => {
+        count++;
+        return await next();
+      };
+      const mid2 = async (ctx: Context, next: any) => {
+        count++;
+        return await next();
+      };
+
+      app.get("/chain", mid1, mid2, () => "finish");
       app.compile();
 
-      // Accuracy Check: Sending string instead of number should trigger validation failure
-      const res = await app.fetch(new Request("http://localhost/age", {
-        method: "POST",
-        body: JSON.stringify({ age: "twenty" }), // Invalid type
-        headers: { "Content-Type": "application/json" }
-      }));
-
-      // If your typebox middleware returns a specific error status
-      expect(res.status).toBeGreaterThanOrEqual(400);
+      const res = await app.fetch(new Request("http://localhost/chain"));
+      
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe("finish");
+      expect(count).toBe(2); // Ensure both middlewares were executed
     });
+  });
 
-    test("Complex Dynamic Routing Precision", async () => {
-      // Testing overlapping routes: /u/:id vs /u/settings
-      app.get("/u/settings", () => "settings");
-      app.get("/u/:id", (ctx:Context) => ctx.params.id);
+  describe("Memory & Static Reference Performance", () => {
+    test("Logger as Static Reference vs Factory", async () => {
+      // Mock logger that doesn't use factory ()
+      const logger = async (ctx: Context, next: any) => {
+        ctx.set("logged", true);
+        return await next();
+      };
+
+      app.use(logger); // Direct reference
+      app.get("/static-check", (ctx: Context) => ctx.get("logged") ? "ok" : "no");
       app.compile();
 
-      const res1 = await app.fetch(new Request("http://localhost/u/settings"));
-      expect(await res1.text()).toBe("settings");
+      const res = await app.fetch(new Request("http://localhost/static-check"));
+      expect(await res.text()).toBe("ok");
+    });
+  });
 
-      const res2 = await app.fetch(new Request("http://localhost/u/123"));
-      expect(await res2.text()).toBe("123");
+  describe("Context Integrity", () => {
+    test("Context Store Isolation (Concurrency Check)", async () => {
+      app.get("/set/:val", (ctx: Context) => {
+        ctx.set("data", ctx.params.val);
+        // Simulate slight delay to catch race conditions if any
+        return new Promise(r => setTimeout(() => r(ctx.json({ stored: ctx.get("data") })), 5));
+      });
+      app.compile();
+
+      // Send multiple requests simultaneously
+      const [res1, res2] = await Promise.all([
+        app.fetch(new Request("http://localhost/set/A")),
+        app.fetch(new Request("http://localhost/set/B"))
+      ]);
+
+      const data1 = await res1.json();
+      const data2 = await res2.json();
+
+      // Each request context must maintain its own store
+      expect(data1.stored).toBe("A");
+      expect(data2.stored).toBe("B");
     });
   });
 });

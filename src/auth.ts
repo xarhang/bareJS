@@ -42,6 +42,14 @@ const verifyData = async (data: string, signature: string, secret: string): Prom
   return timingSafeEqual(a, b);
 };
 
+export const manualTimingSafeEqual = (a: Uint8Array, b: Uint8Array): boolean => {
+  if (a.length !== b.length) return false;
+  let res = 0;
+  for (let i = 0; i < a.length; i++) {
+    res |= a[i]! ^ b[i]!;
+  }
+  return res === 0;
+};
 /**
  * 1. BARE TOKEN AUTH (Stateless Middleware)
  * High-performance JWT alternative for BareJS

@@ -117,7 +117,7 @@ authRouter.post("/login", async (ctx: Context) => {
 
 // --- 2. Protected Data Router ---
 // Pass your bareAuth middleware directly to the constructor
-const protectedRoute = new BareRouter("", [bareAuth(SECRET)]);
+const protectedRoute = new BareRouter("", bareAuth(SECRET));
 
 protectedRoute.group("/api/v1", (v1) => {
   v1.get("/me", (ctx: Context) => {

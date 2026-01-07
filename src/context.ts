@@ -15,7 +15,12 @@ export type Middleware =
 // export type Handler = (ctx: Context) => Promise<any> | any;
 export type ContextHandler = (ctx: Context) => Promise<any> | any;
 export type NativeHandler = (req: Request, params: Params) => Promise<any> | any;
-
+export interface AuthUser {
+  id: number;
+  username: string;
+  role: string;
+  tier?: string;
+}
 // 2. The Final Handler: This allows either (ctx) OR (req, params)
 export type Handler = ContextHandler | NativeHandler;
 export class Context {
@@ -145,6 +150,9 @@ export class Context {
     this._status = code;
     this.setHeader('location', url);
     return null;
+  }
+  get user(): AuthUser | null {
+    return this.store['user'] || null;
   }
 }
 

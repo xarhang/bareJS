@@ -184,7 +184,7 @@
 
 // All comments in English
 import { Context, type Middleware, type Handler, type WSHandlers, type Next } from './context';
-import { typebox, zod, native } from './validators';
+// import { typebox, zod, native } from './validators';
 import { BareRouter } from './router'; // Import your new router
 
 export * from './context';

@@ -12,7 +12,8 @@ export type {
   Next, 
   WSHandlers ,
   Context,
-  Params
+  Params,
+  AuthUser
 } from './context';
 
 // Validation Middlewares

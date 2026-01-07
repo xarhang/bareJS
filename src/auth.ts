@@ -1,39 +1,67 @@
-import type {  Next } from './context';
+import type {  AuthUser, Next } from './context';
 
 /**
  * UTILS: Internal Crypto Helpers using Native Web Crypto
- * This approach is Type-safe and highly compatible with Bun
+ * Optimized for Bun performance and type safety.
  */
 const encoder = new TextEncoder();
 
+/**
+ * SIGN: Creates a HMAC-SHA256 signature
+ */
 const signData = async (data: string, secret: string): Promise<string> => {
-  // Using Bun.crypto.hmac with 'any' cast to bypass version-specific type issues
-  const hmac = (Bun as any).crypto.hmac("sha256", secret, data);
-  return Buffer.from(hmac).toString("hex");
-};
-
-const verifyData = async (data: string, signature: string, secret: string): Promise<boolean> => {
-  const expectedSignature = await signData(data, secret);
-  // Using crypto.subtle.timingSafeEqual or Bun's native timingSafeEqual
-  return (Bun as any).crypto.timingSafeEqual(
-    encoder.encode(signature),
-    encoder.encode(expectedSignature)
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
   );
+
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(data)
+  );
+
+  return Buffer.from(signature).toString("hex");
 };
 
 /**
- * 1. BARE TOKEN AUTH (High Performance JWT-like)
+ * VERIFY: Checks signature integrity using Constant-Time comparison
+ */
+const verifyData = async (data: string, signature: string, secret: string): Promise<boolean> => {
+  const expectedSignature = await signData(data, secret);
+  
+  const a = encoder.encode(signature);
+  const b = encoder.encode(expectedSignature);
+
+  // Critical: timingSafeEqual requires buffers of identical length
+  if (a.byteLength !== b.byteLength) return false;
+  
+  return (Bun as any).crypto.timingSafeEqual(a, b);
+};
+
+/**
+ * 1. BARE TOKEN AUTH (Stateless Middleware)
+ * High-performance JWT alternative for BareJS
  */
 export const bareAuth = (secret: string) => {
   return async (ctx: any, next: Next) => {
+    // 1. Extract Header
     const authHeader = ctx.req.headers.get('Authorization');
+    
     if (!authHeader?.startsWith('Bearer ')) {
       return ctx.status(401).json({ status: 'error', message: 'Bearer token required' });
     }
 
+    // 2. Extract Token
     const token = authHeader.split(' ')[1];
-    if (!token) return ctx.status(401).json({ status: 'error', message: 'Invalid token format' });
+    if (!token) {
+      return ctx.status(401).json({ status: 'error', message: 'Invalid token format' });
+    }
 
+    // 3. Split Payload and Signature
     const parts = token.split('.');
     if (parts.length !== 2) {
       return ctx.status(401).json({ status: 'error', message: 'Malformed token' });
@@ -42,16 +70,20 @@ export const bareAuth = (secret: string) => {
     const [payloadBase64, signature] = parts;
 
     try {
+      // 4. Decode and Verify
       const payloadRaw = Buffer.from(payloadBase64!, 'base64').toString();
       const isValid = await verifyData(payloadRaw, signature!, secret);
 
       if (!isValid) {
         return ctx.status(401).json({ status: 'error', message: 'Invalid signature' });
       }
+      // 5. Attach User to Context
+      const user: AuthUser = JSON.parse(payloadRaw);
+      ctx.set('user', user);
 
-      ctx.set('user', JSON.parse(payloadRaw));
       return next();
     } catch (e) {
+      console.error("[Auth] Verification Error:", e);
       return ctx.status(401).json({ status: 'error', message: 'Token verification failed' });
     }
   };
@@ -59,6 +91,7 @@ export const bareAuth = (secret: string) => {
 
 /**
  * 2. BASIC AUTH
+ * Useful for internal tools and simple admin panels
  */
 export const basicAuth = (credentials: { user: string; pass: string }) => {
   return async (ctx: any, next: Next) => {
@@ -83,18 +116,38 @@ export const basicAuth = (credentials: { user: string; pass: string }) => {
 
 /**
  * 3. PASSWORD UTILS (Bun Native)
+ * Uses Argon2id - the gold standard for password hashing
  */
 export const Password = {
-  hash: (password: string) => Bun.password.hash(password, { algorithm: "argon2id" }),
+  hash: (password: string) => Bun.password.hash(password, { 
+    algorithm: "argon2id",
+    memoryCost: 65536, // 64MB
+    timeCost: 2 
+  }),
   verify: (password: string, hash: string) => Bun.password.verify(password, hash)
 };
 
 /**
  * 4. TOKEN GENERATOR
+ * Creates a "Bare Token" consisting of base64(payload).hex(signature)
  */
 export const createToken = async (payload: object, secret: string): Promise<string> => {
   const payloadStr = JSON.stringify(payload);
   const payloadBase64 = Buffer.from(payloadStr).toString('base64');
   const signature = await signData(payloadStr, secret);
   return `${payloadBase64}.${signature}`;
+};
+
+/**
+ * 5. ROLE AUTHORIZATION (Bonus Max Function)
+ * Ensures user has specific permissions after bareAuth
+ */
+export const hasRole = (role: string) => {
+  return async (ctx: any, next: Next) => {
+    const user = ctx.get('user');
+    if (!user || user.role !== role) {
+      return ctx.status(403).json({ status: 'error', message: `Required role: ${role}` });
+    }
+    return next();
+  };
 };

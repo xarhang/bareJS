@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767891853297,
+  "lastUpdate": 1767892554054,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -962,6 +962,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3640.3532844412903,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "xarhang@hotmail.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "xarhang@hotmail.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "8b6b35a91971df44d2bd291ab9db12e30889812e",
+          "message": "Merge branch 'feat/radix-router'",
+          "timestamp": "2026-01-09T00:15:21+07:00",
+          "tree_id": "cfb555063e61c61f75061864a6bd1a3361017b87",
+          "url": "https://github.com/xarhang/bareJS/commit/8b6b35a91971df44d2bd291ab9db12e30889812e"
+        },
+        "date": 1767892553841,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1965.4800990481692,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1874.0918181669153,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3643.238132021069,
             "unit": "undefined"
           }
         ]

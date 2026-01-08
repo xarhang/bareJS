@@ -1,23 +1,39 @@
-# 🚀 BareJS
+<div align="center">
+  <br />
+  <h1>🚀 BareJS</h1>
+  <p><strong>The "Metal" of Web Frameworks</strong></p>
+  <p><i>An ultra-high-performance web engine built for Bun, architected strictly for Mechanical Sympathy.</i></p>
 
-**The "Metal" of Web Frameworks.**
+  <p>
+    <a href="https://www.npmjs.com/package/barejs">
+      <img src="https://img.shields.io/npm/v/barejs?style=for-the-badge&logo=npm&color=CB3837" alt="NPM Version">
+    </a>
+    <a href="https://github.com/xarhang/bareJS/actions/workflows/bench.yml">
+      <img src="https://img.shields.io/github/actions/workflow/status/xarhang/bareJS/bench.yml?branch=main&label=Performance&style=for-the-badge&logo=github" alt="Performance">
+    </a>
+    <a href="https://bun.sh">
+      <img src="https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=for-the-badge&logo=bun" alt="Bun Version">
+    </a>
+    <a href="https://github.com/xarhang/bareJS/blob/main/LICENSE">
+      <img src="https://img.shields.io/github/license/xarhang/bareJS?style=for-the-badge&color=blue" alt="License">
+    </a>
+  </p>
 
-BareJS is an ultra-high-performance web engine built on **Bun**, architected strictly for **Mechanical Sympathy**. It JIT-compiles your routes and middleware into a flat execution pipeline, bypassing object lookups and overcoming the "Promise Tax".
+  <p align="center">
+    <a href="#-benchmarks">Benchmarks</a> •
+    <a href="#-features">Features</a> •
+    <a href="#-quick-start">Quick Start</a> •
+    <a href="#-architecture">Architecture</a>
+  </p>
 
-<p align="left">
-  <a href="https://www.npmjs.com/package/barejs">
-    <img src="https://img.shields.io/npm/v/barejs?style=flat-square&logo=npm&color=CB3837" alt="NPM Version">
-  </a>
-  <a href="https://github.com/xarhang/bareJS/actions/workflows/bench.yml">
-    <img src="https://github.com/xarhang/bareJS/actions/workflows/badge.svg" alt="Performance Benchmark">
-  </a>
-</p>
+  ---
+</div>
 
----
+
 
 ## 📊 Benchmarks: Real-World Performance
 
-BareJS is designed to lead in complex, real-world scenarios. In our "Stress Test" involving 10 middlewares and deep routing, BareJS outperforms even the fastest competitors.
+BareJS leads in complex, real-world scenarios. We test using a **"Real-World" Stress Test** involving **10 middlewares** and **Deep Path Routing** to ensure we measure engine efficiency, not just hello-world speed.
 
 <!-- MARKER: PERFORMANCE_TABLE_START -->
 
@@ -30,7 +46,13 @@ BareJS is designed to lead in complex, real-world scenarios. In our "Stress Test
 > Last Updated: Thu, 08 Jan 2026 17:04:12 GMT
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
+> [!TIP]
+> **View our [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/)** for historical data and detailed performance trends across different hardware.
 ---
+### Why BareJS is Faster
+* **Flat Pipeline:** No recursive middleware overhead.
+* **JIT Route Compilation:** Pre-calculates route matching before the first request hits.
+* **Zero Dependency:** Built purely for the Bun runtime.
 
 ## 🛠️ Installation & Setup
 
@@ -160,4 +182,4 @@ The `Context` object is recycled to eliminate GC overhead.
 
 ---
 
-**Maintained by [xarhang]** | **License: MIT**
+**Maintained by [xarhang](https://github.com/xarhang)** | **License: MIT**

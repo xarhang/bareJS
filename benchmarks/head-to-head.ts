@@ -1,7 +1,9 @@
+// All comments in English
 import { BareJS, Context } from '../src/bare';
 import { Elysia } from 'elysia';
 import { Hono } from 'hono';
 import { bench, group, run } from 'mitata';
+import { writeFileSync } from 'fs';
 
 const MW_COUNT = 10;
 const DEEP_PATH = '/api/v1/user/:id/profile/settings/:category';
@@ -14,13 +16,10 @@ for (let i = 0; i < MW_COUNT; i++) {
   bare.use((ctx: Context, next: any) => next());
 }
 bare.get(DEEP_PATH, (ctx: Context) => ctx.json({ id: ctx.params.id }));
-// Force compile once before benchmark // remove because use it on fetch in bareJS fetch
-// bare.compile();
 
-// 2. Setup Elysia (Fixed Error 2349)
+// 2. Setup Elysia
 const elysia = new Elysia();
 for (let i = 0; i < MW_COUNT; i++) {
-  // Elysia's closest equivalent to a pass-through middleware
   elysia.onBeforeHandle(() => { });
 }
 elysia.get(DEEP_PATH, ({ params }) => ({ id: params.id }));
@@ -33,19 +32,49 @@ for (let i = 0; i < MW_COUNT; i++) {
 hono.get(DEEP_PATH, (c) => c.json({ id: c.req.param('id') }));
 
 // --- BENCHMARK ---
-group('The "Real World" Stress Test (10 MW + Deep Path)', () => {
+async function main() {
+  console.log('🚀 Running "Real World" Stress Test (10 MW + Deep Path)...');
 
-  bench('BareJS', () => {
-    bare.fetch(req);
+  group('The "Real World" Stress Test', () => {
+    bench('BareJS', () => {
+      bare.fetch(req);
+    });
+
+    bench('Elysia', () => {
+      elysia.handle(req);
+    });
+
+    bench('Hono', async () => {
+      await hono.fetch(req);
+    });
   });
 
-  bench('Elysia', () => {
-    elysia.handle(req);
+  const results: any = await run();
+
+  // Extracting average latency (nanoseconds)
+  const formatted = results.benchmarks.map((b: any) => {
+    let avg = 0;
+
+    // Mitata structure check
+    if (b.stats?.avg) {
+      avg = b.stats.avg;
+    } else if (b.runs && b.runs.length > 0) {
+      const stats = b.runs[0].stats;
+      avg = stats?.avg ?? stats?.mean ?? 0;
+    }
+
+    return {
+      name: String(b.alias || b.name || "Unknown").trim(),
+      value: avg // Keeping raw nanoseconds for update-readme logic
+    };
   });
 
-  bench('Hono', async () => {
-    await hono.fetch(req);
-  });
-});
+  // Log to console for debugging
+  console.log("📊 Final Benchmark Data:", JSON.stringify(formatted, null, 2));
 
-await run();
+  // Save to JSON for update-readme.ts
+  writeFileSync("result.json", JSON.stringify(formatted, null, 2));
+  console.log("✅ result.json generated successfully.");
+}
+
+main();

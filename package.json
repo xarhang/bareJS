@@ -1,6 +1,6 @@
 {
   "name": "barejs",
-  "version": "0.1.33",
+  "version": "0.1.34",
   "author": "xarhang",
   "description": "High-performance JIT-specialized web framework for Bun",
   "main": "./dist/index.js",

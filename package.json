@@ -20,8 +20,8 @@
   },
   "scripts": {
     "test": "bun test",
-    "bench": "bun run benchmarks/index.ts",
-    "benchs": "bun run benchmarks/head-to-head.ts",
+    "benchs": "bun run benchmarks/index.ts",
+    "bench": "bun run benchmarks/head-to-head.ts",
     "dev": "bun --watch src/index.ts",
     "build": "bun ./scripts/build.ts",
     "prepublishOnly": "bun run build",

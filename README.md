@@ -2,34 +2,22 @@
 
 **The "Metal" of Web Frameworks.**
 
-BareJS is an ultra-high-performance web engine built on **Bun**, architected strictly for **Mechanical Sympathy**. By aligning software execution with modern CPU branch prediction and memory caching, we achieve latencies that traditional frameworks simply cannot touch.
+BareJS is an ultra-high-performance web engine built on **Bun**, architected strictly for **Mechanical Sympathy**. It JIT-compiles your routes and middleware into a flat execution pipeline, bypassing object lookups and overcoming the "Promise Tax".
 
 <p align="left">
-  <a href="https://github.com/xarhang/bareJS/tags">
-    <img src="https://img.shields.io/github/v/tag/xarhang/bareJS?style=flat-square&logo=github&label=github&color=black" alt="GitHub Tag">
-  </a>
   <a href="https://www.npmjs.com/package/barejs">
     <img src="https://img.shields.io/npm/v/barejs?style=flat-square&logo=npm&color=CB3837" alt="NPM Version">
   </a>
   <a href="https://github.com/xarhang/bareJS/actions/workflows/bench.yml">
-    <img src="https://github.com/xarhang/bareJS/actions/workflows/bench.yml/badge.svg" alt="Performance Benchmark">
+    <img src="https://github.com/xarhang/bareJS/actions/workflows/badge.svg" alt="Performance Benchmark">
   </a>
 </p>
 
 ---
 
-## 📊 Benchmarks: The "Nanosecond" Standard
+## 📊 Benchmarks: Real-World Performance
 
-BareJS ruthlessly optimizes the hot path. We don't just "wrap" request handlers; we **JIT compile** them into a flat executive function, bypassing object lookups entirely.
-
-| Scenario | Framework | Time/Request | Speedup |
-| :--- | :--- | :--- | :--- |
-| **Stress Test** (10 MW + Deep Path) | **BareJS** | **1.61 µs** | **Baseline 🚀** |
-| | Elysia | 2.15 µs | 1.33x slower |
-| | Hono | 9.57 µs | 5.94x slower |
-| **Simple Route** (Hello World) | **BareJS** | **1.99 µs** | **Tied (Runtime Limit)** |
-
-> *Benchmarks run on AMD Ryzen 7 3700X, Bun v1.3.5*
+BareJS is designed to lead in complex, real-world scenarios. In our "Stress Test" involving 10 middlewares and deep routing, BareJS outperforms even the fastest competitors.
 
 <!-- MARKER: PERFORMANCE_TABLE_START -->
 
@@ -42,169 +30,133 @@ BareJS ruthlessly optimizes the hot path. We don't just "wrap" request handlers;
 > Last Updated: Thu, 08 Jan 2026 16:38:07 GMT
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
-
-<!-- NOTE: The table above is automatically updated via scripts/update-readme.ts -->
-
 ---
 
-
-## ⚡ Quick Start
-
-Initialize a production-ready project instantly:
+## 🛠️ Installation & Setup
 
 ```bash
-bun create barejs my-app
-cd my-app
-bun dev
+bun add barejs
 ```
 
 ### The "Bare" Minimum
 ```typescript
-import { BareJS, type Context } from 'barejs';
+import { BareJS } from 'barejs';
 
 const app = new BareJS();
 
-app.get('/ping', (ctx: Context) => ctx.json({ msg: "pong" }));
+app.get('/', (ctx) => ctx.json({ hello: "world" }));
 
 app.listen(3000);
 ```
 
 ---
 
-## 📖 The Hitchhiker's Guide to BareJS
+## 📘 Comprehensive Guide
 
-### 1. Routing & Context
-BareJS uses a **Zero-Allocation Context**. The `ctx` object is reused from a pre-allocated pool to prevent Garbage Collection spikes.
-
-```typescript
-app.get('/users/:id', (ctx: Context) => {
-  // 1. Params (Zero-Copy slices)
-  const id = ctx.params.id;
-
-  // 2. Query Strings (Wait... where are they?)
-  // Use native Bun request for raw speed if needed:
-  const url = new URL(ctx.req.url);
-  const sort = url.searchParams.get('sort');
-
-  // 3. Response
-  return ctx.status(200).json({ id, sort });
-});
-```
-
-### 2. Nested Routers & Grouping
-Organize your API into standard modules using `BareRouter`.
+### 1. 🔀 Advanced Routing
+Use `BareRouter` for modularity and nesting.
 
 ```typescript
 import { BareJS, BareRouter } from 'barejs';
 
 const app = new BareJS();
-const v1 = new BareRouter("/api/v1");
-const auth = new BareRouter("/auth");
+const api = new BareRouter("/api/v1");
 
-// Define routes on sub-router
-auth.post("/login", (ctx) => ctx.json({ token: "..." }));
+api.get("/status", (ctx) => ({ status: "ok" }));
 
-// Mount router (Result: /api/v1/auth/login)
-v1.use(auth);
-app.use(v1);
+app.use(api); // Result: /api/v1/status
 ```
 
-### 3. Middleware
-Middleware in BareJS is "Compiled Away". Whether you have 1 or 100 middlewares, the runtime cost is flattened.
+### 2. 🛡️ Security & Authentication
+Full RFC 7515 compliant JWT support and secure password utilities.
 
 ```typescript
-// Global Middleware
-app.use(async (ctx, next) => {
-  const start = Date.now();
-  await next();
-  console.log(`Took: ${Date.now() - start}ms`);
+import { bareAuth, createToken, Password, type Context } from 'barejs';
+
+const SECRET = "your-secret";
+
+// JWT Generation
+app.post('/login', async (ctx) => {
+  const hash = await Password.hash("password123");
+  const isValid = await Password.verify("password123", hash);
+  
+  if (isValid) {
+    const token = await createToken({ id: 1 }, SECRET);
+    return { token };
+  }
 });
 
-// Route-Specific Middleware
-const upgrade = (ctx, next) => {
-  if (ctx.req.headers.get("upgrade") !== "websocket") return ctx.status(400).json({ error: "No WS" });
-  return next();
-};
-
-app.get('/ws', upgrade, (ctx) => { /* ... */ });
+// Protection Middleware
+app.get('/me', bareAuth(SECRET), (ctx) => {
+  const user = ctx.get('user'); // Set by bareAuth
+  return { user };
+});
 ```
 
----
-
-## 🛡️ Security & Authentication (JWT)
-BareJS includes a standard-compliant (RFC 7515) JWT implementation powered by `CrytpoKey` caching.
+### 3. ✅ Data Validation (3 Styles)
+Choose the validation style that fits your workflow.
 
 ```typescript
-import { bareAuth, createToken, type Context } from 'barejs';
+import { typebox, zod, native, t } from 'barejs';
+import { z } from 'zod';
 
-const SECRET = process.env.JWT_SECRET || "s3cr3t";
+// Style A: TypeBox (Fastest, Highly Recommended)
+const TypeBoxSchema = t.Object({ name: t.String() });
+app.post('/typebox', typebox(TypeBoxSchema), (ctx) => ctx.body);
 
-// 1. Generate Token
-app.post('/login', async (ctx: Context) => {
-  const user = { id: 1, role: "admin" };
-  const token = await createToken(user, SECRET);
-  return { token };
-});
+// Style B: Zod (Standard)
+const ZodSchema = z.object({ age: z.number() });
+app.post('/zod', zod(ZodSchema), (ctx) => ctx.body);
 
-// 2. Protect Routes
-// bareAuth automatically verifies header and sets ctx.get('user')
-app.get('/admin', bareAuth(SECRET), (ctx: Context) => {
-  const user = ctx.get('user');
-  return { secret_data: "42", user };
-});
+// Style C: Native (Zero Dependency)
+const NativeSchema = { properties: { id: { type: 'number' } } };
+app.post('/native', native(NativeSchema), (ctx) => ctx.body);
 ```
 
----
+### 4. 🔌 Essential Plugins
+Built-in utilities for modern web development.
 
-## ✅ Validation (TypeBox)
-We recommend **TypeBox** for validation as it compiles to JIT-friendly code.
-
+#### **Logger**
+Color-coded terminal logging with millisecond-precision timing.
 ```typescript
-import { typebox, t } from 'barejs';
-
-const UserSchema = t.Object({
-  username: t.String(),
-  age: t.Number()
-});
-
-app.post('/user', typebox(UserSchema), (ctx) => {
-  // TypeScript knows ctx.body is { username: string, age: number }
-  return { created: ctx.body.username };
-});
+import { logger } from 'barejs';
+app.use(logger);
 ```
 
----
-
-## 🔌 Built-in Utilities
-
-### CORS
+#### **CORS**
 ```typescript
 import { cors } from 'barejs';
-app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
+app.use(cors({ origin: "*", methods: "GET,POST" }));
 ```
 
-### Static Files
+#### **Static Files**
+Efficiently serve files from any directory.
 ```typescript
 import { staticFile } from 'barejs';
-// Serve everything in ./public at root
-app.use(staticFile("public"));
+app.use(staticFile("public")); // Serves ./public/* at /
 ```
+
+### 5. 🧠 Context API
+The `Context` object is recycled to eliminate GC overhead.
+
+| Method / Property | Description |
+| :--- | :--- |
+| `ctx.req` | Raw Bun `Request` object |
+| `ctx.params` | Route parameters |
+| `ctx.body` | Validated body (from `typebox`, `zod`, etc.) |
+| `ctx.status(code)` | Sets response status |
+| `ctx.json(data)` | Returns an optimized JSON response |
+| `ctx.set(k, v)` | Stores data in request lifecycle |
+| `ctx.get(k)` | Retrieves stored data |
 
 ---
 
-## ⚙️ Deployment & Tuning
+## ⚙️ Performance Tuning
 
-To unleash full performance (100k+ RPS), create a production environment:
-
-```bash
-# Power of 2 pool size allows bitwise masking vs expensive modulo
-BARE_POOL_SIZE=4096 NODE_ENV=production bun run index.ts
-```
-
-| Config | Default | Description |
+| OS Variable | Default | Description |
 | :--- | :--- | :--- |
-| `BARE_POOL_SIZE` | `1024` | Request context pool. Must be power of 2. |
-| `NODE_ENV` | `development` | Set to `production` to enable aggressive JIT. |
+| `BARE_POOL_SIZE` | `1024` | Pre-allocated context pool. Use power of 2. |
+| `NODE_ENV` | `development` | Use `production` to enable max JIT stability. |
 
 ---
 

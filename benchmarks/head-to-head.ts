@@ -35,7 +35,7 @@ hono.get(DEEP_PATH, (c) => c.json({ id: c.req.param('id') }));
 // --- BENCHMARK ---
 group('The "Real World" Stress Test (10 MW + Deep Path)', () => {
 
-  bench('BareJS (New Context)', () => {
+  bench('BareJS', () => {
     bare.fetch(req);
   });
 

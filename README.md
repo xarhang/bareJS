@@ -31,11 +31,11 @@ BareJS is the definitive baseline for speed in the JavaScript ecosystem. By ruth
 
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **621.69 ns** | **Baseline** |
-| Elysia | 2.28 µs | 3.67x slower |
-| Hono | 3.83 µs | 6.16x slower |
+| **BareJS** | **597.86 ns** | **Baseline** |
+| Elysia | 2.28 µs | 3.82x slower |
+| Hono | 4.20 µs | 7.02x slower |
 
-> Last Updated: Wed, 07 Jan 2026 08:53:13 GMT
+> Last Updated: Thu, 08 Jan 2026 16:38:07 GMT
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 

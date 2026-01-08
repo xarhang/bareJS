@@ -23,11 +23,11 @@ BareJS is designed to lead in complex, real-world scenarios. In our "Stress Test
 
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **597.86 ns** | **Baseline** |
-| Elysia | 2.28 µs | 3.82x slower |
-| Hono | 4.20 µs | 7.02x slower |
+| **BareJS** | **1.95 µs** | **Baseline** |
+| Elysia | 1.92 µs | 0.98x slower |
+| Hono | 3.64 µs | 1.87x slower |
 
-> Last Updated: Thu, 08 Jan 2026 16:38:07 GMT
+> Last Updated: Thu, 08 Jan 2026 17:04:12 GMT
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 ---

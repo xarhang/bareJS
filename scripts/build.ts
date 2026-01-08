@@ -2,16 +2,14 @@ import { $ } from "bun";
 
 console.log("🛠  Building BareJS for Release...");
 
-// 1. Clean up old dist folder
 await $`rm -rf dist`;
 
-// 2. Build everything using src/index.ts as the entrypoint
 const result = await Bun.build({
-  entrypoints: ['./src/index.ts'], // <-- เปลี่ยนเป็น index เพื่อมัดรวมทุกอย่าง
+  entrypoints: ['./src/index.ts'],
   outdir: './dist',
   target: 'bun',
   minify: true,
-  naming: "[name].[ext]" // จะได้ไฟล์ dist/index.js
+  naming: "[name].[ext]"
 });
 
 if (result.success) {
@@ -21,8 +19,5 @@ if (result.success) {
   process.exit(1);
 }
 
-// 3. Generate Type Definitions for the entire project
-// เราจะใช้ tsc จัดการทุกไฟล์ใน src เพื่อให้ได้ Type ครบถ้วน
 await $`bun x tsc`;
-// 4. Rename index.d.ts if needed (or ensure it points correctly)
 console.log("🚀 BareJS is ready to fly!");

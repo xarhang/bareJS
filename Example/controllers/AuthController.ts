@@ -1,6 +1,6 @@
-// test/controller/AuthController.ts
-import type { Context } from '../../src/context'; // ปรับ Path ตามโครงสร้างจริง
-import { createToken } from '../../src/auth';    // ปรับ Path ตามโครงสร้างจริง
+// controllers/AuthController.ts
+import type { Context } from '../../src/context';
+import { createToken } from '../../src/auth';
 
 interface LoginBody {
   username?: string;
@@ -8,10 +8,6 @@ interface LoginBody {
 }
 
 export class AuthController {
-  /**
-   * LOGIN: (POST /api/v1/auth/login)
-   * ทำการตรวจสอบ User และสร้าง "Bare Token" กลับไป
-   */
   static async login(ctx: Context) {
     try {
       const body = await ctx.req.json() as LoginBody;
@@ -25,15 +21,9 @@ export class AuthController {
       }
 
       // 2. Auth Logic (Mock Admin)
-      // ในการใช้งานจริง: ควรใช้ Password.verify(body.password, user.hash_from_db)
       if (body.username === "admin" && body.password === "1234") {
         const secret = process.env.JWT_SECRET || "default_secret";
 
-        /**
-         * 🚀 POINT OF SPEED:
-         * เราฝังทุกอย่างที่ 'Controller อื่นๆ' ต้องใช้ลงใน Token ทันที
-         * เพื่อลดการ Query Database ใน Request ถัดไป
-         */
         const token = await createToken({
           id: 99,
           username: body.username,
@@ -63,12 +53,7 @@ export class AuthController {
     }
   }
 
-  /**
-   * GET ME: (GET /api/v1/admin/me)
-   * ดึงข้อมูลจาก Token ผ่าน Context Getter (379ns Performance)
-   */
   static async getMe(ctx: Context) {
-    // ดึงผ่าน Getter ที่เราเขียนไว้ใน context.ts
     const user = ctx.get('user');
 
     if (!user) {
@@ -78,7 +63,6 @@ export class AuthController {
       });
     }
 
-    // ข้อมูลเหล่านี้ดึงจาก Memory ใน Token (Zero DB Query)
     return ctx.json({
       status: 'success',
       data: {
@@ -90,13 +74,10 @@ export class AuthController {
     });
   }
 
-  /**
-   * GET PROFILE: ตัวอย่างการแสดงผลแบบดิบ
-   */
   static getProfile(ctx: Context) {
     return ctx.json({
       status: 'success',
-      user: ctx.get('user') // ส่ง Object user ออกไปทั้งหมด
+      user: ctx.get('user')
     });
   }
 }

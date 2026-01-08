@@ -1,4 +1,3 @@
-// All comments in English
 import { BareJS, Context } from '../src/bare';
 import { Elysia } from 'elysia';
 import { Hono } from 'hono';

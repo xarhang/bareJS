@@ -1,8 +1,9 @@
 import {
   type Middleware,
-  type Handler,
-  type GroupCallback
+  type Handler
 } from './context';
+
+export type GroupCallback = (router: BareRouter) => void;
 
 type HandlersChain = (Middleware | Handler)[];
 
@@ -25,13 +26,35 @@ export class BareRouter {
     return this;
   }
 
-  public get = (path: string, ...h: HandlersChain) => this._add("GET", path, h);
-  public post = (path: string, ...h: HandlersChain) => this._add("POST", path, h);
-  public put = (path: string, ...h: HandlersChain) => this._add("PUT", path, h);
-  public patch = (path: string, ...h: HandlersChain) => this._add("PATCH", path, h);
-  public delete = (path: string, ...h: HandlersChain) => this._add("DELETE", path, h);
+  public get(path: string, handler: Handler): this;
+  public get(path: string, middleware: Middleware, handler: Handler): this;
+  public get(path: string, ...h: HandlersChain): this;
+  public get(path: string, ...h: HandlersChain) { return this._add("GET", path, h); }
 
-  public group = (path: string, ...args: any[]) => {
+  public post(path: string, handler: Handler): this;
+  public post(path: string, middleware: Middleware, handler: Handler): this;
+  public post(path: string, ...h: HandlersChain): this;
+  public post(path: string, ...h: HandlersChain) { return this._add("POST", path, h); }
+
+  public put(path: string, handler: Handler): this;
+  public put(path: string, middleware: Middleware, handler: Handler): this;
+  public put(path: string, ...h: HandlersChain): this;
+  public put(path: string, ...h: HandlersChain) { return this._add("PUT", path, h); }
+
+  public patch(path: string, handler: Handler): this;
+  public patch(path: string, middleware: Middleware, handler: Handler): this;
+  public patch(path: string, ...h: HandlersChain): this;
+  public patch(path: string, ...h: HandlersChain) { return this._add("PATCH", path, h); }
+
+  public delete(path: string, handler: Handler): this;
+  public delete(path: string, middleware: Middleware, handler: Handler): this;
+  public delete(path: string, ...h: HandlersChain): this;
+  public delete(path: string, ...h: HandlersChain) { return this._add("DELETE", path, h); }
+
+  public group(path: string, callback: GroupCallback): this;
+  public group(path: string, middleware: Middleware, callback: GroupCallback): this;
+  public group(path: string, ...args: any[]): this;
+  public group(path: string, ...args: any[]): this {
     const callback = args.pop() as GroupCallback;
     const middleware = args;
 
@@ -43,7 +66,7 @@ export class BareRouter {
     callback(subRouter);
     this.routes.push(...subRouter.routes);
     return this;
-  };
+  }
 
   /**
    * 🔗 Use: Mounts a router or middleware

@@ -8,16 +8,16 @@ import { logger } from '../src/logger';
 const app = new BareJS();
 const api = new BareRouter("/api");
 const secret = process.env.JWT_SECRET || "default_secret";
-api.group("/v1", (v1: any) => {
+api.group("/v1", (v1) => {
 
   // 🚪 Public Routes
-  v1.group("/auth", (auth: any) => {
+  v1.group("/auth", (auth) => {
     auth.post("/login", AuthController.login);
   });
 
   // 🔒 Protected Routes
-  v1.group("/admin", bareAuth(secret), (admin: BareRouter) => {
-    admin.get("/dashboard", (ctx: Context) => {
+  v1.group("/admin", bareAuth(secret), (admin) => {
+    admin.get("/dashboard", (ctx) => {
       const user = ctx.get('user'); // Authenticated user from context
       return ctx.json({ message: `Welcome ${user.username}` });
     });

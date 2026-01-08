@@ -2,7 +2,6 @@ export type Params = Record<string, string>;
 export type Next = () => Promise<any> | any;
 export type Middleware = (ctx: Context, next: Next) => Promise<any> | any;
 export type Handler = (ctx: Context) => Promise<any> | any;
-export type GroupCallback = (router: any) => void;
 export type AuthUser = Record<string, any>;
 
 export class Context {

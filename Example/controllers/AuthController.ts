@@ -8,7 +8,7 @@ interface LoginBody {
 }
 
 export class AuthController {
-  static async login(ctx: Context) {
+  static async login(ctx: any) {
     try {
       const body = await ctx.req.json() as LoginBody;
 
@@ -53,7 +53,7 @@ export class AuthController {
     }
   }
 
-  static async getMe(ctx: Context) {
+  static async getMe(ctx: any) {
     const user = ctx.get('user');
 
     if (!user) {
@@ -74,7 +74,7 @@ export class AuthController {
     });
   }
 
-  static getProfile(ctx: Context) {
+  static getProfile(ctx: any) {
     return ctx.json({
       status: 'success',
       user: ctx.get('user')

@@ -21,7 +21,7 @@ const UserSchema = TB.Type.Object({
 
 // ✅ Route 1: Using TypeBox Validator
 // Annotating 'req' as Context (which is an alias for Request)
-app.post('/users-tb', typebox(UserSchema), (req: Context) => {
+app.post('/users-tb', typebox(UserSchema), (req) => {
   return {
     message: "Saved via TypeBox",
     user: (req as any).parsedBody
@@ -29,7 +29,7 @@ app.post('/users-tb', typebox(UserSchema), (req: Context) => {
 });
 
 // ✅ Route 2: Using Native Validator
-app.post('/users-native', native(UserSchema), (req: Context) => {
+app.post('/users-native', native(UserSchema), (req) => {
   return {
     message: "Saved via Native",
     user: (req as any).parsedBody
@@ -42,19 +42,19 @@ app.get('/', () => ({ message: "Welcome to BareJS!" }));
 app.get('/ping', () => { ({ message: "pong" }) });
 
 // ✅ Dynamic Path: Explicitly type 'req' and 'params'
-app.get('/user/:id', (ctx: Context) => {
+app.get('/user/:id', (ctx) => {
   const userId = ctx.params.id;
   return { user: userId, status: 'active' };
 });
 
 // ✅ Multiple Params: Explicitly type 'req' and 'params'
-app.get('/post/:category/:id', (ctx: Context) => {
+app.get('/post/:category/:id', (ctx) => {
   return ctx.params;
 });
 
 const publicRoute = new BareRouter();
-publicRoute.group("/api/v1", (v1: BareRouter) => {
-  v1.get("/login", (ctx: Context) => "Login Page");
+publicRoute.group("/api/v1", (v1) => {
+  v1.get("/login", (ctx) => "Login Page");
   v1.get("/status", () => "OK");
 });
 const SECRET = process.env.JWT_SECRET || "super-secret-key";
@@ -62,7 +62,7 @@ const SECRET = process.env.JWT_SECRET || "super-secret-key";
 // --- 1. Public Auth Router ---
 const authRouter = new BareRouter("/auth");
 
-authRouter.post("/login", async (ctx: Context) => {
+authRouter.post("/login", async (ctx) => {
   // Logic to check DB password here...
   const token = await createToken({ id: 1, name: "Admin" }, SECRET);
   return { token };
@@ -72,13 +72,13 @@ authRouter.post("/login", async (ctx: Context) => {
 // Pass your bareAuth middleware directly to the constructor
 const protectedRoute = new BareRouter("", [bareAuth(SECRET)]);
 
-protectedRoute.group("/api/v1", (v1: BareRouter) => {
-  v1.get("/me", (ctx: Context) => {
+protectedRoute.group("/api/v1", (v1) => {
+  v1.get("/me", (ctx) => {
     // ctx.get('user') works because of ctx.set('user', ...) in bareAuth
     return { user: ctx.get('user') };
   });
 
-  v1.get("/dashboard", (ctx: Context) => ({ stats: [10, 20, 30] }));
+  v1.get("/dashboard", (ctx) => ({ stats: [10, 20, 30] }));
 });
 
 // --- 3. Mount ---

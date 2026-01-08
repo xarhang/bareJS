@@ -39,11 +39,11 @@ BareJS leads in complex, real-world scenarios. We test using a **"Real-World" St
 
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **1.55 µs** | **Baseline** |
-| Elysia | 2.23 µs | 1.44x slower |
-| Hono | 9.88 µs | 6.40x slower |
+| **BareJS** | **1.61 µs** | **Baseline** |
+| Elysia | 1.90 µs | 1.18x slower |
+| Hono | 8.69 µs | 5.39x slower |
 
-> Last Updated: 2026-01-08 (BareJS Ultra-Accuracy Suite)
+> Last Updated: 2026-01-09 (BareJS Ultra-Accuracy Suite)
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 > [!TIP]
@@ -82,9 +82,16 @@ Use `BareRouter` for modularity and nesting.
 import { BareJS, BareRouter } from 'barejs';
 
 const app = new BareJS();
-const api = new BareRouter("/api/v1");
+const api = new BareRouter("/api");
 
-api.get("/status", (ctx) => ({ status: "ok" }));
+// ⚡ New: Simplified Nested Groups (Auto-Inferred Types)
+api.group("/v1", (v1) => {
+  v1.get("/status", (ctx) => ({ status: "ok" }));
+  
+  v1.group("/auth", (auth) => {
+    auth.post("/login", (ctx) => "OK");
+  });
+});
 
 app.use(api); // Result: /api/v1/status
 ```
@@ -93,7 +100,7 @@ app.use(api); // Result: /api/v1/status
 Full RFC 7515 compliant JWT support and secure password utilities.
 
 ```typescript
-import { bareAuth, createToken, Password, type Context } from 'barejs';
+import { bareAuth, createToken, Password } from 'barejs';
 
 const SECRET = "your-secret";
 

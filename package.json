@@ -19,7 +19,7 @@
     "url": "git+https://github.com/xarhang/barejs.git"
   },
   "scripts": {
-    "test": "bun test",
+    "test": "bun run tests/core.test.ts",
     "benchs": "bun run benchmarks/index.ts",
     "bench": "bun run benchmarks/head-to-head.ts",
     "dev": "bun --watch src/index.ts",
@@ -64,5 +64,8 @@
     "src",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "dependencies": {
+    "barejs": "."
+  }
 }

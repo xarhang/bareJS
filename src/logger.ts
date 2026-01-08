@@ -1,8 +1,8 @@
 import type { Middleware } from './context';
 
-export const logger: Middleware = async (req, params, next) => {
+export const logger: Middleware = async (ctx, next) => {
   const start = performance.now();
-  const path = new URL(req.url).pathname;
+  const path = new URL(ctx.req.url).pathname;
 
   const response = await next?.();
 
@@ -13,7 +13,7 @@ export const logger: Middleware = async (req, params, next) => {
 
   console.log(
     ` \x1b[90m${new Date().toLocaleTimeString()}\x1b[0m ` +
-    `\x1b[1m\x1b[38;5;117m${req.method.padEnd(7)}\x1b[0m ` +
+    `\x1b[1m\x1b[38;5;117m${ctx.req.method.padEnd(7)}\x1b[0m ` +
     `\x1b[38;5;250m${path}\x1b[0m ` +
     `${statusColor}${status}\x1b[0m ` +
     `\x1b[90m(${duration}ms)\x1b[0m`

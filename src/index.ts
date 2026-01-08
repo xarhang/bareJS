@@ -6,11 +6,10 @@ export interface BarePlugin {
 }
 
 // Context, Types & WebSocket
-export type { 
-  Middleware, 
-  Handler, 
-  Next, 
-  WSHandlers ,
+export type {
+  Middleware,
+  Handler,
+  Next,
   Context,
   Params,
   AuthUser

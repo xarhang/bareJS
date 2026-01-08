@@ -22,24 +22,24 @@ const UserSchema = TB.Type.Object({
 // ✅ Route 1: Using TypeBox Validator
 // Annotating 'req' as Context (which is an alias for Request)
 app.post('/users-tb', typebox(UserSchema), (req: Context) => {
-  return { 
-    message: "Saved via TypeBox", 
-    user: (req as any).parsedBody 
+  return {
+    message: "Saved via TypeBox",
+    user: (req as any).parsedBody
   };
 });
 
 // ✅ Route 2: Using Native Validator
 app.post('/users-native', native(UserSchema), (req: Context) => {
-  return { 
-    message: "Saved via Native", 
-    user: (req as any).parsedBody 
+  return {
+    message: "Saved via Native",
+    user: (req as any).parsedBody
   };
 });
 
 // ✅ Route 3: Pure speed
 app.get('/', () => ({ message: "Welcome to BareJS!" }));
 
-app.get('/ping', () => {({ message: "pong" })});
+app.get('/ping', () => { ({ message: "pong" }) });
 
 // ✅ Dynamic Path: Explicitly type 'req' and 'params'
 app.get('/user/:id', (ctx: Context) => {
@@ -49,11 +49,11 @@ app.get('/user/:id', (ctx: Context) => {
 
 // ✅ Multiple Params: Explicitly type 'req' and 'params'
 app.get('/post/:category/:id', (ctx: Context) => {
-  return ctx.params; 
+  return ctx.params;
 });
 
 const publicRoute = new BareRouter();
-publicRoute.group("/api/v1", (v1) => {
+publicRoute.group("/api/v1", (v1: BareRouter) => {
   v1.get("/login", (ctx: Context) => "Login Page");
   v1.get("/status", () => "OK");
 });
@@ -72,7 +72,7 @@ authRouter.post("/login", async (ctx: Context) => {
 // Pass your bareAuth middleware directly to the constructor
 const protectedRoute = new BareRouter("", [bareAuth(SECRET)]);
 
-protectedRoute.group("/api/v1", (v1) => {
+protectedRoute.group("/api/v1", (v1: BareRouter) => {
   v1.get("/me", (ctx: Context) => {
     // ctx.get('user') works because of ctx.set('user', ...) in bareAuth
     return { user: ctx.get('user') };
@@ -88,4 +88,4 @@ app.use(protectedRoute);
 const HOST = process.env.HOST || "10.62.0.72";
 const PORT = parseInt(process.env.PORT || "3000");
 
-app.listen(HOST, PORT);
+app.listen(PORT, HOST);

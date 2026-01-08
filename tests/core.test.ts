@@ -1,5 +1,5 @@
 import { expect, test, describe, beforeEach } from "bun:test";
-import { BareJS, Context, typebox } from "../src/bare";
+import { BareJS, Context } from "../src/bare";
 import { bareAuth, createToken } from "../src/auth"; // Adjusted paths
 
 describe("BareJS Ultra-Accuracy Suite - Extended", () => {
@@ -13,7 +13,7 @@ describe("BareJS Ultra-Accuracy Suite - Extended", () => {
     test("Auth Middleware - Valid Token Lifecycle", async () => {
       // 1. Setup route with the middleware
       app.get("/protected", bareAuth(SECRET), (ctx: Context) => {
-        return ctx.json({ user: ctx.user });
+        return ctx.json({ user: ctx.get('user') });
       });
       app.compile();
 
@@ -60,12 +60,52 @@ describe("BareJS Ultra-Accuracy Suite - Extended", () => {
       const data = await res.json();
       expect(data.message).toBe("Bearer token required");
     });
+    test("Exports - Typebox Available", () => {
+      const { typebox, t } = require("../src/bare");
+      expect(typebox).toBeDefined();
+      expect(t).toBeDefined();
+      expect(t.String).toBeDefined();
+    });
+  });
+
+  describe("Router Composition", () => {
+    test("Mounting Sub-Router (app.use(router))", async () => {
+      // Logic mirroring Example/index.ts
+      const { BareRouter } = await import("../src/router");
+      const api = new BareRouter("/api");
+      api.get("/ping", (ctx: Context) => ctx.json({ msg: "pong" }));
+
+      app.use(api);
+
+      const res = await app.fetch(new Request("http://localhost/api/ping"));
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.msg).toBe("pong");
+    });
+
+    test("Deeply Nested Router (e.g. /api/v1/auth/login)", async () => {
+      const { BareRouter } = await import("../src/router");
+      const api = new BareRouter("/api");
+
+      api.group("/v1", (v1: any) => {
+        v1.group("/auth", (auth: any) => {
+          auth.get("/login", (ctx: Context) => ctx.json({ status: "login" }));
+        });
+      });
+
+      app.use(api);
+
+      const res = await app.fetch(new Request("http://localhost/api/v1/auth/login"));
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.status).toBe("login");
+    });
   });
 
   describe("Middleware Chain (The 'H is not a function' Fix)", () => {
     test("Multiple Middleware Propagation", async () => {
       let count = 0;
-      
+
       const mid1 = async (ctx: Context, next: any) => {
         count++;
         return await next();
@@ -79,7 +119,7 @@ describe("BareJS Ultra-Accuracy Suite - Extended", () => {
       app.compile();
 
       const res = await app.fetch(new Request("http://localhost/chain"));
-      
+
       expect(res.status).toBe(200);
       expect(await res.text()).toBe("finish");
       expect(count).toBe(2); // Ensure both middlewares were executed

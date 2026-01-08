@@ -18,9 +18,9 @@ export class AuthController {
 
       // 1. Validation
       if (!body.username || !body.password) {
-        return ctx.status(400).json({ 
-          status: 'error', 
-          message: "Missing credentials" 
+        return ctx.status(400).json({
+          status: 'error',
+          message: "Missing credentials"
         });
       }
 
@@ -34,31 +34,31 @@ export class AuthController {
          * เราฝังทุกอย่างที่ 'Controller อื่นๆ' ต้องใช้ลงใน Token ทันที
          * เพื่อลดการ Query Database ใน Request ถัดไป
          */
-        const token = await createToken({ 
-          id: 99, 
-          username: body.username, 
+        const token = await createToken({
+          id: 99,
+          username: body.username,
           role: "admin",
-          tier: "pro" 
+          tier: ""
         }, secret);
 
         console.log(`[Auth] ✅ ${body.username} logged in at ${new Date().toISOString()}`);
 
-        return ctx.json({ 
-          status: 'success', 
-          token 
+        return ctx.json({
+          status: 'success',
+          token
         });
       }
 
-      return ctx.status(401).json({ 
-        status: 'error', 
-        message: "Invalid username or password" 
+      return ctx.status(401).json({
+        status: 'error',
+        message: "Invalid username or password"
       });
 
     } catch (e) {
       console.error("[Auth Error]:", e);
-      return ctx.status(400).json({ 
-        status: 'error', 
-        message: "Invalid JSON format" 
+      return ctx.status(400).json({
+        status: 'error',
+        message: "Invalid JSON format"
       });
     }
   }
@@ -69,12 +69,12 @@ export class AuthController {
    */
   static async getMe(ctx: Context) {
     // ดึงผ่าน Getter ที่เราเขียนไว้ใน context.ts
-    const user = ctx.user; 
+    const user = ctx.get('user');
 
     if (!user) {
-      return ctx.status(401).json({ 
-        status: 'error', 
-        message: "User session not found" 
+      return ctx.status(401).json({
+        status: 'error',
+        message: "User session not found"
       });
     }
 
@@ -96,7 +96,7 @@ export class AuthController {
   static getProfile(ctx: Context) {
     return ctx.json({
       status: 'success',
-      user: ctx.user // ส่ง Object user ออกไปทั้งหมด
+      user: ctx.get('user') // ส่ง Object user ออกไปทั้งหมด
     });
   }
 }

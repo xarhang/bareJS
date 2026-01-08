@@ -1,104 +1,117 @@
-import type {  AuthUser, Next } from './context';
+import type { AuthUser, Next } from './context';
 import { timingSafeEqual } from 'node:crypto';
+
 /**
  * UTILS: Internal Crypto Helpers using Native Web Crypto
  * Optimized for Bun performance and type safety.
  */
 const encoder = new TextEncoder();
 
-/**
- * SIGN: Creates a HMAC-SHA256 signature
- */
-const signData = async (data: string, secret: string): Promise<string> => {
+// ⚡ Base64Url Helpers (RFC 4648)
+const base64Url = (input: Uint8Array | string): string => {
+  let base64 = typeof input === 'string'
+    ? Buffer.from(input).toString('base64')
+    : Buffer.from(input).toString('base64');
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+const fromBase64Url = (str: string): string => {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  return Buffer.from(str, 'base64').toString();
+};
+
+// ⚡ PERF: Cache CryptoKeys to avoid repeated async importKey calls
+const keyCache = new Map<string, CryptoKey>();
+
+const importKey = async (secret: string): Promise<CryptoKey> => {
+  if (keyCache.has(secret)) return keyCache.get(secret)!;
+
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign", "verify"]
   );
 
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(data)
-  );
-
-  return Buffer.from(signature).toString("hex");
+  keyCache.set(secret, key);
+  return key;
 };
 
 /**
- * VERIFY: Checks signature integrity using Constant-Time comparison
+ * 4. TOKEN GENERATOR (Standard JWT)
  */
-const verifyData = async (data: string, signature: string, secret: string): Promise<boolean> => {
-  const expectedSignature = await signData(data, secret);
-  
-  const a = encoder.encode(signature);
-  const b = encoder.encode(expectedSignature);
+export const createToken = async (payload: object, secret: string): Promise<string> => {
+  const header = JSON.stringify({ alg: "HS256", typ: "JWT" });
+  const body = JSON.stringify(payload);
 
-  // Critical: timingSafeEqual requires buffers of identical length
-  if (a.byteLength !== b.byteLength) return false;
-  
-  return timingSafeEqual(a, b);
+  const encodedHeader = base64Url(header);
+  const encodedBody = base64Url(body);
+  const data = `${encodedHeader}.${encodedBody}`;
+
+  const key = await importKey(secret);
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
+  const encodedSig = base64Url(new Uint8Array(signature));
+
+  return `${data}.${encodedSig}`;
 };
 
-export const manualTimingSafeEqual = (a: Uint8Array, b: Uint8Array): boolean => {
-  if (a.length !== b.length) return false;
-  let res = 0;
-  for (let i = 0; i < a.length; i++) {
-    res |= a[i]! ^ b[i]!;
-  }
-  return res === 0;
-};
 /**
- * 1. BARE TOKEN AUTH (Stateless Middleware)
+ * 1. BARE TOKEN AUTH (Standard JWT Middleware)
  * High-performance JWT alternative for BareJS
  */
 export const bareAuth = (secret: string) => {
-  return async (ctx: any, next: any) => { 
+  return async (ctx: any, next: any) => {
     const authHeader = ctx.req.headers.get('Authorization');
-    
     if (!authHeader?.startsWith('Bearer ')) {
-      return ctx.status(401).json({ status: 'error', message: 'Bearer token required' });
+      return ctx.status(401).json({ message: "Bearer token required" });
     }
 
-    const token = authHeader.split(' ')[1];
-    if (!token) {
-      return ctx.status(401).json({ status: 'error', message: 'Invalid token format' });
-    }
-
+    const token = authHeader.slice(7);
     const parts = token.split('.');
-    if (parts.length !== 2) {
-      return ctx.status(401).json({ status: 'error', message: 'Malformed token' });
+
+    if (parts.length !== 3) {
+      return ctx.status(401).json({ message: 'Malformed JWT token' });
     }
 
-    const [payloadBase64, signature] = parts;
+    const [header, payload, signature] = parts;
+    const data = `${header}.${payload}`;
 
     try {
-      const payloadRaw = Buffer.from(payloadBase64!, 'base64').toString();
-      const isValid = await verifyData(payloadRaw, signature!, secret);
+      const key = await importKey(secret);
 
-      if (!isValid) {
-        return ctx.status(401).json({ status: 'error', message: 'Invalid signature' });
+      // Verify Signature
+      const expectedSig = await crypto.subtle.sign(
+        "HMAC",
+        key,
+        encoder.encode(data)
+      );
+
+      const validSig = base64Url(new Uint8Array(expectedSig));
+
+      if (signature !== validSig) {
+        return ctx.status(401).json({ message: 'Invalid signature' });
       }
 
-      const user: AuthUser = JSON.parse(payloadRaw);
-      ctx.set('user', user);
+      // Decode Payload
+      const decoded = JSON.parse(fromBase64Url(payload!));
+      ctx.set('user', decoded);
 
       if (Array.isArray(next)) {
-        if (next.length === 0) return; 
+        if (next.length === 0) return;
         const [current, ...rest] = next;
-        return current(ctx, rest); 
+        return current(ctx, rest);
       }
 
       if (typeof next === 'function') {
         return next();
       }
-      return; 
-      
+      return;
+
     } catch (e) {
-      console.error("[Auth] Verification Error:", e);
-      return ctx.status(401).json({ status: 'error', message: 'Token verification failed' });
+      console.error("[Auth] Error:", e);
+      return ctx.status(401).json({ message: 'Token verification failed' });
     }
   };
 };
@@ -133,23 +146,12 @@ export const basicAuth = (credentials: { user: string; pass: string }) => {
  * Uses Argon2id - the gold standard for password hashing
  */
 export const Password = {
-  hash: (password: string) => Bun.password.hash(password, { 
+  hash: (password: string) => Bun.password.hash(password, {
     algorithm: "argon2id",
     memoryCost: 65536, // 64MB
-    timeCost: 2 
+    timeCost: 2
   }),
   verify: (password: string, hash: string) => Bun.password.verify(password, hash)
-};
-
-/**
- * 4. TOKEN GENERATOR
- * Creates a "Bare Token" consisting of base64(payload).hex(signature)
- */
-export const createToken = async (payload: object, secret: string): Promise<string> => {
-  const payloadStr = JSON.stringify(payload);
-  const payloadBase64 = Buffer.from(payloadStr).toString('base64');
-  const signature = await signData(payloadStr, secret);
-  return `${payloadBase64}.${signature}`;
 };
 
 /**

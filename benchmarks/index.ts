@@ -18,7 +18,7 @@ const hono = new Hono().get("/user/:id", (c) => c.json(payload));
 // All comments in English
 async function main() {
   console.log("🚀 Starting Performance Benchmark...");
-  
+
   bench("BareJS", () => bare.fetch(req));
   bench("Elysia", () => elysia.handle(req));
   bench("Hono", () => hono.fetch(req));
@@ -31,7 +31,7 @@ async function main() {
     // 1. Check if stats.avg exists
     if (b.stats?.avg) {
       avg = b.stats.avg;
-    } 
+    }
     // 2. Fallback: Calculate from the 'runs' array (Common in Bun/Windows Mitata)
     else if (b.runs && b.runs.length > 0) {
       // Some versions nest metrics inside runs[0].stats

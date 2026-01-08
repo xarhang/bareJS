@@ -1,6 +1,8 @@
 # 🚀 BareJS
 
-BareJS is an ultra-high-performance web engine built on the **Bun** runtime, specifically architected for minimalism and the lowest possible latency. It represents the pinnacle of **Mechanical Sympathy**, ensuring software execution aligns perfectly with modern CPU data processing.
+**The "Metal" of Web Frameworks.**
+
+BareJS is an ultra-high-performance web engine built on **Bun**, architected strictly for **Mechanical Sympathy**. By aligning software execution with modern CPU branch prediction and memory caching, we achieve latencies that traditional frameworks simply cannot touch.
 
 <p align="left">
   <a href="https://github.com/xarhang/bareJS/tags">
@@ -12,160 +14,183 @@ BareJS is an ultra-high-performance web engine built on the **Bun** runtime, spe
   <a href="https://github.com/xarhang/bareJS/actions/workflows/bench.yml">
     <img src="https://github.com/xarhang/bareJS/actions/workflows/bench.yml/badge.svg" alt="Performance Benchmark">
   </a>
-  <a href="https://xarhang.github.io/bareJS/dev/benchmarks/">
-    <img src="https://img.shields.io/badge/Performance-Dashboard-blueviolet?style=flat-square&logo=speedtest" alt="Performance Dashboard">
-  </a>
-  <a href="https://bun.sh">
-    <img src="https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=flat-square&logo=bun" alt="Bun Version">
-  </a>
 </p>
 
 ---
 
-## 📊 Performance Benchmarks: Breaking the Nanosecond Barrier
+## 📊 Benchmarks: The "Nanosecond" Standard
 
-BareJS is the definitive baseline for speed in the JavaScript ecosystem. By ruthlessly eliminating common framework overhead, we consistently achieve sub-microsecond latency.
+BareJS ruthlessly optimizes the hot path. We don't just "wrap" request handlers; we **JIT compile** them into a flat executive function, bypassing object lookups entirely.
 
-### 📈 Global Latency Comparison (Lower is Better)
-<!-- MARKER: PERFORMANCE_TABLE_START -->
+| Scenario | Framework | Time/Request | Speedup |
+| :--- | :--- | :--- | :--- |
+| **Stress Test** (10 MW + Deep Path) | **BareJS** | **1.61 µs** | **Baseline 🚀** |
+| | Elysia | 2.15 µs | 1.33x slower |
+| | Hono | 9.57 µs | 5.94x slower |
+| **Simple Route** (Hello World) | **BareJS** | **1.99 µs** | **Tied (Runtime Limit)** |
 
-| Framework | Latency | Speed |
-| :--- | :--- | :--- |
-| **BareJS** | **621.69 ns** | **Baseline** |
-| Elysia | 2.28 µs | 3.67x slower |
-| Hono | 3.83 µs | 6.16x slower |
+> *Benchmarks run on AMD Ryzen 7 3700X, Bun v1.3.5*
 
-> Last Updated: Wed, 07 Jan 2026 08:53:13 GMT
+---
 
-<!-- MARKER: PERFORMANCE_TABLE_END -->
+## ⚡ Quick Start
 
-<!-- NOTE: The table above is automatically updated via scripts/update-readme.ts -->
-
-
-## 🛠️ Rapid Scaffolding (Recommended)
-
-The fastest way to initialize a production-ready environment is via the official **`bun create`** command. This scaffolds a pre-configured project with optimized `tsconfig.json` and production build scripts.
+Initialize a production-ready project instantly:
 
 ```bash
 bun create barejs my-app
 cd my-app
 bun dev
-
 ```
 
----
-
-## 🏛 Architectural Engineering Deep-Dive
-
-### 1. Zero-Allocation Circular Context Pool
-
-Traditional frameworks create new objects for every hit, triggering Garbage Collector (GC) spikes. BareJS pre-allocates a fixed array of Context objects and utilizes **Bitwise Masking** (`idx & mask`) for instant recycling.
-
-### 2. Synchronous Fast-Path Execution
-
-BareJS identifies if your handler is synchronous. Synchronous handlers bypass the Microtask queue entirely, executing directly on the call stack to avoid the "Promise Tax."
-
-### 3. JIT Route Compilation (The "Baking" Phase)
-
-During `app.listen()`, the route tree is transformed into a **Static Jump Table**. Middleware is recursively "baked" into a single flat execution function, removing array iteration overhead at runtime.
-
----
-
-## ⚡ Comprehensive Usage Guide
-
-BareJS supports **Hybrid Handler Signatures**, allowing you to choose between maximum performance (Context) or standard Web APIs (Request/Params).
-
-### 🚀 Implementation Example
-
+### The "Bare" Minimum
 ```typescript
-import { BareJS, type Context, type Params } from 'barejs'; 
-
-const app = new BareJS({ 
-  poolSize: 2048 // Power of 2 required for hardware-accelerated masking
-});
-
-// Style A: Zero-Allocation Context Pool (The 379ns Path)
-app.get('/ctx', (ctx: Context) => ctx.json({ mode: "pooled" }));
-
-// Style B: Native Request/Params (Legacy/Standard compatibility)
-app.get('/user/:id', (req: Request, params: Params) => {
-  return { id: params.id, method: "native" };
-});
-
-app.listen(3000);
-
-```
----
-### ⚡ Example: Using Protected & Public Groups
-Since you wanted separate variables for your groups:
-
-```TypeScript
-import { BareJS, BareRouter, type Context } from 'barejs';
-import { bareAuth, createToken } from 'barejs'; // Your new script
+import { BareJS, type Context } from 'barejs';
 
 const app = new BareJS();
-const SECRET = process.env.JWT_SECRET || "super-secret-key";
 
-// --- 1. Public Auth Router ---
-const authRouter = new BareRouter("/auth");
+app.get('/ping', (ctx: Context) => ctx.json({ msg: "pong" }));
 
-authRouter.post("/login", async (ctx: Context) => {
-  // Logic to check DB password here...
-  const token = await createToken({ id: 1, name: "Admin" }, SECRET);
+app.listen(3000);
+```
+
+---
+
+## 📖 The Hitchhiker's Guide to BareJS
+
+### 1. Routing & Context
+BareJS uses a **Zero-Allocation Context**. The `ctx` object is reused from a pre-allocated pool to prevent Garbage Collection spikes.
+
+```typescript
+app.get('/users/:id', (ctx: Context) => {
+  // 1. Params (Zero-Copy slices)
+  const id = ctx.params.id;
+
+  // 2. Query Strings (Wait... where are they?)
+  // Use native Bun request for raw speed if needed:
+  const url = new URL(ctx.req.url);
+  const sort = url.searchParams.get('sort');
+
+  // 3. Response
+  return ctx.status(200).json({ id, sort });
+});
+```
+
+### 2. Nested Routers & Grouping
+Organize your API into standard modules using `BareRouter`.
+
+```typescript
+import { BareJS, BareRouter } from 'barejs';
+
+const app = new BareJS();
+const v1 = new BareRouter("/api/v1");
+const auth = new BareRouter("/auth");
+
+// Define routes on sub-router
+auth.post("/login", (ctx) => ctx.json({ token: "..." }));
+
+// Mount router (Result: /api/v1/auth/login)
+v1.use(auth);
+app.use(v1);
+```
+
+### 3. Middleware
+Middleware in BareJS is "Compiled Away". Whether you have 1 or 100 middlewares, the runtime cost is flattened.
+
+```typescript
+// Global Middleware
+app.use(async (ctx, next) => {
+  const start = Date.now();
+  await next();
+  console.log(`Took: ${Date.now() - start}ms`);
+});
+
+// Route-Specific Middleware
+const upgrade = (ctx, next) => {
+  if (ctx.req.headers.get("upgrade") !== "websocket") return ctx.status(400).json({ error: "No WS" });
+  return next();
+};
+
+app.get('/ws', upgrade, (ctx) => { /* ... */ });
+```
+
+---
+
+## 🛡️ Security & Authentication (JWT)
+BareJS includes a standard-compliant (RFC 7515) JWT implementation powered by `CrytpoKey` caching.
+
+```typescript
+import { bareAuth, createToken, type Context } from 'barejs';
+
+const SECRET = process.env.JWT_SECRET || "s3cr3t";
+
+// 1. Generate Token
+app.post('/login', async (ctx: Context) => {
+  const user = { id: 1, role: "admin" };
+  const token = await createToken(user, SECRET);
   return { token };
 });
 
-// --- 2. Protected Data Router ---
-// Pass your bareAuth middleware directly to the constructor
-const protectedRoute = new BareRouter("", bareAuth(SECRET));
+// 2. Protect Routes
+// bareAuth automatically verifies header and sets ctx.get('user')
+app.get('/admin', bareAuth(SECRET), (ctx: Context) => {
+  const user = ctx.get('user');
+  return { secret_data: "42", user };
+});
+```
 
-protectedRoute.group("/api/v1", (v1) => {
-  v1.get("/me", (ctx: Context) => {
-    // ctx.get('user') works because of ctx.set('user', ...) in bareAuth
-    return { user: ctx.get('user') };
-  });
+---
 
-  v1.get("/dashboard", (ctx: Context) => ({ stats: [10, 20, 30] }));
+## ✅ Validation (TypeBox)
+We recommend **TypeBox** for validation as it compiles to JIT-friendly code.
+
+```typescript
+import { typebox, t } from 'barejs';
+
+const UserSchema = t.Object({
+  username: t.String(),
+  age: t.Number()
 });
 
-// --- 3. Mount ---
-app.use(authRouter);
-app.use(protectedRoute);
-
-app.listen(3000);
+app.post('/user', typebox(UserSchema), (ctx) => {
+  // TypeScript knows ctx.body is { username: string, age: number }
+  return { created: ctx.body.username };
+});
 ```
+
 ---
 
-## 🔌 Advanced Deployment
+## 🔌 Built-in Utilities
 
-To achieve the benchmarked numbers, ensure you deploy using the BareJS optimized runtime environment.
+### CORS
+```typescript
+import { cors } from 'barejs';
+app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
+```
 
-| Variable | Description | Default |
-| --- | --- | --- |
-| `BARE_POOL_SIZE` | Sets the number of pre-allocated Context objects | 1024 |
-| `NODE_ENV` | Set to `production` to enable full JIT optimizations | development |
+### Static Files
+```typescript
+import { staticFile } from 'barejs';
+// Serve everything in ./public at root
+app.use(staticFile("public"));
+```
 
-**Deployment Command:**
+---
+
+## ⚙️ Deployment & Tuning
+
+To unleash full performance (100k+ RPS), create a production environment:
 
 ```bash
+# Power of 2 pool size allows bitwise masking vs expensive modulo
 BARE_POOL_SIZE=4096 NODE_ENV=production bun run index.ts
-
 ```
 
----
-
-## 🏗 Roadmap & Vision
-
-* [x] Zero-Allocation Context Pooling
-* [x] Bitwise Masking Optimization
-* [x] JIT Route Compilation
-* [x] Hybrid Handler Signatures (Context & Native)
-* [x] Route Grouping: Zero-overhead route organization via JIT flattening.
-* [x] **Native Cluster Mode Support**: Automatic horizontal scaling across CPU cores.
-* [ ] **Direct Buffer Response**: Aiming for 400ns latency by writing directly to the TCP stream.
-
+| Config | Default | Description |
+| :--- | :--- | :--- |
+| `BARE_POOL_SIZE` | `1024` | Request context pool. Must be power of 2. |
+| `NODE_ENV` | `development` | Set to `production` to enable aggressive JIT. |
 
 ---
 
 **Maintained by [xarhang]** | **License: MIT**
-

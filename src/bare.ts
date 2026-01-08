@@ -184,7 +184,7 @@ export class BareJS extends BareRouter {
     return this.hotFetch!(req);
   };
 
-  public listen(port: number = 3000, hostname: string = '0.0.0.0') {
+  public listen(port: number = 3000, hostname: string = '0.0.0.0', forkMode: boolean = true) {
     if (!this.compiled) this.compile();
 
     console.log(`🚀 BareJS server running at http://${hostname}:${port}`);
@@ -193,7 +193,7 @@ export class BareJS extends BareRouter {
       port,
       hostname,
       fetch: this.fetch,
-      reusePort: true,
+      reusePort: forkMode,
 
     });
   }

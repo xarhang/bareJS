@@ -31,7 +31,22 @@ BareJS ruthlessly optimizes the hot path. We don't just "wrap" request handlers;
 
 > *Benchmarks run on AMD Ryzen 7 3700X, Bun v1.3.5*
 
+<!-- MARKER: PERFORMANCE_TABLE_START -->
+
+| Framework | Latency | Speed |
+| :--- | :--- | :--- |
+| **BareJS** | **597.86 ns** | **Baseline** |
+| Elysia | 2.28 µs | 3.82x slower |
+| Hono | 4.20 µs | 7.02x slower |
+
+> Last Updated: Thu, 08 Jan 2026 16:38:07 GMT
+
+<!-- MARKER: PERFORMANCE_TABLE_END -->
+
+<!-- NOTE: The table above is automatically updated via scripts/update-readme.ts -->
+
 ---
+
 
 ## ⚡ Quick Start
 

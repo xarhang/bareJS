@@ -4,11 +4,9 @@ import {
   type GroupCallback
 } from './context';
 
-// กำหนด Type ให้ยืดหยุ่น เพื่อรับ Middleware หลายตัวต่อด้วย Handler 1 ตัว
 type HandlersChain = (Middleware | Handler)[];
 
 export class BareRouter {
-  // เก็บข้อมูลดิบของ Route ไว้ก่อนนำไป Compile ใน BareJS
   public routes: { method: string; path: string; handlers: any[] }[] = [];
 
   constructor(
@@ -16,12 +14,7 @@ export class BareRouter {
     public groupMiddleware: any[] = []
   ) { }
 
-  /**
-   * 🛠️ Internal method สำหรับการบันทึก Route
-   * มีการทำ Path Normalization เพื่อลดภาระของ Router ตอนทำงานจริง
-   */
   private _add(method: string, path: string, handlers: HandlersChain) {
-    // กำจัด // ซ้ำซ้อนให้เหลือ / ตัวเดียว
     const fullPath = (this.prefix + path).replace(/\/+/g, "/") || "/";
 
     this.routes.push({
@@ -32,19 +25,13 @@ export class BareRouter {
     return this;
   }
 
-  // HTTP Methods ที่รองรับ
   public get = (path: string, ...h: HandlersChain) => this._add("GET", path, h);
   public post = (path: string, ...h: HandlersChain) => this._add("POST", path, h);
   public put = (path: string, ...h: HandlersChain) => this._add("PUT", path, h);
   public patch = (path: string, ...h: HandlersChain) => this._add("PATCH", path, h);
   public delete = (path: string, ...h: HandlersChain) => this._add("DELETE", path, h);
 
-  /**
-   * 📂 Grouping Logic
-   * ช่วยให้จัดการ Prefix และ Middleware แยกตามส่วนของ API ได้
-   */
   public group = (path: string, ...args: any[]) => {
-    // แยก Callback (ตัวสุดท้าย) ออกจาก Middleware ที่ระบุมา
     const callback = args.pop() as GroupCallback;
     const middleware = args;
 
@@ -53,10 +40,7 @@ export class BareRouter {
       [...this.groupMiddleware, ...middleware]
     );
 
-    // รัน callback เพื่อจดทะเบียน routes ใน subRouter
     callback(subRouter);
-
-    // ดึง routes ทั้งหมดจาก subRouter กลับมาที่ router หลัก
     this.routes.push(...subRouter.routes);
     return this;
   };

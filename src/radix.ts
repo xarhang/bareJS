@@ -32,7 +32,6 @@ export class RadixNode {
     const len = url.length;
     if (url[i] === '/') i++;
 
-    // ล้าง params เดิมใน ctx (Zero-allocation)
     for (const k in ctx.params) delete ctx.params[k];
 
     while (i < len) {
@@ -68,7 +67,6 @@ export class RadixNode {
 
       if (!found) {
         if (node.paramNode) {
-          // เขียนลง ctx.params โดยตรง
           ctx.params[node.paramName!] = url.slice(i, j);
           node = node.paramNode;
         } else return null;
@@ -78,7 +76,6 @@ export class RadixNode {
     return node.handlers[method] || null;
   }
 
-  // 🔥 JIT Compiler: เปลี่ยน Tree ให้เป็น Code (If-Else)
   public jitCompile(
     register: (h: Function) => string,
     level = 0,
@@ -89,10 +86,8 @@ export class RadixNode {
     let code = '';
     const indent = '  '.repeat(level);
 
-    // 1. Static Children
     if (this.staticKeys.length > 0) {
       if (this.staticKeys.length === 1) {
-        // ⚡ Optim: Single Child Fast Path
         const key = this.staticKeys[0]!;
         const kLen = key.length;
 

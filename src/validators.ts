@@ -1,4 +1,3 @@
-// All comments in English
 import * as Compiler from '@sinclair/typebox/compiler';
 import type { Context, Middleware } from './context';
 
@@ -9,7 +8,7 @@ const errorJSON = (data: any, status = 400) => new Response(JSON.stringify(data)
 
 export const typebox = (schema: any) => {
   const check = Compiler.TypeCompiler.Compile(schema);
-  
+
   return async (ctx: Context, next: any) => {
     try {
       const body = await ctx.req.json();
@@ -22,8 +21,8 @@ export const typebox = (schema: any) => {
           path: error?.path || 'body'
         });
       }
-      
-      ctx.body = body; 
+
+      ctx.body = body;
       // ✅ FIX TS2722: Check if next exists before calling
       return next ? next() : undefined;
     } catch {
@@ -39,7 +38,7 @@ export const native = (schema: any) => {
   const props = schema.properties || {};
   const keys = Object.keys(props);
   const kLen = keys.length;
-  
+
   const mw: Middleware = async (ctx: any, next?: any) => {
     try {
       // Handle both (ctx, next) and (req, params, next) styles
@@ -58,13 +57,13 @@ export const native = (schema: any) => {
           });
         }
       }
-      
+
       if (isCtx) ctx.body = body;
-      
+
       // ✅ FIX TS2722: Check next
       return next ? next() : undefined;
-    } catch { 
-      return errorJSON({ status: 'error', message: 'Invalid JSON payload' }); 
+    } catch {
+      return errorJSON({ status: 'error', message: 'Invalid JSON payload' });
     }
   };
   return mw;
@@ -88,13 +87,13 @@ export const zod = (schema: any) => {
           errors: result.error.format()
         });
       }
-      
+
       if (isCtx) ctx.body = result.data;
-      
+
       // ✅ FIX TS2722: Check next
       return next ? next() : undefined;
-    } catch { 
-      return errorJSON({ status: 'error', message: 'Invalid JSON payload' }); 
+    } catch {
+      return errorJSON({ status: 'error', message: 'Invalid JSON payload' });
     }
   };
   return mw;

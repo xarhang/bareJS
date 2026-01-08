@@ -7,7 +7,6 @@ export type AuthUser = Record<string, any>;
 
 export class Context {
   public req!: Request;
-  // จอง Object ไว้รอเพื่อ Reuse
   public params: Params = {};
   public _status = 200;
   public _headers?: Record<string, string>;

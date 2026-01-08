@@ -1,4 +1,4 @@
-
+// All comments in English
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 const FILE = 'result.json';
@@ -23,22 +23,29 @@ try {
     return val;
   };
 
-  const b = findValue('BareJS');
-  const e = findValue('Elysia');
-  const h = findValue('Hono');
+  const b = findValue('BareJS'); // e.g., 1551.57 (Latency in ns)
+  const e = findValue('Elysia'); // e.g., 2304.12 (Latency in ns)
+  const h = findValue('Hono');   // e.g., 9647.76 (Latency in ns)
 
+  /**
+   * CORRECT LATENCY LOGIC:
+   * 'Slower' factor = Competitor Latency / Baseline Latency
+   * Example: 2304 / 1551 = 1.48x slower
+   */
   const calculateSlower = (competitor: number, baseline: number) => {
-    return (baseline / competitor).toFixed(2);
+    return (competitor / baseline).toFixed(2);
   };
 
-  const table = `| Framework | Throughput (Score) | Performance |
+  // Convert nanoseconds to microseconds for display
+  const fmt = (ns: number) => `${(ns / 1000).toFixed(2)} µs`;
+
+  const table = `| Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **${b.toFixed(2)}** | **Baseline** |
-| Elysia | ${e.toFixed(2)} | ${calculateSlower(e, b)}x slower |
-| Hono | ${h.toFixed(2)} | ${calculateSlower(h, b)}x slower |`;
+| **BareJS** | **${fmt(b)}** | **Baseline** |
+| Elysia | ${fmt(e)} | ${calculateSlower(e, b)}x slower |
+| Hono | ${fmt(h)} | ${calculateSlower(h, b)}x slower |`;
 
   let readme = readFileSync(README, 'utf8');
-
 
   const startTag = '<!-- MARKER: PERFORMANCE_TABLE_START -->';
   const endTag = '<!-- MARKER: PERFORMANCE_TABLE_END -->';
@@ -55,12 +62,11 @@ try {
 
     writeFileSync(README, newContent);
 
-
-    const multiplier = (b / e).toFixed(2);
+    // Correcting the log for clarity
+    const multiplier = (e / b).toFixed(2);
     console.log(`✅ README updated: BareJS is ${multiplier}x faster than Elysia.`);
   } else {
     console.warn("⚠️ Markers missing or broken in README.md");
-    console.log("Please ensure exists in README.md");
   }
 } catch (error: any) {
   console.error("❌ Update failed:", error.message);

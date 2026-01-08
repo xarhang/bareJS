@@ -1,4 +1,4 @@
-// All comments in English
+
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 const FILE = 'result.json';
@@ -23,16 +23,10 @@ try {
     return val;
   };
 
-  // ค่าที่ได้จาก JSON คือ Throughput (Higher is Better)
-  const b = findValue('BareJS'); // เช่น 1965
-  const e = findValue('Elysia'); // เช่น 1874
-  const h = findValue('Hono');   // เช่น 3643 (ตรวจสอบ 404/Error ใน Hono ด้วย)
+  const b = findValue('BareJS');
+  const e = findValue('Elysia');
+  const h = findValue('Hono');
 
-  /**
-   * FIXED LOGIC: 
-   * เนื่องจากค่าใน JSON คือ 'Operations per s' 
-   * เราต้องเอา BareJS (ตัวที่เร็วกว่า/ค่ามากกว่า) ตั้ง แล้วหารด้วยคู่แข่ง
-   */
   const calculateSlower = (competitor: number, baseline: number) => {
     return (baseline / competitor).toFixed(2);
   };
@@ -45,9 +39,9 @@ try {
 
   let readme = readFileSync(README, 'utf8');
 
-  // ตรวจสอบให้แน่ใจว่าใน README.md มี Tag เหล่านี้อยู่
-  const startTag = '';
-  const endTag = '';
+
+  const startTag = '<!-- MARKER: PERFORMANCE_TABLE_START -->';
+  const endTag = '<!-- MARKER: PERFORMANCE_TABLE_END -->';
 
   const startIndex = readme.indexOf(startTag);
   const endIndex = readme.indexOf(endTag);
@@ -61,7 +55,7 @@ try {
 
     writeFileSync(README, newContent);
 
-    // แก้ไข log ให้แสดงค่าที่ถูกต้อง
+
     const multiplier = (b / e).toFixed(2);
     console.log(`✅ README updated: BareJS is ${multiplier}x faster than Elysia.`);
   } else {

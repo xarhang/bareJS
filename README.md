@@ -1,6 +1,6 @@
 <div align="center">
   <br />
-  <h1>🚀 BareJS</h1>
+   <h1>Bare<span style="color: #F7DF1E;">JS</span></h1>
   <p><strong>The "Metal" of Web Frameworks</strong></p>
   <p><i>An ultra-high-performance web engine built for Bun, architected strictly for Mechanical Sympathy.</i></p>
 

@@ -57,7 +57,7 @@ try {
     const before = readme.substring(0, startIndex + startTag.length);
     const after = readme.substring(endIndex);
 
-    const timestamp = `\n\n> Last Updated: ${new Date().toISOString().split('T')[0]} (BareJS Ultra-Accuracy Suite)\n`;
+    const timestamp = `\n\n> Last Updated: ${new Date().toISOString().split('T')[0]} (github action)\n`;
     const newContent = `${before}\n\n${table}${timestamp}\n${after}`;
 
     writeFileSync(README, newContent);

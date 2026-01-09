@@ -1,12 +1,11 @@
 // All comments in English
 import { BareJS } from './src/bare';
-import { typebox, native } from './src/validators';
-import * as TB from '@sinclair/typebox';
+import {  native } from './src/validators';
 import { logger } from './src/logger';
 // Import types for explicit annotation
 import type { Context } from './src/context';
 import { BareRouter } from './src/router';
-import { createToken, bareAuth } from './src';
+import { createToken, bareAuth,T,t, Type } from './src';
 
 const app = new BareJS();
 
@@ -14,14 +13,14 @@ const app = new BareJS();
 app.use(logger);
 
 // Create Schema with TypeBox
-const UserSchema = TB.Type.Object({
-  name: TB.Type.String(),
-  age: TB.Type.Number()
+const UserSchema = T.Object({
+  name: Type.String(),
+  age: T.Number()
 });
 
 // ✅ Route 1: Using TypeBox Validator
 // Annotating 'req' as Context (which is an alias for Request)
-app.post('/users-tb', typebox(UserSchema), (req: Context) => {
+app.post('/users-tb', t(UserSchema), (req: Context) => {
   return {
     message: "Saved via TypeBox",
     user: (req as any).parsedBody

@@ -39,11 +39,11 @@ BareJS leads in complex, real-world scenarios. We test using a **"Real-World" St
 
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **1.15 µs** | **Baseline** |
-| Elysia | 1.60 µs | 1.39x slower |
-| Hono | 8.81 µs | 7.63x slower |
+| **BareJS** | **1.76 µs** | **Baseline** |
+| Elysia | 2.48 µs | 1.40x slower |
+| Hono | 10.41 µs | 5.90x slower |
 
-> Last Updated: 2026-01-09 (BareJS Ultra-Accuracy Suite)
+> Last Updated: 2026-01-09 (github action)
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 > [!TIP]

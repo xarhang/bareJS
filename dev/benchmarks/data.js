@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768194349182,
+  "lastUpdate": 1768200833097,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -1685,6 +1685,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 9474.602005542381,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "committer": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "distinct": true,
+          "id": "1299bb00557869665577b7e7c764a08eb0e8a5bb",
+          "message": "0.1.43",
+          "timestamp": "2026-01-12T13:59:03+07:00",
+          "tree_id": "67f88dd140f1f93c1d2758413b237d78e0199e68",
+          "url": "https://github.com/xarhang/bareJS/commit/1299bb00557869665577b7e7c764a08eb0e8a5bb"
+        },
+        "date": 1768200832787,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1574.1012715934808,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2433.5244726044807,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 10633.536293424413,
             "unit": "undefined"
           }
         ]

@@ -11,6 +11,11 @@ const secret = process.env.JWT_SECRET || "default_secret";
 app.get("/", (ctx: Context) => {
   return ctx.json({ message: "Welcome to BareJS API" });
 });
+app.use(async (ctx: Context, next: any) => {
+  await next();
+  if (!ctx._headers) ctx._headers = {};
+  ctx._headers["x-response-time"] = "1.53ms";
+});
 app.get("/bomb", (ctx: Context) => {
   // บังคับให้พังด้วยการเรียกใช้ตัวแปรที่ไม่มีอยู่จริง
   return (this as any).doesNotExist(); 

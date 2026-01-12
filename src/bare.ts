@@ -2,7 +2,8 @@ import { BareRouter } from './router';
 import { RadixNode } from './radix';
 import { Context } from './context';
 import { Type as typebox, Type as t } from '@sinclair/typebox';
-
+import { join } from "node:path";
+import { readFileSync } from "node:fs";
 export interface NotFoundResponse {
   status: number;
   message: string;
@@ -23,6 +24,18 @@ export class BareJS extends BareRouter {
     for (let i = 0; i < size; i++) {
       this.pool.push(new Context());
     }
+    try {
+      const pkgPath = join(process.cwd(), "package.json");
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      if (pkg.name) {
+        this.name = pkg.name
+          .split(/[-_]/)
+          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(" ");
+      }
+    } catch {
+      this.name = "App";
+    }
   }
 
   private notFoundHandler: () => NotFoundResponse = () => ({
@@ -40,13 +53,13 @@ export class BareJS extends BareRouter {
     const mws = pipeline;
     const len = pipeline.length;
 
-    // ⚡ Static ResponseInit for 200 OK (Zero Allocation)
+    //  Static ResponseInit for 200 OK (Zero Allocation)
     const json200 = { status: 200, headers: { "content-type": "application/json" } };
 
     // Inline Finalizer
     const finalizeCode = `
       if (res instanceof Response) return res;
-      // ⚡ Smart Finalizer: Handle String vs Object vs Null
+      //  Smart Finalizer: Handle String vs Object vs Null
       if (typeof res === 'string') {
          return new Response(res, {
             status: ctx._status,
@@ -54,7 +67,7 @@ export class BareJS extends BareRouter {
          });
       }
       
-      // ⚡ FASTEST PATH: 200 OK + No Custom Headers -> Use Cached Init
+      //  FASTEST PATH: 200 OK + No Custom Headers -> Use Cached Init
       if (ctx._status === 200 && !ctx._headers) {
          return Response.json(res ?? null, json200);
       }
@@ -79,13 +92,13 @@ export class BareJS extends BareRouter {
     const isAsync = pipeline.some(fn => fn.constructor.name === 'AsyncFunction');
     let code = '';
 
-    // 🔥 Middleware Hoisting: Pass functions as arguments to avoid array lookup
+    //  Middleware Hoisting: Pass functions as arguments to avoid array lookup
     const fnNames = pipeline.map((_, i) => `fn${i}`);
 
     if (isAsync) {
       // ASYNC MODE
       for (let i = 0; i < len - 1; i++) {
-        // ⚡ Smart Await: Optimistically assume sync execution
+        //  Smart Await: Optimistically assume sync execution
         code += `let r${i} = fn${i}(ctx, noop);\n`;
         code += `if (r${i}) {\n`;
         code += `  if (r${i}.then) r${i} = await r${i};\n`;
@@ -96,7 +109,7 @@ export class BareJS extends BareRouter {
       // SYNC MODE
       for (let i = 0; i < len - 1; i++) {
         code += `const r${i} = fn${i}(ctx, noop);\n`;
-        // ⚡ Optim: Truthy check first
+        //  Optim: Truthy check first
         code += `if (r${i} && r${i} instanceof Response) return r${i};\n`;
       }
     }
@@ -141,7 +154,7 @@ export class BareJS extends BareRouter {
       stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
 
-    // 🔥 JIT Compiler: Create all Code instead of tree.lookup
+    //  JIT Compiler: Create all Code instead of tree.lookup
     const hoistedHandlers: Function[] = [];
     const register = (h: Function) => {
       const name = `h${hoistedHandlers.length}`;
@@ -151,7 +164,7 @@ export class BareJS extends BareRouter {
 
     const routerCode = tree.jitCompile(register);
 
-    // 🔥 Create seamless Fetcher (JIT Edition)
+    // Create seamless Fetcher (JIT Edition)
     // We send nodes into the closure so the code can use them
     const EMPTY_PARAMS = Object.freeze({});
     const hNames = hoistedHandlers.map((_, i) => `h${i}`);
@@ -176,7 +189,7 @@ export class BareJS extends BareRouter {
         const method = req.method;
         const ctx = pool[(++pIdx) & mask];
         try {
-        // ⚡ INLINED Context.reset() for max speed (No function call overhead)
+        //  INLINED Context.reset() for max speed (No function call overhead)
         ctx.req = req;
         ctx._status = 200;
         ctx._headers = undefined;
@@ -184,9 +197,9 @@ export class BareJS extends BareRouter {
         ctx.params = EMPTY_PARAMS;
         ctx.body = undefined;
 
-        // ⚡ JIT Generated Code Start
+        //  JIT Generated Code Start
         ${routerCode}
-        // ⚡ JIT Generated Code End
+        //  JIT Generated Code End
         const errorBody = hNotFound();
         return Response.json(errorBody, { status: errorBody.status || 404 });
         } catch (e) {
@@ -198,7 +211,7 @@ export class BareJS extends BareRouter {
 
     this.hotFetch = new Function(...args, fnBody)(...values);
     this.compiled = true;
-    // ⚡ Auto-Optimize: Replace wrapper with direct JIT function
+    // Auto-Optimize: Replace wrapper with direct JIT function
     this.fetch = this.hotFetch!;
   }
 
@@ -209,19 +222,53 @@ export class BareJS extends BareRouter {
     }
     return this.hotFetch!(req);
   };
+  public name: string = "App";
 
-  public listen(port: number = 3000, hostname: string = '0.0.0.0') {
+  public listen(port: number = 3000, hostname: string = '0.0.0.0', reusePort: boolean = true) {
     if (!this.compiled) this.compile();
+    const isProd = process.env.NODE_ENV === 'production';
 
-    console.log(`🚀 BareJS server running at http://${hostname}:${port}`);
+    if (!isProd) {
+      console.log(`
+  \x1b[33m  ____                      _ ____  \x1b[0m
+  \x1b[33m | __ )  __ _ _ __ ___     | / ___| \x1b[0m
+  \x1b[33m |  _ \\ / _\` | '__/ _ \\ _  | \\___ \\ \x1b[0m
+  \x1b[33m | |_) | (_| | | |  __/| |_| |___) |\x1b[0m
+  \x1b[33m |____/ \\__,_|_|  \\___| \\___/|____/ \x1b[0m
+                                        
+  \x1b[32m🚀 ${this.name} is running in development mode\x1b[0m
+  \x1b[90m⚙️  Pool Size: ${this.pool.length} | JIT: Enabled | Port: ${port}\x1b[0m
+      `);
+    }
 
-    return Bun.serve({
+    const server = Bun.serve({
       port,
       hostname,
       fetch: this.fetch,
-      reusePort: true,
-
+      reusePort: reusePort,
     });
+
+    const shutdown = () => {
+      const isProdInternal = process.env.NODE_ENV === 'production';
+      if (isProdInternal) {
+        // Standard Production Log
+        console.log(`[${this.name}] INFO: Received shutdown signal. Stopping server...`);
+      } else {
+        // Fancy Development Log
+        process.stdout.write(`\r\x1b[K\x1b[31m🛑 Stopping ${this.name}...\x1b[0m\n`);
+      }
+      server.stop();
+      if (isProdInternal) {
+        console.log(`[${this.name}] INFO: Server stopped cleanly.`);
+      } else {
+        console.log(`\x1b[32m✅ ${this.name} has been stopped.\x1b[0m`);
+      }
+      process.exit(0);
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+
+    return server;
   }
 }
 

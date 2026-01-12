@@ -3,6 +3,11 @@ import { RadixNode } from './radix';
 import { Context } from './context';
 import { Type as typebox, Type as t } from '@sinclair/typebox';
 
+export interface NotFoundResponse {
+  status: number;
+  message: string;
+  [key: string]: any;
+}
 export class BareJS extends BareRouter {
   private tree = new RadixNode();
   private pool: Context[] = [];
@@ -20,6 +25,13 @@ export class BareJS extends BareRouter {
     }
   }
 
+  private notFoundHandler: () => NotFoundResponse = () => ({
+    status: 404,
+    message: "Route not found"
+  });
+  public setNotFound(handler: () => NotFoundResponse) {
+    this.notFoundHandler = handler;
+  }
 
 
   // inherited use() from BareRouter handles router merging now
@@ -122,6 +134,12 @@ export class BareJS extends BareRouter {
     const pool = this.pool;
     const mask = this.poolMask;
     let pIdx = 0;
+    const hNotFound = this.notFoundHandler;
+    const hError = (err: any) => ({
+      status: 500,
+      message: err.message || "Internal Server Error",
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
 
     // 🔥 JIT Compiler: Create all Code instead of tree.lookup
     const hoistedHandlers: Function[] = [];
@@ -138,8 +156,8 @@ export class BareJS extends BareRouter {
     const EMPTY_PARAMS = Object.freeze({});
     const hNames = hoistedHandlers.map((_, i) => `h${i}`);
 
-    const args = ['pool', 'pIdx', 'mask', 'EMPTY_PARAMS', ...hNames];
-    const values = [pool, pIdx, mask, EMPTY_PARAMS, ...hoistedHandlers];
+    const args = ['pool', 'pIdx', 'mask', 'hNotFound', 'hError', 'EMPTY_PARAMS', ...hNames];
+    const values = [pool, pIdx, mask, hNotFound, hError, EMPTY_PARAMS, ...hoistedHandlers];
 
     const fnBody = `
       return function(req) {
@@ -157,7 +175,7 @@ export class BareJS extends BareRouter {
 
         const method = req.method;
         const ctx = pool[(++pIdx) & mask];
-        
+        try {
         // ⚡ INLINED Context.reset() for max speed (No function call overhead)
         ctx.req = req;
         ctx._status = 200;
@@ -169,8 +187,12 @@ export class BareJS extends BareRouter {
         // ⚡ JIT Generated Code Start
         ${routerCode}
         // ⚡ JIT Generated Code End
-
-        return new Response('404', { status: 404 });
+        const errorBody = hNotFound();
+        return Response.json(errorBody, { status: errorBody.status || 404 });
+        } catch (e) {
+          const errorBody = hError(e);
+          return Response.json(errorBody, { status: errorBody.status || 500 });
+        }
       }
     `;
 

@@ -86,9 +86,17 @@ export class RadixNode {
     let code = '';
     const indent = '  '.repeat(level);
 
-    // Base Case: Handlers at this Node
-    if (level === 0 && Object.keys(this.handlers).length > 0) {
-      code += `${indent}if (${idxPrefix} >= ${pathPrefix}.length || (${pathPrefix}.length === ${idxPrefix} + 1 && ${pathPrefix}.charCodeAt(${idxPrefix}) === 47)) {\n`;
+    // ⚡ [CORE] Handler Matcher: ส่วนนี้จะเช็คว่า path สิ้นสุดที่ Node นี้หรือไม่
+    // ครอบคลุมทั้ง Root (/) และตอนที่ recursive ลงมาจนจบ segment สุดท้าย
+    if (Object.keys(this.handlers).length > 0) {
+      code += `${indent}if (${idxPrefix} >= ${pathPrefix}.length) {\n`;
+      
+      // ฉีด Params เข้า Context เมื่อยืนยันว่า Match แล้ว
+      if (paramAccumulator.length > 0) {
+        const props = paramAccumulator.map((p: any) => `"${p.name}": ${p.varName}`).join(', ');
+        code += `${indent}  ctx.params = { ${props} };\n`;
+      }
+
       code += `${indent}  switch(method) {\n`;
       for (const [m, h] of Object.entries(this.handlers)) {
         const hName = register(h as Function);
@@ -97,7 +105,8 @@ export class RadixNode {
       code += `${indent}  }\n`;
       code += `${indent}}\n`;
     }
-    // 1. Static Keys
+
+    // 1. Static Keys Logic
     if (this.staticKeys.length > 0) {
       if (this.staticKeys.length === 1) {
         const key = this.staticKeys[0]!;
@@ -108,40 +117,22 @@ export class RadixNode {
         code += `${indent}  if (isNaN(nextChar) || nextChar === 47) {\n`;
 
         const child = this.children[key]!;
-        const newIdxVar = `newIdx${level}`;
+        const newIdxVar = `newIdxL${level}`; // ป้องกันชื่อตัวแปรซ้ำใน nested level
         code += `${indent}    const ${newIdxVar} = isNaN(nextChar) ? ${pathPrefix}.length : (${idxPrefix} + ${kLen} + 1);\n`;
 
+        // Recursive call ลงไปยังลูก
         code += child.jitCompile(register, level + 1, pathPrefix, newIdxVar, paramAccumulator);
-
-        if (Object.keys(child.handlers).length > 0) {
-          code += `${indent}    if (${newIdxVar} >= ${pathPrefix}.length) {\n`;
-
-          // ⚡ JIT: Construct Params Object
-          if (paramAccumulator.length > 0) {
-            const props = paramAccumulator.map((p: any) => `"${p.name}": ${p.varName}`).join(', ');
-            code += `${indent}      ctx.params = { ${props} };\n`;
-          }
-
-          code += `${indent}      switch(method) {\n`;
-          for (const [m, h] of Object.entries(child.handlers)) {
-            const hName = register(h as Function);
-            code += `${indent}        case "${m}": return ${hName}(ctx);\n`;
-          }
-          code += `${indent}      }\n`;
-          code += `${indent}    }\n`;
-        }
 
         code += `${indent}  }\n`;
         code += `${indent}}\n`;
 
       } else {
-        // Multi-Path Branching
+        // Multi-Path Branching: กรณีมีหลาย Static Path ในระดับเดียวกัน
         code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
         code += `${indent}if (slash${level} === -1) slash${level} = ${pathPrefix}.length;\n`;
-        code += `${indent}const len${level} = slash${level} - (${idxPrefix});\n\n`; // FIXED PRECEDENCE
+        code += `${indent}const len${level} = slash${level} - ${idxPrefix};\n\n`;
 
         code += `${indent}switch(len${level}) {\n`;
-
         for (const key of this.staticKeys) {
           code += `${indent}  case ${key.length}: // "${key}"\n`;
           if (key.length === 1) {
@@ -153,24 +144,6 @@ export class RadixNode {
           const child = this.children[key]!;
           code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramAccumulator);
 
-          if (Object.keys(child.handlers).length > 0) {
-            code += `${indent}      if (slash${level} === ${pathPrefix}.length) {\n`;
-
-            // ⚡ JIT: Construct Params Object
-            if (paramAccumulator.length > 0) {
-              const props = paramAccumulator.map((p: any) => `"${p.name}": ${p.varName}`).join(', ');
-              code += `${indent}        ctx.params = { ${props} };\n`;
-            }
-
-            code += `${indent}        switch(method) {\n`;
-            for (const [m, h] of Object.entries(child.handlers)) {
-              const hName = register(h as Function);
-              code += `${indent}          case "${m}": return ${hName}(ctx);\n`;
-            }
-            code += `${indent}        }\n`;
-            code += `${indent}      }\n`;
-          }
-
           code += `${indent}    }\n`;
           code += `${indent}    break;\n`;
         }
@@ -178,44 +151,26 @@ export class RadixNode {
       }
     }
 
-    // 2. Param Node (Fallback)
+    // 2. Param Node Logic (Fallback)
     if (this.paramNode) {
       const pNode = this.paramNode;
+      // ถ้าไม่มี static keys ในระดับนี้ ต้องหาตำแหน่ง slash เอง
       if (this.staticKeys.length === 0) {
         code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
         code += `${indent}if (slash${level} === -1) slash${level} = ${pathPrefix}.length;\n`;
       }
 
-      // ⚡ Optim: Capture Param into Local Variable (Stack)
-      const pVar = `p${level}`;
+      const pVar = `pL${level}`;
       code += `${indent}const ${pVar} = ${pathPrefix}.slice(${idxPrefix}, slash${level});\n`;
 
       const newAccumulator = [...paramAccumulator, { name: this.paramName!, varName: pVar }];
-
+      
+      // Recursive call ลงไปยังลูกของ Param Node
       code += pNode.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, newAccumulator);
-
-      if (Object.keys(pNode.handlers).length > 0) {
-        code += `${indent}if (slash${level} === ${pathPrefix}.length) {\n`;
-
-        // ⚡ JIT: Construct Params Object
-        if (newAccumulator.length > 0) {
-          const props = newAccumulator.map((p: any) => `"${p.name}": ${p.varName}`).join(', ');
-          code += `${indent}  ctx.params = { ${props} };\n`;
-        }
-
-        code += `${indent}  switch(method) {\n`;
-        for (const [m, h] of Object.entries(pNode.handlers)) {
-          const hName = register(h as Function);
-          code += `${indent}    case "${m}": return ${hName}(ctx);\n`;
-        }
-        code += `${indent}  }\n`;
-        code += `${indent}}\n`;
-      }
     }
 
     return code;
   }
 
-  // Helper for ID generation
   public id = Math.random().toString(36).slice(2);
 }

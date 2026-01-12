@@ -11,6 +11,10 @@ const secret = process.env.JWT_SECRET || "default_secret";
 app.get("/", (ctx: Context) => {
   return ctx.json({ message: "Welcome to BareJS API" });
 });
+app.get("/bomb", (ctx: Context) => {
+  // บังคับให้พังด้วยการเรียกใช้ตัวแปรที่ไม่มีอยู่จริง
+  return (this as any).doesNotExist(); 
+});
 api.group("/v1", (v1: any) => {
 
   // 🚪 Public Routes

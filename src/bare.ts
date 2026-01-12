@@ -249,26 +249,28 @@ export class BareJS extends BareRouter {
     });
 
     const shutdown = () => {
-      const isProdInternal = process.env.NODE_ENV === 'production';
-      if (isProdInternal) {
-        // Standard Production Log
-        console.log(`[${this.name}] INFO: Received shutdown signal. Stopping server...`);
+      const isProd = process.env.NODE_ENV === 'production';
+      const serverName = this.name;
+      const supportsEmoji = process.stdout.isTTY;
+
+      if (isProd) {
+        console.log(`[${serverName}] INFO: Stopping server...`);
       } else {
-        // Fancy Development Log
-        process.stdout.write(`\r\x1b[K\x1b[31m🛑 Stopping ${this.name}...\x1b[0m\n`);
+
+        const stopIcon = supportsEmoji ? "🛑" : "!";
+        const checkIcon = supportsEmoji ? "✅" : "v";
+
+
+        process.stdout.write(`\n\x1b[31m${stopIcon} Stopping ${serverName}...\x1b[0m\n`);
+        server.stop();
+        process.stdout.write(`\x1b[32m${checkIcon} ${serverName} has been stopped.\x1b[0m\n`);
       }
-      server.stop();
-      if (isProdInternal) {
-        console.log(`[${this.name}] INFO: Server stopped cleanly.`);
-      } else {
-        console.log(`\x1b[32m✅ ${this.name} has been stopped.\x1b[0m`);
-      }
+
       process.exit(0);
     };
+
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
-
-    return server;
   }
 }
 

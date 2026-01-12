@@ -33,13 +33,14 @@
 
 BareJS leads in complex, real-world scenarios. We measure engine efficiency using a **stress test** involving **10+ middlewares** and **deep radix tree routing** to ensure performance holds under high concurrency, not just in isolated "Hello World" loops.
 <!-- MARKER: PERFORMANCE_TABLE_START -->
+
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **1.15 µs** | **Baseline** |
-| Elysia | 1.60 µs | 1.39x slower |
-| Hono | 8.81 µs | 7.63x slower |
+| **BareJS** | **1.57 µs** | **Baseline** |
+| Elysia | 2.43 µs | 1.55x slower |
+| Hono | 10.63 µs | 6.76x slower |
 
-> Last Updated: 2026-01-09 (BareJS Ultra-Accuracy Suite)
+> Last Updated: 2026-01-12 (github action)
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 > [!TIP]

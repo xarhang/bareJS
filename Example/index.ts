@@ -17,7 +17,7 @@ app.use(async (ctx: Context, next: any) => {
   ctx._headers["x-response-time"] = "1.53ms";
 });
 app.get("/bomb", (ctx: Context) => {
-  // บังคับให้พังด้วยการเรียกใช้ตัวแปรที่ไม่มีอยู่จริง
+  //force error
   return (this as any).doesNotExist(); 
 });
 api.group("/v1", (v1: any) => {

@@ -50,18 +50,18 @@ export class Context {
   }
 
   public json(data: any): Response {
-    if (this._headers) {
-      if (!this._headers["content-type"]) this._headers["content-type"] = "application/json";
+    if (this._headers !== undefined) {
+      if (this._headers["content-type"] === undefined) {
+        this._headers["content-type"] = "application/json";
+      }
       return Response.json(data, {
         status: this._status,
         headers: this._headers
       });
     }
-
     if (this._status === 200) {
       return Response.json(data);
     }
-
     return Response.json(data, { status: this._status });
   }
 

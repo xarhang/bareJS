@@ -29,7 +29,7 @@ BareJS is built for speed. When submitting a pull request, please ensure that:
 ## 🏗️ Development Setup
 ```bash
 # Clone your fork
-git clone [https://github.com/xarhang/bareJS.git](https://github.com/xarhang/bareJS.git)
+git clone https://github.com/xarhang/bareJS.git
 cd bareJS
 
 # Install Bun dependencies

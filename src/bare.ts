@@ -9,10 +9,13 @@ export class BareJS extends BareRouter {
   private poolIdx = 0;
   private hotFetch?: (req: Request) => any;
   private compiled = false;
+  private poolMask: number;
 
-  constructor() {
+  constructor(poolSize: number = 1024) {
     super();
-    for (let i = 0; i < 1024; i++) {
+    const size = Math.pow(2, Math.ceil(Math.log2(poolSize)));
+    this.poolMask = size - 1;
+    for (let i = 0; i < size; i++) {
       this.pool.push(new Context());
     }
   }
@@ -117,6 +120,7 @@ export class BareJS extends BareRouter {
 
     const tree = this.tree;
     const pool = this.pool;
+    const mask = this.poolMask;
     let pIdx = 0;
 
     // 🔥 JIT Compiler: Create all Code instead of tree.lookup
@@ -134,8 +138,8 @@ export class BareJS extends BareRouter {
     const EMPTY_PARAMS = Object.freeze({});
     const hNames = hoistedHandlers.map((_, i) => `h${i}`);
 
-    const args = ['pool', 'pIdx', 'EMPTY_PARAMS', ...hNames];
-    const values = [pool, pIdx, EMPTY_PARAMS, ...hoistedHandlers];
+    const args = ['pool', 'pIdx', 'mask', 'EMPTY_PARAMS', ...hNames];
+    const values = [pool, pIdx, mask, EMPTY_PARAMS, ...hoistedHandlers];
 
     const fnBody = `
       return function(req) {
@@ -152,7 +156,7 @@ export class BareJS extends BareRouter {
         }
 
         const method = req.method;
-        const ctx = pool[(++pIdx) & 1023];
+        const ctx = pool[(++pIdx) & mask];
         
         // ⚡ INLINED Context.reset() for max speed (No function call overhead)
         ctx.req = req;

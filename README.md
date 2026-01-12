@@ -62,11 +62,11 @@ bun add barejs
 
 ### The "Bare" Minimum
 ```typescript
-import { BareJS } from 'barejs';
+import { BareJS,type Context } from 'barejs';
 
 const app = new BareJS();
 
-app.get('/', (ctx) => ctx.json({ hello: "world" }));
+app.get('/', (ctx: Context) => ctx.json({ hello: "world" }));
 
 app.listen(3000);
 ```
@@ -79,12 +79,12 @@ app.listen(3000);
 Use `BareRouter` for modularity and nesting.
 
 ```typescript
-import { BareJS, BareRouter } from 'barejs';
+import { BareJS, BareRouter, type Context } from 'barejs';
 
 const app = new BareJS();
 const api = new BareRouter("/api/v1");
 
-api.get("/status", (ctx) => ({ status: "ok" }));
+api.get("/status", (ctx: Context) => ({ status: "ok" }));
 
 app.use(api); // Result: /api/v1/status
 ```
@@ -98,7 +98,7 @@ import { bareAuth, createToken, Password, type Context } from 'barejs';
 const SECRET = "your-secret";
 
 // JWT Generation
-app.post('/login', async (ctx) => {
+app.post('/login', async (ctx: Context) => {
   const hash = await Password.hash("password123");
   const isValid = await Password.verify("password123", hash);
   
@@ -109,7 +109,7 @@ app.post('/login', async (ctx) => {
 });
 
 // Protection Middleware
-app.get('/me', bareAuth(SECRET), (ctx) => {
+app.get('/me', bareAuth(SECRET), (ctx: Context) => {
   const user = ctx.get('user'); // Set by bareAuth
   return { user };
 });
@@ -119,20 +119,20 @@ app.get('/me', bareAuth(SECRET), (ctx) => {
 Choose the validation style that fits your workflow.
 
 ```typescript
-import { typebox, zod, native, t } from 'barejs';
+import { typebox, zod, native, t, type Context } from 'barejs';
 import { z } from 'zod';
 
 // Style A: TypeBox (Fastest, Highly Recommended)
 const TypeBoxSchema = t.Object({ name: t.String() });
-app.post('/typebox', typebox(TypeBoxSchema), (ctx) => ctx.body);
+app.post('/typebox', typebox(TypeBoxSchema), (ctx: Context) => ctx.body);
 
 // Style B: Zod (Standard)
 const ZodSchema = z.object({ age: z.number() });
-app.post('/zod', zod(ZodSchema), (ctx) => ctx.body);
+app.post('/zod', zod(ZodSchema), (ctx: Context) => ctx.body);
 
 // Style C: Native (Zero Dependency)
 const NativeSchema = { properties: { id: { type: 'number' } } };
-app.post('/native', native(NativeSchema), (ctx) => ctx.body);
+app.post('/native', native(NativeSchema), (ctx: Context) => ctx.body);
 ```
 
 ### 4. 🔌 Essential Plugins

@@ -8,6 +8,9 @@ import { logger } from '../src/logger';
 const app = new BareJS();
 const api = new BareRouter("/api");
 const secret = process.env.JWT_SECRET || "default_secret";
+app.get("/", (ctx: Context) => {
+  return ctx.json({ message: "Welcome to BareJS API" });
+});
 api.group("/v1", (v1: any) => {
 
   // 🚪 Public Routes

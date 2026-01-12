@@ -86,6 +86,18 @@ export class RadixNode {
     let code = '';
     const indent = '  '.repeat(level);
 
+    // Base Case: Handlers at this Node
+    if (level === 0 && Object.keys(this.handlers).length > 0) {
+      code += `${indent}if (${idxPrefix} >= ${pathPrefix}.length || (${pathPrefix}.length === ${idxPrefix} + 1 && ${pathPrefix}.charCodeAt(${idxPrefix}) === 47)) {\n`;
+      code += `${indent}  switch(method) {\n`;
+      for (const [m, h] of Object.entries(this.handlers)) {
+        const hName = register(h as Function);
+        code += `${indent}    case "${m}": return ${hName}(ctx);\n`;
+      }
+      code += `${indent}  }\n`;
+      code += `${indent}}\n`;
+    }
+    // 1. Static Keys
     if (this.staticKeys.length > 0) {
       if (this.staticKeys.length === 1) {
         const key = this.staticKeys[0]!;

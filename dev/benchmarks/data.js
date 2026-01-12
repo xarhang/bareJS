@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768181455512,
+  "lastUpdate": 1768185827643,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -1537,6 +1537,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 9488.699740096536,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "committer": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "distinct": true,
+          "id": "d8981f2b52f40e5273d74ae1fabaeccfc7f81acf",
+          "message": "feat: supported body pharser using await when need to use it",
+          "timestamp": "2026-01-12T09:49:05+07:00",
+          "tree_id": "cc00e299264322d23cf8b1325bffbc92ac0ad854",
+          "url": "https://github.com/xarhang/bareJS/commit/d8981f2b52f40e5273d74ae1fabaeccfc7f81acf"
+        },
+        "date": 1768185827340,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1474.0643726822225,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2161.7263551077135,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 9508.659252261537,
             "unit": "undefined"
           }
         ]

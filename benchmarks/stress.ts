@@ -1,4 +1,4 @@
-import { BareJS, Context } from '../src/bare';
+import { BareJS, Context } from '../src/core/bare';
 import { bench, group, run } from 'mitata';
 
 const app = new BareJS();

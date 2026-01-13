@@ -1,6 +1,6 @@
 // controllers/AuthController.ts
-import type { Context } from '../../src/context';
-import { createToken } from '../../src/auth';
+import type { Context } from '../../src/core/context';
+import { createToken } from '../../src/security/auth';
 
 interface LoginBody {
   username?: string;

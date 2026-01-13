@@ -1,4 +1,4 @@
-import { BareJS, Context } from '../src/bare';
+import { BareJS, Context } from '../src/core/bare';
 import { Elysia } from 'elysia';
 import { Hono } from 'hono';
 import { bench, group, run } from 'mitata';

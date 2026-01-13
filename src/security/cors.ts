@@ -1,4 +1,4 @@
-import type { Middleware } from './context';
+import type { Middleware } from './core/context';
 
 export const cors = (options: { origin?: string; methods?: string } = {}) => {
   const origin = options.origin || '*';

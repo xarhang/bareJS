@@ -6,7 +6,7 @@
 
 import * as Compiler from '@sinclair/typebox/compiler';
 import { z } from 'zod'; 
-import type { Context, Middleware, Next } from './context';
+import type { Context, Middleware, Next } from './core/context';
 
 // --- Types & Constants ---
 export const Z = z; 

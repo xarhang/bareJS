@@ -1,10 +1,10 @@
 // All comments in English
-import { BareJS } from './src/bare';
-import {  native } from './src/validators';
-import { logger } from './src/logger';
+import { BareJS } from './src/core/bare';
+import {  native } from './src/security/validators';
+import { logger } from './src/utils/logger';
 // Import types for explicit annotation
-import type { Context } from './src/context';
-import { BareRouter } from './src/router';
+import type { Context } from './src/core/context';
+import { BareRouter } from './src/core/router';
 import { createToken, bareAuth,T,t, Type } from './src';
 
 const app = new BareJS();

@@ -6,7 +6,7 @@
  */
 
 // --- 1. Core Engine ---
-export { BareJS } from './bare';
+export { BareJS } from './core/bare';
 
 /**
  * Plugin Interface for BareJS
@@ -23,22 +23,14 @@ export type {
   Context,
   Params,
   AuthUser
-} from './context';
+} from './core/context';
 
 // --- 3. The Validation Suite (Builders - สำหรับสร้าง Schema) ---
-/**
- * รองรับทั้ง T, Type และ TypeBox
- * ใช้สำหรับสร้าง Schema เช่น T.String() หรือ Type.Number()
- */
 import { Type } from "@sinclair/typebox";
 export { Type, Type as T, Type as TypeBox };
 
 // --- 4. The Validation Suite (Engines - สำหรับเป็น Middleware) ---
-/**
- * รองรับทั้ง t, typebox และ v, validate (Auto)
- * สำหรับ Zod รองรับทั้ง Z (Builder) และ z (Middleware)
- */
-import { typebox, zod, native, validate, Z } from './validators';
+import { typebox, zod, native, validate, Z } from './security/validators';
 export { 
   // TypeBox Engine
   typebox, 
@@ -57,11 +49,13 @@ export {
 };
 
 // --- 5. Middlewares & Utilities ---
-export { logger } from './logger';
-export { cors } from './cors';
-export { staticFile } from './static';
-export { BareRouter } from './router';
+export { logger } from './utils/logger';
+export { cors } from './security/cors';
+export { staticFile } from './utils/static';
+export { BareRouter } from './core/router';
 
 // --- 6. Authentication (Bun Native) ---
 // Always deploy using process.env [2026-01-06]
-export { bareAuth, createToken, Hash as Password, Hash } from './auth';
+export { bareAuth, createToken } from './security/auth';
+// --- 7. Hashing ---
+export{Hash as Password, Hash} from './security/hash';

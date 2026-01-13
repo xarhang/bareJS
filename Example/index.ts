@@ -1,10 +1,10 @@
-import { BareJS } from '../src/bare';
+import { BareJS } from '../src/core/bare';
 import { AuthController } from './controllers/AuthController';
-import { bareAuth } from '../src/auth';
-import type { Context } from '../src/context';
+import { bareAuth } from '../src/security/auth';
+import type { Context } from '../src/core/context';
 import { secrets } from 'bun';
-import { BareRouter } from '../src/router';
-import { logger } from '../src/logger';
+import { BareRouter } from '../src/core/router';
+import { logger } from '../src/utils/logger';
 const app = new BareJS();
 const api = new BareRouter("/api");
 const secret = process.env.JWT_SECRET || "default_secret";

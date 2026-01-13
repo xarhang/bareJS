@@ -4,6 +4,8 @@ import { Context } from './context';
 import { Type as typebox, Type as t } from '@sinclair/typebox';
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
+import { bootstrapConfig } from "./loader";
+
 export interface NotFoundResponse {
   status: number;
   message: string;
@@ -19,6 +21,7 @@ export class BareJS extends BareRouter {
 
   constructor(poolSize: number = 1024) {
     super();
+    bootstrapConfig();
     const size = Math.pow(2, Math.ceil(Math.log2(poolSize)));
     this.poolMask = size - 1;
     for (let i = 0; i < size; i++) {
@@ -229,6 +232,7 @@ export class BareJS extends BareRouter {
     const isProd = process.env.NODE_ENV === 'production';
 
     if (!isProd) {
+      const { BARE_CONFIG } = require("./config");
       console.log(`
   \x1b[33m  ____                      _ ____  \x1b[0m
   \x1b[33m | __ )  __ _ _ __ ___     | / ___| \x1b[0m
@@ -238,6 +242,7 @@ export class BareJS extends BareRouter {
                                         
   \x1b[32m🚀 ${this.name} is running in development mode\x1b[0m
   \x1b[90m⚙️  Pool Size: ${this.pool.length} | JIT: Enabled | Port: ${port}\x1b[0m
+  🛡️  Hash: ${BARE_CONFIG.hash.algorithm} (${BARE_CONFIG.hash.memoryCost / 1024}MB)
       `);
     }
 

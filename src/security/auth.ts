@@ -1,4 +1,4 @@
-import type { AuthUser, Next } from './context';
+import type { AuthUser, Next } from '../core/context';
 import { timingSafeEqual } from 'node:crypto';
 
 /**
@@ -141,29 +141,7 @@ export const basicAuth = (credentials: { user: string; pass: string }) => {
   };
 };
 
-/**
- * 3. PASSWORD UTILS (Bun Native)
- * Uses Argon2id - the gold standard for password hashing
- */
-export const Hash = {
- 
-  make: (data: string): Promise<string> => 
-    Bun.password.hash(data, {
-      algorithm: "argon2id",
-      memoryCost: 65536, // 64MB 
-      timeCost: 2       
-    }),
 
-  
-  verify: (data: string, hash: string): Promise<boolean> => 
-    Bun.password.verify(data, hash),
-
-  needsRehash: (hash: string): boolean => {
-    if (!hash.startsWith("$argon2id$")) return true;
-    const isLatestConfig = hash.includes("m=65536") && hash.includes("t=2");
-    return !isLatestConfig;
-  }
-};
 
 /**
  * 5. ROLE AUTHORIZATION (Bonus Max Function)

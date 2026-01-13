@@ -145,13 +145,24 @@ export const basicAuth = (credentials: { user: string; pass: string }) => {
  * 3. PASSWORD UTILS (Bun Native)
  * Uses Argon2id - the gold standard for password hashing
  */
-export const Password = {
-  hash: (password: string) => Bun.password.hash(password, {
-    algorithm: "argon2id",
-    memoryCost: 65536, // 64MB
-    timeCost: 2
-  }),
-  verify: (password: string, hash: string) => Bun.password.verify(password, hash)
+export const Hash = {
+ 
+  make: (data: string): Promise<string> => 
+    Bun.password.hash(data, {
+      algorithm: "argon2id",
+      memoryCost: 65536, // 64MB 
+      timeCost: 2       
+    }),
+
+  
+  verify: (data: string, hash: string): Promise<boolean> => 
+    Bun.password.verify(data, hash),
+
+  needsRehash: (hash: string): boolean => {
+    if (!hash.startsWith("$argon2id$")) return true;
+    const isLatestConfig = hash.includes("m=65536") && hash.includes("t=2");
+    return !isLatestConfig;
+  }
 };
 
 /**

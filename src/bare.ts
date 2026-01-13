@@ -265,7 +265,6 @@ export class BareJS extends BareRouter {
         server.stop();
         process.stdout.write(`\x1b[32m${checkIcon} ${serverName} has been stopped.\x1b[0m\n`);
       }
-
       process.exit(0);
     };
 

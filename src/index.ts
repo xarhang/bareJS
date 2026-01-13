@@ -64,4 +64,4 @@ export { BareRouter } from './router';
 
 // --- 6. Authentication (Bun Native) ---
 // Always deploy using process.env [2026-01-06]
-export { bareAuth, createToken, Password } from './auth';
+export { bareAuth, createToken, Hash as Password, Hash } from './auth';

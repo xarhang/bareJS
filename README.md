@@ -98,15 +98,16 @@ app.use(api); // Accessible at /api/v1/status
 Built-in utilities for secure password hashing (Argon2/Bcrypt via Bun) and RFC-compliant JWT handling.
 
 ```typescript
-import { bareAuth, createToken, Password, type Context } from 'barejs';
+import { bareAuth, createToken, Password,Hash, type Context } from 'barejs';
 
 const SECRET = "your-ultra-secure-secret";
 
 app.post('/login', async (ctx: Context) => {
   const body = await ctx.jsonBody();
-  const hash = await Password.hash(body.password);
-  const isValid = await Password.verify(body.password, hash);
-  
+  //const hash = await Password.hash(body.password); //you can replace with Hash
+  const hash = await Hash.hash(body.password);
+  // const isValid = await Password.verify(body.password, hash); //you can replace with Hash
+  const isValid = await Hash.verify(body.password, hash);
   if (isValid) {
     const token = await createToken({ id: 1 }, SECRET);
     return { token };

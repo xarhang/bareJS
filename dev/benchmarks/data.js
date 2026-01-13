@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768267614405,
+  "lastUpdate": 1768274608258,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -1798,6 +1798,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 9846.368454791806,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "committer": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "distinct": true,
+          "id": "1da8755b2a46b8f2cd3678629a1da0f65ed5faf0",
+          "message": "feat: barejs v0.1.44 - core refactor, dynamic config, and security separation",
+          "timestamp": "2026-01-13T10:24:48+07:00",
+          "tree_id": "28e9d4ab976058139c207f9c0a648f98836f89d4",
+          "url": "https://github.com/xarhang/bareJS/commit/1da8755b2a46b8f2cd3678629a1da0f65ed5faf0"
+        },
+        "date": 1768274607634,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1141.8644424217696,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2132.782385842179,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 9423.870434065779,
             "unit": "undefined"
           }
         ]

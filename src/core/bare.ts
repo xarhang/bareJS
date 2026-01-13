@@ -227,27 +227,32 @@ export class BareJS extends BareRouter {
   };
   public name: string = "App";
 
-  public listen(port: number = 3000, hostname: string = '0.0.0.0', reusePort: boolean = true) {
+  public listen(port?: number, hostname: string = '0.0.0.0', reusePort: boolean = true) {
     if (!this.compiled) this.compile();
+    
+    // ดึงค่า Config ล่าสุดมาใช้
+    const { BARE_CONFIG } = require("./config");
+    
+    // ลำดับความสำคัญ: Parameter > Config File > Default (3000)
+    const finalPort = port || BARE_CONFIG.port || 3000;
     const isProd = process.env.NODE_ENV === 'production';
 
-    if (!isProd) {
-      const { BARE_CONFIG } = require("./config");
-      console.log(`
-  \x1b[33m  ____                      _ ____  \x1b[0m
-  \x1b[33m | __ )  __ _ _ __ ___     | / ___| \x1b[0m
-  \x1b[33m |  _ \\ / _\` | '__/ _ \\ _  | \\___ \\ \x1b[0m
-  \x1b[33m | |_) | (_| | | |  __/| |_| |___) |\x1b[0m
-  \x1b[33m |____/ \\__,_|_|  \\___| \\___/|____/ \x1b[0m
-                                        
-  \x1b[32m🚀 ${this.name} is running in development mode\x1b[0m
-  \x1b[90m⚙️  Pool Size: ${this.pool.length} | JIT: Enabled | Port: ${port}\x1b[0m
-  🛡️  Hash: ${BARE_CONFIG.hash.algorithm} (${BARE_CONFIG.hash.memoryCost / 1024}MB)
+if (!isProd) {
+  console.log(`
+  \x1b[33m  ____                    _ _____ \x1b[0m
+  \x1b[33m | __ )  __ _ _ __ ___     | | ____|\x1b[0m
+  \x1b[33m |  _ \\ / _\` | '__/ _ \\ _  | |  _|  \x1b[0m
+  \x1b[33m | |_) | (_| | | |  __/| |_| | |___ \x1b[0m
+  \x1b[33m |____/ \\__,_|_|  \\___| \\___/|_____|\x1b[0m
+                                         
+   \x1b[32m🚀 ${this.name} is running in development mode\x1b[0m
+   \x1b[90m⚙️  Pool Size: ${this.pool.length} | JIT: Enabled | Port: ${finalPort}\x1b[0m
+   \x1b[36m🛡️  Hash: ${BARE_CONFIG.hash.algorithm} (${BARE_CONFIG.hash.memoryCost / 1024}MB) | Iterations: ${BARE_CONFIG.hash.timeCost}\x1b[0m
       `);
     }
 
     const server = Bun.serve({
-      port,
+      port: finalPort,
       hostname,
       fetch: this.fetch,
       reusePort: reusePort,

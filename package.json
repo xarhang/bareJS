@@ -22,7 +22,7 @@
     "test": "bun test",
     "benchs": "bun run benchmarks/index.ts",
     "bench": "bun run benchmarks/head-to-head.ts",
-    "dev": "bun --watch src/index.ts",
+    "dev": "bun --watch example/index.ts",
     "build": "bun ./scripts/build.ts",
     "prepublishOnly": "bun run build",
     "release": "bun run build && npm version patch && npm publish --access public"

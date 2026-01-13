@@ -1,3 +1,4 @@
+
 <div align="center">
   <br />
   <h1>Bare<span style="color: #F7DF1E;">JS</span></h1>
@@ -8,14 +9,14 @@
     <a href="https://www.npmjs.com/package/barejs">
       <img src="https://img.shields.io/npm/v/barejs?style=for-the-badge&logo=npm&color=CB3837" alt="NPM Version">
     </a>
-    <a href="https://github.com/xarhang/bareJS/actions/workflows/bench.yml">
-      <img src="https://img.shields.io/github/actions/workflow/status/xarhang/bareJS/bench.yml?branch=main&label=Performance&style=for-the-badge&logo=github" alt="Performance">
+    <a href="https://github.com/xarhang/barejs/actions/workflows/bench.yml">
+      <img src="https://img.shields.io/github/actions/workflow/status/xarhang/barejs/bench.yml?branch=main&label=Performance&style=for-the-badge&logo=github" alt="Performance">
     </a>
     <a href="https://bun.sh">
       <img src="https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=for-the-badge&logo=bun" alt="Bun Version">
     </a>
-    <a href="https://github.com/xarhang/bareJS/blob/main/LICENSE">
-      <img src="https://img.shields.io/github/license/xarhang/bareJS?style=for-the-badge&color=blue" alt="License">
+    <a href="https://github.com/xarhang/barejs/blob/main/LICENSE">
+      <img src="https://img.shields.io/github/license/xarhang/barejs?style=for-the-badge&color=blue" alt="License">
     </a>
   </p>
 
@@ -23,6 +24,7 @@
     <a href="#-benchmarks">Benchmarks</a> •
     <a href="#-features">Features</a> •
     <a href="#-quick-start">Quick Start</a> •
+    <a href="#-configuration">Configuration</a> •
     <a href="#-architecture">Architecture</a>
   </p>
 
@@ -31,7 +33,8 @@
 
 ## 📊 Benchmarks: Real-World Performance
 
-BareJS leads in complex, real-world scenarios. We measure engine efficiency using a **stress test** involving **10+ middlewares** and **deep radix tree routing** to ensure performance holds under high concurrency, not just in isolated "Hello World" loops.
+BareJS leads in complex, real-world scenarios. We measure engine efficiency using a **stress test** involving **10+ middlewares** and **deep radix tree routing** to ensure performance holds under high concurrency.
+
 <!-- MARKER: PERFORMANCE_TABLE_START -->
 
 | Framework | Latency | Speed |
@@ -40,18 +43,19 @@ BareJS leads in complex, real-world scenarios. We measure engine efficiency usin
 | Elysia | 2.43 µs | 1.55x slower |
 | Hono | 10.63 µs | 6.76x slower |
 
-> Last Updated: 2026-01-12 (github action)
+> Last Updated: 2026-01-12
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 > [!TIP]
 > **View our [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/)** for historical data and detailed performance trends across different hardware.
 
+
 ## 🚀 Key Features
 
-* **JIT Pipeline Compilation**: Routes and middleware chains are compiled into a single, flattened JavaScript function at runtime to eliminate recursive call overhead.
-* **Object Pooling**: Recycles `Context` objects via a circular buffer, significantly reducing Garbage Collection (GC) pressure.
-* **Lazy Body Parsing**: Requests are processed instantly. Payloads are only parsed on-demand via `ctx.jsonBody()`, maintaining peak speed for GET requests.
-* **Mechanical Sympathy**: Intentionally designed to align with V8's optimization heuristics and Bun's internal I/O architecture.
+* **JIT Pipeline Compilation**: Routes and middleware chains are flattened into a single function at runtime.
+* **Object Pooling**: Recycles `Context` objects via a circular buffer, drastically reducing GC pressure.
+* **Secure by Default**: Built-in **Argon2id (64MB)** hashing for maximum production security.
+* **Mechanical Sympathy**: Intentionally designed to align with V8's optimization and Bun's I/O.
 
 ## 🛠️ Installation
 
@@ -66,9 +70,7 @@ bun add barejs
 import { BareJS, type Context } from 'barejs';
 
 const app = new BareJS();
-
 app.get('/', (ctx: Context) => ctx.json({ hello: "world" }));
-
 app.listen(3000);
 
 ```
@@ -77,116 +79,77 @@ app.listen(3000);
 
 ## 📘 Comprehensive Guide
 
-### 1. 🔀 Advanced Routing
+### 1. 🛡️ Security & Authentication (Dual-API)
 
-Modularize your application and maintain clean codebases using `BareRouter`.
-
-```typescript
-import { BareJS, BareRouter, type Context } from 'barejs';
-
-const app = new BareJS();
-const api = new BareRouter("/api/v1");
-
-api.get("/status", (ctx: Context) => ({ status: "ok" }));
-
-app.use(api); // Accessible at /api/v1/status
-
-```
-
-### 2. 🛡️ Security & Authentication
-
-Built-in utilities for secure password hashing (Argon2/Bcrypt via Bun) and RFC-compliant JWT handling.
+BareJS provides high-level security utilities. You can use `Hash` or `Password` interchangeably for semantic clarity.
 
 ```typescript
-import { bareAuth, createToken, Password,Hash, type Context } from 'barejs';
+import { bareAuth, createToken, Password, Hash, type Context } from 'barejs';
 
-const SECRET = "your-ultra-secure-secret";
+const SECRET = process.env.JWT_SECRET || "your-secret";
 
-app.post('/login', async (ctx: Context) => {
+app.post('/register', async (ctx: Context) => {
   const body = await ctx.jsonBody();
-  //const hash = await Password.hash(body.password); //you can replace with Hash
-  const hash = await Hash.hash(body.password);
-  // const isValid = await Password.verify(body.password, hash); //you can replace with Hash
+  
+  // High-performance Argon2id Hashing (64MB default)
+  const hash = await Password.make(body.password); 
+  
+  // Verify with ease
   const isValid = await Hash.verify(body.password, hash);
+  
   if (isValid) {
     const token = await createToken({ id: 1 }, SECRET);
     return { token };
   }
 });
 
-// Protect routes with bareAuth middleware
+// Protect routes
 app.get('/me', bareAuth(SECRET), (ctx: Context) => {
-  const user = ctx.get('user'); // Identity injected by bareAuth
-  return { user };
+  return { user: ctx.get('user') };
 });
+
+```
+
+### 2. ⚙️ Configuration
+
+Customize your engine by creating a `bare.config.ts` in your root directory.
+
+```typescript
+// bare.config.ts
+export default {
+  port: 3000,
+  hash: {
+    algorithm: "argon2id",
+    memoryCost: 65536, // 64MB
+    timeCost: 2
+  }
+};
 
 ```
 
 ### 3. ✅ Data Validation (3 Styles)
 
-BareJS integrates deeply with TypeBox for JIT-level speeds but remains compatible with the broader ecosystem.
-
 ```typescript
 import { typebox, zod, native, t, type Context } from 'barejs';
 import { z } from 'zod';
 
-// Style A: TypeBox (Highest Performance - Recommended)
-const TypeBoxSchema = t.Object({ name: t.String() });
-app.post('/typebox', typebox(TypeBoxSchema), async (ctx: Context) => {
-  const body = await ctx.jsonBody();
-  return body;
-});
+// Style A: TypeBox (JIT Optimized - Recommended)
+const Schema = t.Object({ name: t.String() });
+app.post('/user', typebox(Schema), (ctx) => ctx.json(ctx.body));
 
 // Style B: Zod (Industry Standard)
 const ZodSchema = z.object({ age: z.number() });
-app.post('/zod', zod(ZodSchema), async (ctx: Context) => {
-  const body = await ctx.jsonBody();
-  return body;
-});
-
-// Style C: Native (Zero Dependency / JSON Schema)
-const NativeSchema = { 
-  type: "object",
-  properties: { id: { type: 'number' } },
-  required: ["id"]
-};
-app.post('/native', native(NativeSchema), async (ctx: Context) => {
-  const body = await ctx.jsonBody();
-  return body;
-});
+app.post('/age', zod(ZodSchema), (ctx) => ctx.json(ctx.body));
 
 ```
 
 ### 4. 🔌 Essential Plugins
 
-Standard utilities optimized for the BareJS engine's execution model.
-
-#### **Logger**
-
-High-precision terminal logging with color-coded status codes and microsecond timing.
-
 ```typescript
-import { logger } from 'barejs';
+import { logger, cors, staticFile } from 'barejs';
+
 app.use(logger);
-
-```
-
-#### **CORS**
-
-Highly optimized Cross-Origin Resource Sharing middleware.
-
-```typescript
-import { cors } from 'barejs';
-app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
-
-```
-
-#### **Static Files**
-
-Serves static assets with zero-overhead using Bun's native file system implementation.
-
-```typescript
-import { staticFile } from 'barejs';
+app.use(cors());
 app.use(staticFile("public"));
 
 ```
@@ -195,27 +158,22 @@ app.use(staticFile("public"));
 
 ## 🧠 Context API
 
-The `Context` object is pre-allocated in a circular pool to eliminate memory fragmentation.
-
 | Method / Property | Description |
 | --- | --- |
 | `ctx.req` | Raw incoming Bun `Request` object. |
-| `ctx.params` | Object containing route parameters (e.g., `:id`). |
-| **`ctx.jsonBody()`** | **[Async]** Parses the JSON body on-demand and caches it for the lifecycle. |
-| `ctx.status(code)` | Sets the HTTP status code (Chainable). |
-| `ctx.json(data)` | Finalizes and returns an optimized JSON response. |
-| `ctx.set(k, v)` | Stores metadata in the request-scoped store. |
-| `ctx.get(k)` | Retrieves stored data from the lifecycle store. |
+| `ctx.params` | Route parameters (e.g., `:id`). |
+| `ctx.jsonBody()` | **[Async]** Parses and caches JSON body. |
+| `ctx.status(code)` | Sets the HTTP status code. |
+| `ctx.json(data)` | Returns an optimized JSON response. |
 
 ---
 
 ## ⚙️ Performance Tuning
 
-| OS Variable | Default | Description |
+| OS Variable / File | Default | Description |
 | --- | --- | --- |
-| `BARE_POOL_SIZE` | `1024` | Pre-allocated context pool size. Must be a **Power of 2**. |
-| `NODE_ENV` | `development` | Use `production` to hide stack traces and enable V8's hot-path optimizations. |
+| `bare.config.ts` | - | Centralized config for Port and Hash. |
+| `BARE_POOL_SIZE` | `1024` | Context pool size (Must be Power of 2). |
+| `NODE_ENV` | `development` | Set to `production` for peak JIT speed. |
 
----
-
-**Maintained by [xarhang](https://github.com/xarhang) | **License: MIT**
+**Maintained by [xarhang](https://github.com/xarhang) | License: MIT**

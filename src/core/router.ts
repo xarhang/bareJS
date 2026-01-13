@@ -2,7 +2,7 @@ import {
   type Middleware,
   type Handler,
   type GroupCallback
-} from './core/context';
+} from '../core/context';
 
 type HandlersChain = (Middleware | Handler)[];
 

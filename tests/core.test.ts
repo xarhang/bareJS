@@ -1,6 +1,6 @@
 import { expect, test, describe, beforeEach } from "bun:test";
-import { BareJS, Context } from "../src/bare";
-import { bareAuth, createToken } from "../src/auth"; // Adjusted paths
+import { BareJS, Context } from "../src/core/bare";
+import { bareAuth, createToken } from "../src/security/auth"; // Adjusted paths
 
 describe("BareJS Ultra-Accuracy Suite - Extended", () => {
   let app: BareJS;
@@ -61,7 +61,7 @@ describe("BareJS Ultra-Accuracy Suite - Extended", () => {
       expect(data.message).toBe("Bearer token required");
     });
     test("Exports - Typebox Available", () => {
-      const { typebox, t } = require("../src/bare");
+      const { typebox, t } = require("../src/core/bare");
       expect(typebox).toBeDefined();
       expect(t).toBeDefined();
       expect(t.String).toBeDefined();
@@ -71,7 +71,7 @@ describe("BareJS Ultra-Accuracy Suite - Extended", () => {
   describe("Router Composition", () => {
     test("Mounting Sub-Router (app.use(router))", async () => {
       // Logic mirroring Example/index.ts
-      const { BareRouter } = await import("../src/router");
+      const { BareRouter } = await import("../src/core/router");
       const api = new BareRouter("/api");
       api.get("/ping", (ctx: Context) => ctx.json({ msg: "pong" }));
 
@@ -84,7 +84,7 @@ describe("BareJS Ultra-Accuracy Suite - Extended", () => {
     });
 
     test("Deeply Nested Router (e.g. /api/v1/auth/login)", async () => {
-      const { BareRouter } = await import("../src/router");
+      const { BareRouter } = await import("../src/core/router");
       const api = new BareRouter("/api");
 
       api.group("/v1", (v1: any) => {

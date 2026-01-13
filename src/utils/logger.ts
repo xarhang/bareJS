@@ -1,4 +1,4 @@
-import type { Middleware } from './core/context';
+import type { Middleware } from '../core/context';
 
 export const logger: Middleware = async (ctx, next) => {
   const start = performance.now();

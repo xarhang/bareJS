@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768202735525,
+  "lastUpdate": 1768267614405,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -1761,6 +1761,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 10136.667870796833,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "committer": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "distinct": true,
+          "id": "01e2ae7caaa3f3f3a68a57266cf56167084936ee",
+          "message": "feat(security): implement Argon2id hashing & needsRehash\n\nperf: reach 912ns sub-microsecond latency on Bun 1.3.5",
+          "timestamp": "2026-01-13T08:32:04+07:00",
+          "tree_id": "72ade8f1695d5fe7e10a5749a4c23ee45313a8bb",
+          "url": "https://github.com/xarhang/bareJS/commit/01e2ae7caaa3f3f3a68a57266cf56167084936ee"
+        },
+        "date": 1768267613788,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1442.2563175730193,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2233.657685412424,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 9846.368454791806,
             "unit": "undefined"
           }
         ]

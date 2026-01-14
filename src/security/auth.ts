@@ -64,15 +64,16 @@ export const createToken = async (payload: object, secret: string): Promise<stri
 export const bareAuth = (secret: string) => {
   return async (ctx: any, next: any) => {
     const authHeader = ctx.req.headers.get('Authorization');
+    
     if (!authHeader?.startsWith('Bearer ')) {
-      return ctx.status(401).json({ message: "Bearer token required" });
+      return ctx.status(401).send("Bearer token required");
     }
 
     const token = authHeader.slice(7);
     const parts = token.split('.');
 
     if (parts.length !== 3) {
-      return ctx.status(401).json({ message: 'Malformed JWT token' });
+      return ctx.status(401).send("Malformed JWT token");
     }
 
     const [header, payload, signature] = parts;
@@ -80,24 +81,18 @@ export const bareAuth = (secret: string) => {
 
     try {
       const key = await importKey(secret);
-
-      // Verify Signature
-      const expectedSig = await crypto.subtle.sign(
-        "HMAC",
-        key,
-        encoder.encode(data)
-      );
-
+      const expectedSig = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
       const validSig = base64Url(new Uint8Array(expectedSig));
 
       if (signature !== validSig) {
-        return ctx.status(401).json({ message: 'Invalid signature' });
+        return ctx.status(401).send("Invalid signature");
       }
 
-      // Decode Payload
+      // Decode Payload & Inject to Context
       const decoded = JSON.parse(fromBase64Url(payload!));
       ctx.set('user', decoded);
 
+      // ⚡️ คืนค่า Logic เดิมของคุณ เพื่อรองรับ Router Group (Array)
       if (Array.isArray(next)) {
         if (next.length === 0) return;
         const [current, ...rest] = next;
@@ -107,11 +102,12 @@ export const bareAuth = (secret: string) => {
       if (typeof next === 'function') {
         return next();
       }
+      
       return;
 
     } catch (e) {
       console.error("[Auth] Error:", e);
-      return ctx.status(401).json({ message: 'Token verification failed' });
+      return ctx.status(401).send("Token verification failed");
     }
   };
 };

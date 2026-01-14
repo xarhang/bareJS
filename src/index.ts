@@ -49,7 +49,7 @@ export {
 };
 
 // --- 5. Middlewares & Utilities ---
-export { logger } from './utils/logger';
+// export { logger } from './utils/logger';
 export { cors } from './security/cors';
 export { staticFile } from './utils/static';
 export { BareRouter } from './core/router';

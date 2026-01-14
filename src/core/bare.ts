@@ -14,11 +14,15 @@ export interface NotFoundResponse {
 export class BareJS extends BareRouter {
   private tree = new RadixNode();
   private pool: Context[] = [];
-  private poolIdx = 0;
+  // private poolIdx = 0;
   private hotFetch?: (req: Request) => any;
   private compiled = false;
   private poolMask: number;
-
+  private _useLog: boolean = false;
+  public useLog(enabled: boolean = true): this {
+    this._useLog = enabled;
+    return this;
+  }
   constructor(poolSize: number = 1024) {
     super();
     bootstrapConfig();
@@ -61,34 +65,41 @@ export class BareJS extends BareRouter {
 
     // Inline Finalizer
     const finalizeCode = `
-      if (res instanceof Response) return res;
-      //  Smart Finalizer: Handle String vs Object vs Null
+      if (res instanceof Response) {
+        if (typeof doLog === 'function') doLog(res.status); 
+        return res;
+      }
+      
+      const finalStatus = ctx._status || 200;
+      if (typeof doLog === 'function') doLog(finalStatus);
+
       if (typeof res === 'string') {
          return new Response(res, {
-            status: ctx._status,
+            status: finalStatus,
             headers: ctx._headers || { "content-type": "text/plain" }
          });
       }
       
-      //  FASTEST PATH: 200 OK + No Custom Headers -> Use Cached Init
-      if (ctx._status === 200 && !ctx._headers) {
-         return Response.json(res ?? null, json200);
-      }
-
       return Response.json(res ?? null, {
-        status: ctx._status,
+        status: finalStatus,
         headers: ctx._headers && ctx._headers["content-type"] ? ctx._headers : { "content-type": "application/json" }
       });
     `;
 
     if (len === 1) {
-      // 🚀 Fast path: no middleware (just the handler)
+      // Fast path: no middleware (just the handler)
       const fn0 = pipeline[0];
-      return new Function('fn0', 'json200', `return function(ctx) {
+      return new Function('fn0', 'json200', `return function(ctx, doLog) {
         const res = fn0(ctx);
         if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
         ${finalizeCode}
       }`)(fn0, json200);
+
+      // return new Function('fn0', 'json200', `return function(ctx) {
+      //   const res = fn0(ctx);
+      //   if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
+      //   ${finalizeCode}
+      // }`)(fn0, json200);
     }
 
     // Check async
@@ -134,13 +145,16 @@ export class BareJS extends BareRouter {
 
     const noop = () => { };
 
-    const fnHeader = isAsync ? 'return async function(ctx)' : 'return function(ctx)';
-
+    // const fnHeader = isAsync ? 'return async function(ctx)' : 'return function(ctx)';
+    const fnHeader = pipeline.some(fn => fn.constructor.name === 'AsyncFunction')
+      ? 'return async function(ctx, doLog)' // ⚡️ รับ doLog เข้ามา
+      : 'return function(ctx, doLog)';
     // Construct Function: (...fns, noop, json200) -> return function(ctx) { ... }
     return new Function(...fnNames, 'noop', 'json200', `${fnHeader} { ${code} }`)(...pipeline, noop, json200);
   }
 
   public compile() {
+    const isLog = this._useLog;
     this.tree = new RadixNode();
     for (const route of this.routes) {
       this.tree.insert(route.path, route.method, this.compileHandler(route.handlers));
@@ -154,7 +168,7 @@ export class BareJS extends BareRouter {
     const hError = (err: any) => ({
       status: 500,
       message: err.message || "Internal Server Error",
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+      stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined
     });
 
     //  JIT Compiler: Create all Code instead of tree.lookup
@@ -166,7 +180,9 @@ export class BareJS extends BareRouter {
     };
 
     const routerCode = tree.jitCompile(register);
-
+// console.log("--- GENERATED JIT CODE ---");
+// console.log(routerCode); 
+// console.log("--------------------------");
     // Create seamless Fetcher (JIT Edition)
     // We send nodes into the closure so the code can use them
     const EMPTY_PARAMS = Object.freeze({});
@@ -175,42 +191,58 @@ export class BareJS extends BareRouter {
     const args = ['pool', 'pIdx', 'mask', 'hNotFound', 'hError', 'EMPTY_PARAMS', ...hNames];
     const values = [pool, pIdx, mask, hNotFound, hError, EMPTY_PARAMS, ...hoistedHandlers];
 
-    const fnBody = `
-      return function(req) {
-        const url = req.url;
-        // Start searching after "http://" (7) or "https://" (8)
-        let s = url.indexOf('/', 8);
 
-        // Handle root path or missing slash
-        if (s === -1) {
-            s = url.length;
-        } else if (url.charCodeAt(s) === 47) {
-            // Skip the leading slash to match split() behavior (['users'] not ['/users'])
-            s++;
-        }
+    // ส่วนใน compile() method (หาบรรทัดที่สร้าง fnBody)
 
-        const method = req.method;
-        const ctx = pool[(++pIdx) & mask];
-        try {
-        //  INLINED Context.reset() for max speed (No function call overhead)
-        ctx.req = req;
-        ctx._status = 200;
-        ctx._headers = undefined;
-        if (ctx.store.size > 0) ctx.store.clear();
-        ctx.params = EMPTY_PARAMS;
-        ctx.body = undefined;
+const fnBody = `
+  return function(req) {
+    const start = performance.now();
+    const url = req.url + " "; 
+    const urlLen = req.url.length; // ✅ ความยาวจริงของ URL
+    
+    let s = url.indexOf('/', 8);
+    if (s !== -1) s++; 
+    else s = urlLen; // ✅ เปลี่ยนจาก url.length เป็น urlLen
 
-        //  JIT Generated Code Start
-        ${routerCode}
-        //  JIT Generated Code End
-        const errorBody = hNotFound();
-        return Response.json(errorBody, { status: errorBody.status || 404 });
-        } catch (e) {
-          const errorBody = hError(e);
-          return Response.json(errorBody, { status: errorBody.status || 500 });
-        }
-      }
-    `;
+    const method = req.method;
+    const ctx = pool[(++pIdx) & mask];
+
+    const doLog = (status) => {
+      if (!${isLog}) return;
+      const duration = (performance.now() - start).toFixed(3);
+      console.log(
+        \` \\x1b[90m\${new Date().toLocaleTimeString()}\\x1b[0m \` +
+        \`\\x1b[1m\\x1b[38;5;117m\${method.padEnd(7)}\\x1b[0m \` +
+        \`\\x1b[38;5;250m\${req.url.substring(req.url.indexOf('/', 8))}\\x1b[0m \` +
+        \`\${status >= 400 ? '\\x1b[33m' : '\\x1b[32m'}\${status}\\x1b[0m \` +
+        \`\\x1b[90m(\${duration}ms)\\x1b[0m\`
+      );
+    };
+
+    try {
+      ctx.req = req;
+      ctx._status = 200;
+      ctx._headers = undefined;
+      if (ctx.store.size > 0) ctx.store.clear();
+      ctx.params = EMPTY_PARAMS;
+      ctx.body = undefined;
+
+      // ⚡️ รัน JIT Code (ต้อง replace url.length เป็น urlLen)
+      ${routerCode
+        .replace(/h(\d+)\(ctx\)/g, 'h$1(ctx, doLog)')
+        .replace(/url\.length/g, 'urlLen')} 
+
+      const errorBody = hNotFound();
+      const status = errorBody.status || 404;
+      doLog(status);
+      return Response.json(errorBody, { status });
+
+    } catch (e) {
+      doLog(500);
+      return Response.json(hError(e), { status: 500 });
+    }
+  }
+`;
 
     this.hotFetch = new Function(...args, fnBody)(...values);
     this.compiled = true;
@@ -229,16 +261,16 @@ export class BareJS extends BareRouter {
 
   public listen(port?: number, hostname: string = '0.0.0.0', reusePort: boolean = true) {
     if (!this.compiled) this.compile();
-    
+
     // ดึงค่า Config ล่าสุดมาใช้
     const { BARE_CONFIG } = require("./config");
-    
+
     // ลำดับความสำคัญ: Parameter > Config File > Default (3000)
     const finalPort = port || BARE_CONFIG.port || 3000;
     const isProd = process.env.NODE_ENV === 'production';
 
-if (!isProd) {
-  console.log(`
+    if (!isProd) {
+      console.log(`
   \x1b[33m  ____                    _ _____ \x1b[0m
   \x1b[33m | __ )  __ _ _ __ ___     | | ____|\x1b[0m
   \x1b[33m |  _ \\ / _\` | '__/ _ \\ _  | |  _|  \x1b[0m

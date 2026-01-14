@@ -32,7 +32,8 @@ export const typebox = (schema: any): Middleware => {
 
   return async (ctx: Context, next?: Next) => {
     try {
-      const body = await ctx.req.json();
+      // const body = await ctx.req.json();
+      const body = await ctx.jsonBody();
       
       if (!check.Check(body)) {
         const error = check.Errors(body).First();

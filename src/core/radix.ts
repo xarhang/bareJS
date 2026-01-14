@@ -87,9 +87,8 @@ export class RadixNode {
     const indent = '  '.repeat(level);
 
     // ⚡ [CORE] Handler Matcher: ส่วนนี้จะเช็คว่า path สิ้นสุดที่ Node นี้หรือไม่
-    // ครอบคลุมทั้ง Root (/) และตอนที่ recursive ลงมาจนจบ segment สุดท้าย
     if (Object.keys(this.handlers).length > 0) {
-      code += `${indent}if (${idxPrefix} >= ${pathPrefix}.length) {\n`;
+      code += `${indent}if (${idxPrefix} >= urlLen) {\n`;
       
       // ฉีด Params เข้า Context เมื่อยืนยันว่า Match แล้ว
       if (paramAccumulator.length > 0) {
@@ -117,20 +116,19 @@ export class RadixNode {
         code += `${indent}  if (isNaN(nextChar) || nextChar === 47) {\n`;
 
         const child = this.children[key]!;
-        const newIdxVar = `newIdxL${level}`; // ป้องกันชื่อตัวแปรซ้ำใน nested level
+        const newIdxVar = `newIdxL${level}`;
         code += `${indent}    const ${newIdxVar} = isNaN(nextChar) ? ${pathPrefix}.length : (${idxPrefix} + ${kLen} + 1);\n`;
 
-        // Recursive call ลงไปยังลูก
         code += child.jitCompile(register, level + 1, pathPrefix, newIdxVar, paramAccumulator);
 
         code += `${indent}  }\n`;
         code += `${indent}}\n`;
 
       } else {
-        // Multi-Path Branching: กรณีมีหลาย Static Path ในระดับเดียวกัน
+        // 🔥 แก้ไขตรงนี้: ใส่วงเล็บครอบ idxPrefix เพื่อให้คำนวณถูกต้อง
         code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
         code += `${indent}if (slash${level} === -1) slash${level} = ${pathPrefix}.length;\n`;
-        code += `${indent}const len${level} = slash${level} - ${idxPrefix};\n\n`;
+        code += `${indent}const len${level} = slash${level} - (${idxPrefix});\n\n`; // ✅ ใส่วงเล็บ
 
         code += `${indent}switch(len${level}) {\n`;
         for (const key of this.staticKeys) {
@@ -154,7 +152,6 @@ export class RadixNode {
     // 2. Param Node Logic (Fallback)
     if (this.paramNode) {
       const pNode = this.paramNode;
-      // ถ้าไม่มี static keys ในระดับนี้ ต้องหาตำแหน่ง slash เอง
       if (this.staticKeys.length === 0) {
         code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
         code += `${indent}if (slash${level} === -1) slash${level} = ${pathPrefix}.length;\n`;
@@ -164,8 +161,6 @@ export class RadixNode {
       code += `${indent}const ${pVar} = ${pathPrefix}.slice(${idxPrefix}, slash${level});\n`;
 
       const newAccumulator = [...paramAccumulator, { name: this.paramName!, varName: pVar }];
-      
-      // Recursive call ลงไปยังลูกของ Param Node
       code += pNode.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, newAccumulator);
     }
 

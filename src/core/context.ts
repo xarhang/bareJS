@@ -11,8 +11,8 @@ export class Context {
   public _status = 200;
   public _headers?: Record<string, string> | undefined = undefined;
   public store = new Map<string, any>();
-  public body: any = undefined; 
-
+  public body: any = undefined;
+  public query: Record<string, string> = {}; 
   constructor() { }
 
 
@@ -24,7 +24,7 @@ export class Context {
     const contentType = this.req.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       try {
-        
+
         return this.body = await this.req.json();
       } catch {
         return this.body = null;
@@ -40,7 +40,8 @@ export class Context {
     this._headers = undefined;
     if (this.store.size > 0) this.store.clear();
     this.params = {};
-    this.body = undefined; 
+    this.query = {};
+    this.body = undefined;
     return this;
   }
 
@@ -49,20 +50,38 @@ export class Context {
     return this;
   }
 
+  // public json(data: any): Response {
+  //   if (this._headers !== undefined) {
+  //     if (this._headers["content-type"] === undefined) {
+  //       this._headers["content-type"] = "application/json";
+  //     }
+  //     return Response.json(data, {
+  //       status: this._status,
+  //       headers: this._headers
+  //     });
+  //   }
+  //   if (this._status === 200) {
+  //     return Response.json(data);
+  //   }
+  //   return Response.json(data, { status: this._status });
+  // }
   public json(data: any): Response {
-    if (this._headers !== undefined) {
-      if (this._headers["content-type"] === undefined) {
-        this._headers["content-type"] = "application/json";
-      }
-      return Response.json(data, {
-        status: this._status,
-        headers: this._headers
-      });
+    const status = this._status || 200;
+
+    // No custom headers
+    if (!this._headers) {
+      return Response.json(data, { status });
     }
-    if (this._status === 200) {
-      return Response.json(data);
+
+    // Ensure Content-Type is set to application/json
+    if (this._headers["content-type"] === undefined) {
+      this._headers["content-type"] = "application/json";
     }
-    return Response.json(data, { status: this._status });
+
+    return Response.json(data, {
+      status,
+      headers: this._headers as any // ⚠️ FIX TS18046: Cast to 'any' to allow assignment to 'unknown' headers
+    });
   }
 
   public set(key: string, value: any): this {
@@ -78,5 +97,16 @@ export class Context {
     if (!this._headers) this._headers = {};
     this._headers[name.toLowerCase()] = value;
     return this;
+  }
+  
+
+  public send(message: string, extra: Record<string, any> = {}): Response {
+    const isError = this._status >= 400;
+    
+    return this.json({
+      status: isError ? "error" : "success",
+      msg: message,
+      ...extra
+    });
   }
 }

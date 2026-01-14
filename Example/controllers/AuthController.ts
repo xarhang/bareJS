@@ -10,14 +10,17 @@ interface LoginBody {
 export class AuthController {
   static async login(ctx: Context) {
     try {
-      const body = await ctx.req.json() as LoginBody;
+      // const body = await ctx.jsonBody() as LoginBody;
+      const body = await ctx.jsonBody() as LoginBody | null;
 
-      // 1. Validation
+      // 1. Validation ด่านแรก (ใช้ ctx.fail)
+      if (!body) {
+        return ctx.status(400).send("Invalid or empty JSON body");
+      }
+
+      // 2. Validation ด่านสอง (ใช้ ctx.fail)
       if (!body.username || !body.password) {
-        return ctx.status(400).json({
-          status: 'error',
-          message: "Missing credentials"
-        });
+        return ctx.status(400).send("Missing username or password");
       }
 
       // 2. Auth Logic (Mock Admin)
@@ -33,10 +36,7 @@ export class AuthController {
 
         console.log(`[Auth] ✅ ${body.username} logged in at ${new Date().toISOString()}`);
 
-        return ctx.json({
-          status: 'success',
-          token
-        });
+        return ctx.send("Login successful", { token });
       }
 
       return ctx.status(401).json({

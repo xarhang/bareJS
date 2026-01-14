@@ -2,9 +2,8 @@ import { BareJS } from '../src/core/bare';
 import { AuthController } from './controllers/AuthController';
 import { bareAuth } from '../src/security/auth';
 import type { Context } from '../src/core/context';
-import { secrets } from 'bun';
 import { BareRouter } from '../src/core/router';
-import { logger } from '../src/utils/logger';
+// import { logger } from '../src/utils/logger';
 const app = new BareJS();
 const api = new BareRouter("/api");
 const secret = process.env.JWT_SECRET || "default_secret";
@@ -18,13 +17,14 @@ app.use(async (ctx: Context, next: any) => {
 });
 app.get("/bomb", (ctx: Context) => {
   //force error
-  return (this as any).doesNotExist(); 
+  return (this as any).doesNotExist();
 });
 api.group("/v1", (v1: any) => {
 
   // 🚪 Public Routes
   v1.group("/auth", (auth: any) => {
     auth.post("/login", AuthController.login);
+    auth.get("/me", AuthController.login);
   });
 
   // 🔒 Protected Routes
@@ -41,5 +41,6 @@ api.group("/v1", (v1: any) => {
 });
 
 app.use(api);
-app.use(logger)
+app.useLog(true); // Enable global logging
+console.table(api.routes.map(r => ({ Method: r.method, Path: r.path })));
 app.listen(3000);

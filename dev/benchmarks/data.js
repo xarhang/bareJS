@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768278785269,
+  "lastUpdate": 1768385455451,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -1872,6 +1872,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 9354.94933870693,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "committer": {
+            "email": "xarhang@STB.LA",
+            "name": "xarhang"
+          },
+          "distinct": true,
+          "id": "c70f735987a101aef015722b3655d1814844ac0a",
+          "message": "chore: release v0.1.46 - fix jit routing logic and off-by-one errors",
+          "timestamp": "2026-01-14T17:16:00+07:00",
+          "tree_id": "bd8029a7026b636a748fed06835b856f812bb225",
+          "url": "https://github.com/xarhang/bareJS/commit/c70f735987a101aef015722b3655d1814844ac0a"
+        },
+        "date": 1768385455139,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1729.5314738350046,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2085.321292644108,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 9069.780834147023,
             "unit": "undefined"
           }
         ]

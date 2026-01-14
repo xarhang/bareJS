@@ -189,9 +189,3 @@ app.use(staticFile("public"));
 ---
 
 **Maintained by [xarhang](https://github.com/xarhang) | License: MIT**
-
-1. อัปเดตไฟล์ `README.md` ด้วยเนื้อหาด้านบน
-2. `git commit -m "docs: complete readme update for v0.1.46"`
-3. `git push`
-
-**เมื่อคุณจัดการเรียบร้อยแล้ว เราจะลุย v0.1.47 (JIT Query Parser) ต่อกันเลยไหมครับ?** 🚀✨

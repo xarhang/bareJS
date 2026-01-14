@@ -5,27 +5,20 @@
 <p><i>An ultra-high-performance web engine built for Bun, architected strictly for Mechanical Sympathy.</i></p>
 
 <p>
-<a href="[https://www.npmjs.com/package/barejs](https://www.npmjs.com/package/barejs)">
-<img src="[https://img.shields.io/npm/v/barejs?style=for-the-badge&logo=npm&color=CB3837](https://img.shields.io/npm/v/barejs?style=for-the-badge&logo=npm&color=CB3837)" alt="NPM Version">
+<a href="https://www.npmjs.com/package/barejs">
+<img src="https://img.shields.io/npm/v/barejs?style=for-the-badge&logo=npm&color=CB3837" alt="NPM Version">
 </a>
-<a href="[https://github.com/xarhang/barejs/actions/workflows/bench.yml](https://github.com/xarhang/barejs/actions/workflows/bench.yml)">
-<img src="[https://img.shields.io/github/actions/workflow/status/xarhang/barejs/bench.yml?branch=main&label=Performance&style=for-the-badge&logo=github](https://img.shields.io/github/actions/workflow/status/xarhang/barejs/bench.yml?branch=main&label=Performance&style=for-the-badge&logo=github)" alt="Performance">
+<a href="https://github.com/xarhang/barejs/actions/workflows/bench.yml">
+<img src="https://img.shields.io/github/actions/workflow/status/xarhang/barejs/bench.yml?branch=main&label=Performance&style=for-the-badge&logo=github" alt="Performance">
 </a>
-<a href="[https://bun.sh](https://bun.sh)">
-<img src="[https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=for-the-badge&logo=bun](https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=for-the-badge&logo=bun)" alt="Bun Version">
+<a href="https://bun.sh">
+<img src="https://img.shields.io/badge/Bun-%3E%3D1.0.0-black?style=for-the-badge&logo=bun" alt="Bun Version">
 </a>
-<a href="[https://github.com/xarhang/barejs/blob/main/LICENSE](https://github.com/xarhang/barejs/blob/main/LICENSE)">
-<img src="[https://img.shields.io/github/license/xarhang/barejs?style=for-the-badge&color=blue](https://img.shields.io/github/license/xarhang/barejs?style=for-the-badge&color=blue)" alt="License">
+<a href="https://github.com/xarhang/barejs/blob/main/LICENSE">
+<img src="https://img.shields.io/github/license/xarhang/barejs?style=for-the-badge&color=blue" alt="License">
 </a>
 </p>
-
-<p align="center">
-<a href="#-benchmarks">Benchmarks</a> •
-<a href="#-features">Features</a> •
-<a href="#-quick-start">Quick Start</a> •
-<a href="#-configuration">Configuration</a> •
-<a href="#-architecture">Architecture</a>
-</p>
+</div>
 
 ---
 

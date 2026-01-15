@@ -15,17 +15,16 @@ export class BareRouter {
   ) { }
 
   private _add(method: string, path: string, handlers: HandlersChain) {
-    // ⚡️ แก้ไข: ไม่ต้องเติม / นำหน้า และกำจัด // ออกให้หมด
     let fullPath = (this.prefix + "/" + path)
-        .replace(/\/+/g, "/")    // ยุบ // ให้เหลือ /
-        // .replace(/^\//, "");     // 🚩 ลบ / ตัวหน้าสุดออก (เช่น /api -> api)
+        .replace(/\/+/g, "/")
 
-    // ลบ / ตัวท้ายออกถ้ามี
+
+
     if (fullPath.endsWith("/")) fullPath = fullPath.slice(0, -1);
 
     this.routes.push({
       method: method.toUpperCase(),
-      path: fullPath || "", // หน้าแรกจะเป็นค่าว่าง "" แทน "/"
+      path: fullPath || "", 
       handlers: [...this.groupMiddleware, ...handlers]
     });
     return this;
@@ -41,7 +40,7 @@ export class BareRouter {
     const callback = args.pop();
     const middleware = args;
 
-    // ส่ง prefix ต่อไปโดยคงรูปแบบเดิม
+
     const newPrefix = (this.prefix + "/" + path).replace(/\/+/g, "/");
     const subRouter = new BareRouter(newPrefix, [...this.groupMiddleware, ...middleware]);
 
@@ -52,7 +51,6 @@ export class BareRouter {
 
   public use(mw: any) {
     if (mw instanceof BareRouter || (mw && mw.routes)) {
-      // ดึงมาตรงๆ ไม่ต้องบวก prefix ซ้ำ เพราะใน subRouter มันคำนวณมาแล้ว
       this.routes.push(...mw.routes);
     } else {
       this.groupMiddleware.push(mw);

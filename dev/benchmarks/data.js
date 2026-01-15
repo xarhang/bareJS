@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768481603969,
+  "lastUpdate": 1768481651650,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2143,6 +2143,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 9704.745057803468,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e6f2ee7f74eaf72a8325f082ef885121dcb89b93",
+          "message": "Update router.ts",
+          "timestamp": "2026-01-15T19:53:51+07:00",
+          "tree_id": "38dc465e0995237046be1a186b61041ecfb0b775",
+          "url": "https://github.com/xarhang/bareJS/commit/e6f2ee7f74eaf72a8325f082ef885121dcb89b93"
+        },
+        "date": 1768481651047,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1806.7231337643798,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2425.8733364173368,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 9789.755866084424,
             "unit": "undefined"
           }
         ]

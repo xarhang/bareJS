@@ -192,7 +192,7 @@ export class BareJS extends BareRouter {
     const values = [pool, pIdx, mask, hNotFound, hError, EMPTY_PARAMS, ...hoistedHandlers];
 
 
-    // ส่วนใน compile() method (หาบรรทัดที่สร้าง fnBody)
+
 
 const fnBody = `
   return function(req) {
@@ -227,7 +227,6 @@ const fnBody = `
       ctx.params = EMPTY_PARAMS;
       ctx.body = undefined;
 
-      // ⚡️ รัน JIT Code (ต้อง replace url.length เป็น urlLen)
       ${routerCode
         .replace(/h(\d+)\(ctx\)/g, 'h$1(ctx, doLog)')
         .replace(/url\.length/g, 'urlLen')} 
@@ -262,10 +261,10 @@ const fnBody = `
   public listen(port?: number, hostname: string = '0.0.0.0', reusePort: boolean = true) {
     if (!this.compiled) this.compile();
 
-    // ดึงค่า Config ล่าสุดมาใช้
+
     const { BARE_CONFIG } = require("./config");
 
-    // ลำดับความสำคัญ: Parameter > Config File > Default (3000)
+ 
     const finalPort = port || BARE_CONFIG.port || 3000;
     const isProd = process.env.NODE_ENV === 'production';
 

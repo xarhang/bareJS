@@ -86,11 +86,11 @@ export class RadixNode {
     let code = '';
     const indent = '  '.repeat(level);
 
-    // ⚡ [CORE] Handler Matcher: ส่วนนี้จะเช็คว่า path สิ้นสุดที่ Node นี้หรือไม่
+
     if (Object.keys(this.handlers).length > 0) {
       code += `${indent}if (${idxPrefix} >= urlLen) {\n`;
       
-      // ฉีด Params เข้า Context เมื่อยืนยันว่า Match แล้ว
+
       if (paramAccumulator.length > 0) {
         const props = paramAccumulator.map((p: any) => `"${p.name}": ${p.varName}`).join(', ');
         code += `${indent}  ctx.params = { ${props} };\n`;
@@ -125,10 +125,10 @@ export class RadixNode {
         code += `${indent}}\n`;
 
       } else {
-        // 🔥 แก้ไขตรงนี้: ใส่วงเล็บครอบ idxPrefix เพื่อให้คำนวณถูกต้อง
+  
         code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
         code += `${indent}if (slash${level} === -1) slash${level} = ${pathPrefix}.length;\n`;
-        code += `${indent}const len${level} = slash${level} - (${idxPrefix});\n\n`; // ✅ ใส่วงเล็บ
+        code += `${indent}const len${level} = slash${level} - (${idxPrefix});\n\n`; 
 
         code += `${indent}switch(len${level}) {\n`;
         for (const key of this.staticKeys) {

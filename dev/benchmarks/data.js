@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768481553088,
+  "lastUpdate": 1768481603969,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2104,6 +2104,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 9488.181454168347,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e9ab2eec0f7cbb1445977f4737b984f15a8c760d",
+          "message": "Update radix.ts",
+          "timestamp": "2026-01-15T19:53:02+07:00",
+          "tree_id": "9858a7502135ee164c2e71f6e5ec5e458cc6df0e",
+          "url": "https://github.com/xarhang/bareJS/commit/e9ab2eec0f7cbb1445977f4737b984f15a8c760d"
+        },
+        "date": 1768481603378,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1693.2340607757556,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2175.0539633987382,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 9704.745057803468,
             "unit": "undefined"
           }
         ]

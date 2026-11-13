@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768481651650,
+  "lastUpdate": 1794553444376,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2182,6 +2182,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 9789.755866084424,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "1e81fcfbea09f6e53f5b68d9cfb688df0019dbbe",
+          "message": "fix(security,perf): harden auth/static/JIT/pool and optimize hot path",
+          "timestamp": "2026-11-13T07:03:43Z",
+          "tree_id": "d4ffa2e08ce75fc05594c099a92dd60b836e9316",
+          "url": "https://github.com/xarhang/bareJS/commit/1e81fcfbea09f6e53f5b68d9cfb688df0019dbbe"
+        },
+        "date": 1794553444136,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1450.6572864870773,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1943.9766753158844,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5617.130857648099,
             "unit": "undefined"
           }
         ]

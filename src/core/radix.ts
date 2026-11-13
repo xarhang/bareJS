@@ -92,14 +92,14 @@ export class RadixNode {
       
 
       if (paramAccumulator.length > 0) {
-        const props = paramAccumulator.map((p: any) => `"${p.name}": ${p.varName}`).join(', ');
+        const props = paramAccumulator.map((p: any) => `${JSON.stringify(p.name)}: ${p.varName}`).join(', ');
         code += `${indent}  ctx.params = { ${props} };\n`;
       }
 
       code += `${indent}  switch(method) {\n`;
       for (const [m, h] of Object.entries(this.handlers)) {
         const hName = register(h as Function);
-        code += `${indent}    case "${m}": return ${hName}(ctx);\n`;
+        code += `${indent}    case ${JSON.stringify(m)}: return ${hName}(ctx);\n`;
       }
       code += `${indent}  }\n`;
       code += `${indent}}\n`;
@@ -110,14 +110,15 @@ export class RadixNode {
       if (this.staticKeys.length === 1) {
         const key = this.staticKeys[0]!;
         const kLen = key.length;
+        const nextIdxVar = `nextIdxL${level}`;
 
-        code += `${indent}if (${pathPrefix}.startsWith("${key}", ${idxPrefix})) {\n`;
-        code += `${indent}  const nextChar = ${pathPrefix}.charCodeAt(${idxPrefix} + ${kLen});\n`;
-        code += `${indent}  if (isNaN(nextChar) || nextChar === 47) {\n`;
+        code += `${indent}if (${pathPrefix}.startsWith(${JSON.stringify(key)}, ${idxPrefix})) {\n`;
+        code += `${indent}  const ${nextIdxVar} = ${idxPrefix} + ${kLen};\n`;
+        code += `${indent}  if (${nextIdxVar} === urlLen || ${pathPrefix}.charCodeAt(${nextIdxVar}) === 47) {\n`;
 
         const child = this.children[key]!;
         const newIdxVar = `newIdxL${level}`;
-        code += `${indent}    const ${newIdxVar} = isNaN(nextChar) ? ${pathPrefix}.length : (${idxPrefix} + ${kLen} + 1);\n`;
+        code += `${indent}    const ${newIdxVar} = ${nextIdxVar} === urlLen ? urlLen : (${nextIdxVar} + 1);\n`;
 
         code += child.jitCompile(register, level + 1, pathPrefix, newIdxVar, paramAccumulator);
 
@@ -127,22 +128,34 @@ export class RadixNode {
       } else {
   
         code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
-        code += `${indent}if (slash${level} === -1) slash${level} = ${pathPrefix}.length;\n`;
+        code += `${indent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
         code += `${indent}const len${level} = slash${level} - (${idxPrefix});\n\n`; 
 
-        code += `${indent}switch(len${level}) {\n`;
+        const byLen = new Map<number, string[]>();
         for (const key of this.staticKeys) {
-          code += `${indent}  case ${key.length}: // "${key}"\n`;
-          if (key.length === 1) {
-            code += `${indent}    if (${pathPrefix}.charCodeAt(${idxPrefix}) === ${key.charCodeAt(0)}) {\n`;
-          } else {
-            code += `${indent}    if (${pathPrefix}.startsWith("${key}", ${idxPrefix})) {\n`;
+          let list = byLen.get(key.length);
+          if (!list) {
+            list = [];
+            byLen.set(key.length, list);
           }
+          list.push(key);
+        }
 
-          const child = this.children[key]!;
-          code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramAccumulator);
+        code += `${indent}switch(len${level}) {\n`;
+        for (const [kLen, keysForLen] of byLen) {
+          code += `${indent}  case ${kLen}:\n`;
+          for (const key of keysForLen) {
+            if (kLen === 1) {
+              code += `${indent}    if (${pathPrefix}.charCodeAt(${idxPrefix}) === ${key.charCodeAt(0)}) {\n`;
+            } else {
+              code += `${indent}    if (${pathPrefix}.startsWith(${JSON.stringify(key)}, ${idxPrefix})) {\n`;
+            }
 
-          code += `${indent}    }\n`;
+            const child = this.children[key]!;
+            code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramAccumulator);
+
+            code += `${indent}    }\n`;
+          }
           code += `${indent}    break;\n`;
         }
         code += `${indent}}\n`;
@@ -154,7 +167,7 @@ export class RadixNode {
       const pNode = this.paramNode;
       if (this.staticKeys.length === 0) {
         code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
-        code += `${indent}if (slash${level} === -1) slash${level} = ${pathPrefix}.length;\n`;
+        code += `${indent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
       }
 
       const pVar = `pL${level}`;

@@ -10,11 +10,14 @@ export const Hash = {
 
   needsRehash: (hash: string): boolean => {
     const { algorithm, memoryCost, timeCost } = BARE_CONFIG.hash;
+    if (algorithm === 'bcrypt') {
+      if (!/^\$2[aby]\$/.test(hash)) return true;
+      const costMatch = hash.match(/^\$2[aby]\$(\d+)\$/);
+      return !costMatch || Number(costMatch[1]) !== timeCost;
+    }
     if (!hash.startsWith(`$${algorithm}$`)) return true;
-    
-    return !(
-      hash.includes(`m=${memoryCost}`) && 
-      hash.includes(`t=${timeCost}`)
-    );
+    const mMatch = hash.match(/(?:^|[,$])m=(\d+)(?:[,$]|$)/);
+    const tMatch = hash.match(/(?:^|[,$])t=(\d+)(?:[,$]|$)/);
+    return !mMatch || Number(mMatch[1]) !== memoryCost || !tMatch || Number(tMatch[1]) !== timeCost;
   }
 };

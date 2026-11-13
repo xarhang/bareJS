@@ -65,12 +65,15 @@ export const native = (schema: any): Middleware => {
   return async (ctx: any, next?: any) => {
     try {
       const isCtx = ctx instanceof Object && 'req' in ctx;
-      const req = isCtx ? ctx.req : ctx;
+      const body = isCtx ? await ctx.jsonBody() : await ctx.json();
 
-      const body = await req.json() as any;
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return errorJSON({ status: 'error', message: 'Invalid JSON object payload' });
+      }
+
       for (let i = 0; i < kLen; i++) {
         const k = keys[i]!;
-        if (typeof body[k] !== props[k]?.type) {
+        if (!Object.hasOwn(body, k) || typeof body[k] !== props[k]?.type) {
           return errorJSON({
             status: 'error',
             code: 'TYPE_MISMATCH',
@@ -80,7 +83,6 @@ export const native = (schema: any): Middleware => {
         }
       }
 
-      // ✅ FIX TS18046: Ensure body assignment is allowed
       if (isCtx) (ctx as any).body = body;
 
       return next ? next() : undefined;
@@ -97,11 +99,10 @@ export const zod = (schema: z.ZodSchema): Middleware => {
   return async (ctx: any, next?: any) => {
     try {
       const isCtx = ctx instanceof Object && 'req' in ctx;
-      const req = isCtx ? ctx.req : ctx;
+      const body = isCtx ? await ctx.jsonBody() : await ctx.json();
 
-      const body = await req.json();
       const result = await schema.safeParseAsync(body);
-      
+
       if (!result.success) {
         return errorJSON({
           status: 'error',
@@ -110,9 +111,8 @@ export const zod = (schema: z.ZodSchema): Middleware => {
         });
       }
 
-      // ✅ FIX TS18046: Line 68/74 area fix
       if (isCtx) (ctx as any).body = result.data;
-      
+
       return next ? next() : undefined;
     } catch {
       return errorJSON({ status: 'error', message: 'Invalid JSON payload' });

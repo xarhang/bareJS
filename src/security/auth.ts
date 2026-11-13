@@ -1,27 +1,24 @@
-import type { AuthUser, Next } from '../core/context';
-// import { timingSafeEqual } from 'node:crypto';
+import type { Next } from '../core/context';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * UTILS: Internal Crypto Helpers using Native Web Crypto
- * Optimized for Bun performance and type safety.
+ * UTILS: Internal Crypto Helpers using Native Web Crypto & Node Crypto
+ * Optimized for Bun performance and constant-time security.
  */
 const encoder = new TextEncoder();
 
-// ⚡ Base64Url Helpers (RFC 4648)
+// Base64Url Helpers (RFC 4648) using native C++ Buffer encoding
 const base64Url = (input: Uint8Array | string): string => {
-  let base64 = typeof input === 'string'
-    ? Buffer.from(input).toString('base64')
-    : Buffer.from(input).toString('base64');
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return typeof input === 'string'
+    ? Buffer.from(input).toString('base64url')
+    : Buffer.from(input).toString('base64url');
 };
 
 const fromBase64Url = (str: string): string => {
-  str = str.replace(/-/g, '+').replace(/_/g, '/');
-  while (str.length % 4) str += '=';
-  return Buffer.from(str, 'base64').toString();
+  return Buffer.from(str, 'base64url').toString('utf-8');
 };
 
-// ⚡ PERF: Cache CryptoKeys to avoid repeated async importKey calls
+// PERF: Cache CryptoKeys to avoid repeated async importKey calls for createToken
 const keyCache = new Map<string, CryptoKey>();
 
 const importKey = async (secret: string): Promise<CryptoKey> => {
@@ -59,40 +56,52 @@ export const createToken = async (payload: object, secret: string): Promise<stri
 
 /**
  * 1. BARE TOKEN AUTH (Standard JWT Middleware)
- * High-performance JWT alternative for BareJS
+ * High-performance, constant-time JWT middleware for BareJS
  */
 export const bareAuth = (secret: string) => {
-  return async (ctx: any, next: any) => {
+  return (ctx: any, next: any) => {
     const authHeader = ctx.req.headers.get('Authorization');
-    
+
     if (!authHeader?.startsWith('Bearer ')) {
       return ctx.status(401).send("Bearer token required");
     }
 
     const token = authHeader.slice(7);
-    const parts = token.split('.');
-
-    if (parts.length !== 3) {
+    const firstDot = token.indexOf('.');
+    const secondDot = firstDot === -1 ? -1 : token.indexOf('.', firstDot + 1);
+    if (firstDot === -1 || secondDot === -1 || token.indexOf('.', secondDot + 1) !== -1) {
       return ctx.status(401).send("Malformed JWT token");
     }
 
-    const [header, payload, signature] = parts;
-    const data = `${header}.${payload}`;
+    const headerB64 = token.slice(0, firstDot);
+    const payloadB64 = token.slice(firstDot + 1, secondDot);
+    const sigB64 = token.slice(secondDot + 1);
+    const data = token.slice(0, secondDot);
 
     try {
-      const key = await importKey(secret);
-      const expectedSig = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
-      const validSig = base64Url(new Uint8Array(expectedSig));
+      const expectedSig = createHmac('sha256', secret).update(data).digest();
+      const actualSig = Buffer.from(sigB64, 'base64url');
 
-      if (signature !== validSig) {
+      if (actualSig.length !== expectedSig.length || !timingSafeEqual(actualSig, expectedSig)) {
         return ctx.status(401).send("Invalid signature");
       }
 
-      // Decode Payload & Inject to Context
-      const decoded = JSON.parse(fromBase64Url(payload!));
+      const headerObj = JSON.parse(fromBase64Url(headerB64));
+      if (!headerObj || headerObj.alg !== 'HS256') {
+        return ctx.status(401).send("Unsupported token algorithm");
+      }
+
+      const decoded = JSON.parse(fromBase64Url(payloadB64));
+      const nowSec = Date.now() * 0.001;
+      if (typeof decoded.exp === 'number' && nowSec >= decoded.exp) {
+        return ctx.status(401).send("Token expired");
+      }
+      if (typeof decoded.nbf === 'number' && nowSec < decoded.nbf) {
+        return ctx.status(401).send("Token not active");
+      }
+
       ctx.set('user', decoded);
 
-      // ⚡️ คืนค่า Logic เดิมของคุณ เพื่อรองรับ Router Group (Array)
       if (Array.isArray(next)) {
         if (next.length === 0) return;
         const [current, ...rest] = next;
@@ -102,34 +111,46 @@ export const bareAuth = (secret: string) => {
       if (typeof next === 'function') {
         return next();
       }
-      
-      return;
 
-    } catch (e) {
-      console.error("[Auth] Error:", e);
+      return;
+    } catch {
       return ctx.status(401).send("Token verification failed");
     }
   };
 };
+
+const sha256 = (value: string): Buffer => createHash('sha256').update(value).digest();
 
 /**
  * 2. BASIC AUTH
  * Useful for internal tools and simple admin panels
  */
 export const basicAuth = (credentials: { user: string; pass: string }) => {
+  const expectedUserHash = sha256(credentials.user);
+  const expectedPassHash = sha256(credentials.pass);
+
   return async (ctx: any, next: Next) => {
     const authHeader = ctx.req.headers.get('Authorization');
     if (!authHeader?.startsWith('Basic ')) {
       return ctx.status(401).json({ status: 'error', message: 'Basic Auth required' });
     }
 
-    const token = authHeader.split(' ')[1];
+    const token = authHeader.slice(6).trim();
     if (!token) return ctx.status(401).json({ status: 'error', message: 'Missing credentials' });
 
-    const decoded = Buffer.from(token, 'base64').toString();
-    const [user, pass] = decoded.split(':');
+    const decoded = Buffer.from(token, 'base64').toString('utf-8');
+    const colonIdx = decoded.indexOf(':');
+    if (colonIdx === -1) {
+      return ctx.status(401).json({ status: 'error', message: 'Invalid credentials' });
+    }
 
-    if (user === credentials.user && pass === credentials.pass) {
+    const user = decoded.slice(0, colonIdx);
+    const pass = decoded.slice(colonIdx + 1);
+
+    const userMatch = timingSafeEqual(sha256(user), expectedUserHash);
+    const passMatch = timingSafeEqual(sha256(pass), expectedPassHash);
+
+    if (userMatch && passMatch) {
       return next();
     }
 

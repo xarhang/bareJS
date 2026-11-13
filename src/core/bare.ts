@@ -56,122 +56,109 @@ export class BareJS extends BareRouter {
 
   // inherited use() from BareRouter handles router merging now
 
-  private compileHandler(pipeline: any[]): Function {
-    const mws = pipeline;
+  private compileHandler(pipeline: any[], isLog: boolean): Function {
     const len = pipeline.length;
 
-    //  Static ResponseInit for 200 OK (Zero Allocation)
+    // Static ResponseInit for 200 OK (Zero Allocation)
     const json200 = { status: 200, headers: { "content-type": "application/json" } };
+    const text200 = { status: 200, headers: { "content-type": "text/plain" } };
+
+    const logResCode = isLog ? 'doLog(res.status);' : '';
+    const logStatusCode = isLog ? 'doLog(finalStatus);' : '';
 
     // Inline Finalizer
     const finalizeCode = `
       if (res instanceof Response) {
-        if (typeof doLog === 'function') doLog(res.status); 
+        ${logResCode}
         return res;
       }
       
       const finalStatus = ctx._status || 200;
-      if (typeof doLog === 'function') doLog(finalStatus);
+      ${logStatusCode}
 
       if (typeof res === 'string') {
-         return new Response(res, {
-            status: finalStatus,
-            headers: ctx._headers || { "content-type": "text/plain" }
-         });
+        if (finalStatus === 200 && !ctx._headers) return new Response(res, text200);
+        return new Response(res, {
+          status: finalStatus,
+          headers: ctx._headers || text200.headers
+        });
       }
       
+      if (finalStatus === 200 && !ctx._headers) return Response.json(res ?? null, json200);
       return Response.json(res ?? null, {
         status: finalStatus,
-        headers: ctx._headers && ctx._headers["content-type"] ? ctx._headers : { "content-type": "application/json" }
+        headers: ctx._headers && ctx._headers["content-type"] ? ctx._headers : json200.headers
       });
     `;
 
+    const argSig = isLog ? 'ctx, doLog' : 'ctx';
+
     if (len === 1) {
-      // Fast path: no middleware (just the handler)
       const fn0 = pipeline[0];
-      return new Function('fn0', 'json200', `return function(ctx, doLog) {
+      return new Function('fn0', 'json200', 'text200', `return function(${argSig}) {
         const res = fn0(ctx);
         if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
         ${finalizeCode}
-      }`)(fn0, json200);
-
-      // return new Function('fn0', 'json200', `return function(ctx) {
-      //   const res = fn0(ctx);
-      //   if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
-      //   ${finalizeCode}
-      // }`)(fn0, json200);
+      }`)(fn0, json200, text200);
     }
 
     // Check async
     const isAsync = pipeline.some(fn => fn.constructor.name === 'AsyncFunction');
     let code = '';
 
-    //  Middleware Hoisting: Pass functions as arguments to avoid array lookup
+    // Middleware Hoisting: Pass functions as arguments to avoid array lookup
     const fnNames = pipeline.map((_, i) => `fn${i}`);
 
     if (isAsync) {
-      // ASYNC MODE
       for (let i = 0; i < len - 1; i++) {
-        //  Smart Await: Optimistically assume sync execution
         code += `let r${i} = fn${i}(ctx, noop);\n`;
         code += `if (r${i}) {\n`;
         code += `  if (r${i}.then) r${i} = await r${i};\n`;
-        code += `  if (r${i} instanceof Response) return r${i};\n`;
+        code += `  if (r${i} instanceof Response) { ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
         code += `}\n`;
       }
+      code += `
+        let res = fn${len - 1}(ctx);
+        if (res && res.then) res = await res;
+        ${finalizeCode}
+      `;
     } else {
-      // SYNC MODE
       for (let i = 0; i < len - 1; i++) {
         code += `const r${i} = fn${i}(ctx, noop);\n`;
-        //  Optim: Truthy check first
-        code += `if (r${i} && r${i} instanceof Response) return r${i};\n`;
+        code += `if (r${i} && r${i} instanceof Response) { ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
       }
-    }
-
-    // Final handler
-    if (isAsync) {
       code += `
-         let res = fn${len - 1}(ctx);
-         if (res && res.then) res = await res;
-         ${finalizeCode}
-       `;
-    } else {
-      code += `
-         const res = fn${len - 1}(ctx);
-         if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
-         ${finalizeCode}
-       `;
+        const res = fn${len - 1}(ctx);
+        if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
+        ${finalizeCode}
+      `;
     }
 
     const noop = () => { };
+    const fnHeader = isAsync
+      ? `return async function(${argSig})`
+      : `return function(${argSig})`;
 
-    // const fnHeader = isAsync ? 'return async function(ctx)' : 'return function(ctx)';
-    const fnHeader = pipeline.some(fn => fn.constructor.name === 'AsyncFunction')
-      ? 'return async function(ctx, doLog)' // ⚡️ รับ doLog เข้ามา
-      : 'return function(ctx, doLog)';
-    // Construct Function: (...fns, noop, json200) -> return function(ctx) { ... }
-    return new Function(...fnNames, 'noop', 'json200', `${fnHeader} { ${code} }`)(...pipeline, noop, json200);
+    return new Function(...fnNames, 'noop', 'json200', 'text200', `${fnHeader} { ${code} }`)(...pipeline, noop, json200, text200);
   }
 
   public compile() {
     const isLog = this._useLog;
     this.tree = new RadixNode();
     for (const route of this.routes) {
-      this.tree.insert(route.path, route.method, this.compileHandler(route.handlers));
+      this.tree.insert(route.path, route.method, this.compileHandler(route.handlers, isLog));
     }
 
     const tree = this.tree;
     const pool = this.pool;
-    const mask = this.poolMask;
-    let pIdx = 0;
+    const maxPool = pool.length;
     const hNotFound = this.notFoundHandler;
     const hError = (err: any) => ({
       status: 500,
-      message: err.message || "Internal Server Error",
-      stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined
+      message: process.env.NODE_ENV === 'development' ? (err?.message || "Internal Server Error") : "Internal Server Error",
+      stack: process.env.NODE_ENV === 'development' ? err?.stack : undefined
     });
 
-    //  JIT Compiler: Create all Code instead of tree.lookup
     const hoistedHandlers: Function[] = [];
     const register = (h: Function) => {
       const name = `h${hoistedHandlers.length}`;
@@ -179,45 +166,57 @@ export class BareJS extends BareRouter {
       return name;
     };
 
-    const routerCode = tree.jitCompile(register);
-// console.log("--- GENERATED JIT CODE ---");
-// console.log(routerCode); 
-// console.log("--------------------------");
-    // Create seamless Fetcher (JIT Edition)
-    // We send nodes into the closure so the code can use them
+    const rawRouterCode = tree.jitCompile(register);
     const EMPTY_PARAMS = Object.freeze({});
     const hNames = hoistedHandlers.map((_, i) => `h${i}`);
 
-    const args = ['pool', 'pIdx', 'mask', 'hNotFound', 'hError', 'EMPTY_PARAMS', ...hNames];
-    const values = [pool, pIdx, mask, hNotFound, hError, EMPTY_PARAMS, ...hoistedHandlers];
+    const releaseCode = `
+      if (ctx.store.size > 0) ctx.store.clear();
+      ctx.req = undefined;
+      ctx.body = undefined;
+      ctx._headers = undefined;
+      ctx.params = EMPTY_PARAMS;
+      if (poolTop < maxPool) pool[poolTop++] = ctx;
+    `;
 
+    const callSuffix = isLog ? '(ctx, doLog)' : '(ctx)';
+    const routerCode = rawRouterCode.replace(
+      /return (h\d+)\(ctx\);/g,
+      `const out = $1${callSuffix};
+      if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { ${releaseCode} ${isLog ? 'doLog(500);' : ''} return Response.json(hError(e), { status: 500 }); });
+      ${releaseCode}
+      return out;`
+    );
 
+    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'EMPTY_PARAMS', ...hNames];
+    const values = [pool, maxPool, Context, hNotFound, hError, EMPTY_PARAMS, ...hoistedHandlers];
 
-
-const fnBody = `
-  return function(req) {
+    const logInit = isLog ? `
     const start = performance.now();
-    const url = req.url + " "; 
-    const urlLen = req.url.length; // ✅ ความยาวจริงของ URL
-    
-    let s = url.indexOf('/', 8);
-    if (s !== -1) s++; 
-    else s = urlLen; // ✅ เปลี่ยนจาก url.length เป็น urlLen
-
-    const method = req.method;
-    const ctx = pool[(++pIdx) & mask];
-
     const doLog = (status) => {
-      if (!${isLog}) return;
       const duration = (performance.now() - start).toFixed(3);
       console.log(
         \` \\x1b[90m\${new Date().toLocaleTimeString()}\\x1b[0m \` +
         \`\\x1b[1m\\x1b[38;5;117m\${method.padEnd(7)}\\x1b[0m \` +
-        \`\\x1b[38;5;250m\${req.url.substring(req.url.indexOf('/', 8))}\\x1b[0m \` +
+        \`\\x1b[38;5;250m\${url.substring(url.indexOf('/', 8))}\\x1b[0m \` +
         \`\${status >= 400 ? '\\x1b[33m' : '\\x1b[32m'}\${status}\\x1b[0m \` +
         \`\\x1b[90m(\${duration}ms)\\x1b[0m\`
       );
-    };
+    };` : '';
+
+    const fnBody = `
+  let poolTop = maxPool;
+  return function(req) {
+    const url = req.url;
+    let s = url.indexOf('/', 8);
+    const q = s === -1 ? -1 : url.indexOf('?', s);
+    const urlLen = q === -1 ? url.length : q;
+    if (s !== -1) s++;
+    else s = urlLen;
+
+    const method = req.method;
+    const ctx = poolTop > 0 ? pool[--poolTop] : new Context();
+    ${logInit}
 
     try {
       ctx.req = req;
@@ -227,17 +226,17 @@ const fnBody = `
       ctx.params = EMPTY_PARAMS;
       ctx.body = undefined;
 
-      ${routerCode
-        .replace(/h(\d+)\(ctx\)/g, 'h$1(ctx, doLog)')
-        .replace(/url\.length/g, 'urlLen')} 
+      ${routerCode}
 
       const errorBody = hNotFound();
       const status = errorBody.status || 404;
-      doLog(status);
+      ${isLog ? 'doLog(status);' : ''}
+      ${releaseCode}
       return Response.json(errorBody, { status });
 
     } catch (e) {
-      doLog(500);
+      ${isLog ? 'doLog(500);' : ''}
+      ${releaseCode}
       return Response.json(hError(e), { status: 500 });
     }
   }
@@ -245,7 +244,6 @@ const fnBody = `
 
     this.hotFetch = new Function(...args, fnBody)(...values);
     this.compiled = true;
-    // Auto-Optimize: Replace wrapper with direct JIT function
     this.fetch = this.hotFetch!;
   }
 

@@ -5,9 +5,17 @@ import {
 } from '../core/context';
 import { schemaValidator, type RouteSchemas } from '../security/validators';
 
+import type { RouteSchema } from '../client/index';
+
 type HandlersChain = (Middleware | Handler | RouteSchemas)[];
 
-export class BareRouter {
+export type InferSchema<S> =
+  S extends { static: infer T } ? T
+  : S extends { _output: infer T } ? T
+  : any;
+
+export class BareRouter<Routes extends RouteSchema = {}> {
+  declare readonly __routes: Routes;
   public routes: any[] = [];
 
   constructor(
@@ -15,7 +23,7 @@ export class BareRouter {
     public groupMiddleware: any[] = []
   ) { }
 
-  private _add(method: string, path: string, handlers: HandlersChain) {
+  protected _add(method: string, path: string, handlers: HandlersChain) {
     let fullPath = (this.prefix + "/" + path)
         .replace(/\/+/g, "/");
 
@@ -39,12 +47,12 @@ export class BareRouter {
     return this;
 }
 
-  public get = (path: string, ...h: HandlersChain) => this._add("GET", path, h);
-  public post = (path: string, ...h: HandlersChain) => this._add("POST", path, h);
-  public put = (path: string, ...h: HandlersChain) => this._add("PUT", path, h);
-  public patch = (path: string, ...h: HandlersChain) => this._add("PATCH", path, h);
-  public delete = (path: string, ...h: HandlersChain) => this._add("DELETE", path, h);
-  public options = (path: string, ...h: HandlersChain) => this._add("OPTIONS", path, h);
+  public get: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("GET", path, h);
+  public post: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("POST", path, h);
+  public put: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("PUT", path, h);
+  public patch: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("PATCH", path, h);
+  public delete: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("DELETE", path, h);
+  public options: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("OPTIONS", path, h);
 
   public group = (path: string, ...args: any[]) => {
     const callback = args.pop();

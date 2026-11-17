@@ -163,6 +163,8 @@ export interface RouteSchemas {
   params?: any;
   headers?: any;
   response?: any;
+  /** Strip undeclared properties from validated body using JIT projector (prevents Mass Assignment) */
+  stripUnknown?: boolean;
   detail?: RouteDetail;
   maxBodySize?: number;
 }
@@ -269,6 +271,7 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
   const queryCheck = schemas.query ? compileSingleSchema(schemas.query) : null;
   const paramsCheck = schemas.params ? compileSingleSchema(schemas.params) : null;
   const headersCheck = schemas.headers ? compileSingleSchema(schemas.headers) : null;
+  const bodyProjector = schemas.stripUnknown && schemas.body ? compileProjector(schemas.body) : null;
   const responseFilter = schemas.response ? createResponseFilter(schemas.response) : null;
   const maxBodySize = schemas.maxBodySize ?? 1048576;
 
@@ -320,7 +323,7 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
     }
     const r = bodyCheck(body);
     if (!r.ok) return errorJSON({ status: 'error', code: 'VALIDATION_FAILED', error: r.error });
-    ctx.body = r.data;
+    ctx.body = bodyProjector ? bodyProjector(r.data) : r.data;
 
     return next ? next() : undefined;
   };

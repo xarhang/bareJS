@@ -1,4 +1,4 @@
-import { BareRouter } from './router';
+import { BareRouter, type InferSchema } from './router';
 import { RadixNode } from './radix';
 import { Context } from './context';
 import { Type as typebox, Type as t } from '@sinclair/typebox';
@@ -6,6 +6,15 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { bootstrapConfig } from "./loader";
 import { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from "../utils/openapi";
+import type { RouteSchemas } from "../security/validators";
+import type { RouteSchema } from "../client/index";
+
+export interface CronOptions {
+  /** Execute the cron job immediately upon registration (default: false) */
+  runOnStart?: boolean;
+  /** Optional error handler when the cron callback throws or rejects */
+  onError?: (err: any) => void;
+}
 
 export interface WebSocketRouteHandler {
   open?: (ws: any) => void;
@@ -19,7 +28,36 @@ export interface NotFoundResponse {
   message: string;
   [key: string]: any;
 }
-export class BareJS extends BareRouter {
+
+type TypedRouteHandler<Derived, S extends RouteSchemas, Res> = (
+  ctx: Context & Derived & {
+    body: S extends { body: infer B } ? InferSchema<B> : any;
+    query: S extends { query: infer Q } ? InferSchema<Q> : Record<string, string>;
+    params: S extends { params: infer Pa } ? InferSchema<Pa> : Record<string, any>;
+  }
+) => Res | Promise<Res>;
+
+type AddRoute<Derived extends Record<string, any>, Routes extends RouteSchema, M extends string> = {
+  <P extends string, S extends RouteSchemas, Res = S extends { response: infer R } ? InferSchema<R> : any>(
+    path: P,
+    schemas: S,
+    handler: TypedRouteHandler<Derived, S, Res>
+  ): BareJS<Derived, Routes & Record<P, {
+    method: M;
+    body: S extends { body: infer B } ? InferSchema<B> : any;
+    response: S extends { response: infer R } ? InferSchema<R> : Awaited<Res>;
+  }>>;
+  <P extends string, Res = any>(
+    path: P,
+    ...handlers: any[]
+  ): BareJS<Derived, Routes & Record<P, { method: M; response: Awaited<Res> }>>;
+};
+
+export class BareJS<
+  Derived extends Record<string, any> = {},
+  Routes extends RouteSchema = {}
+> extends BareRouter<Routes> {
+  declare readonly __routes: Routes;
   private tree = new RadixNode();
   private pool: Context[] = [];
   // private poolIdx = 0;
@@ -31,6 +69,7 @@ export class BareJS extends BareRouter {
   private wsRoutes = new Map<string, WebSocketRouteHandler>();
   private startHooks: (() => void | Promise<void>)[] = [];
   private stopHooks: (() => void | Promise<void>)[] = [];
+  private crons: Array<{ name: string; timer: ReturnType<typeof setInterval> }> = [];
   private server?: ReturnType<typeof Bun.serve>;
   private shutdownHandler?: () => Promise<void>;
   private wsAdapter = {
@@ -55,7 +94,42 @@ export class BareJS extends BareRouter {
     return this;
   }
 
+  /**
+   * Built-in overlap-safe background interval scheduler.
+   * Automatically cleared when app.stop() is called.
+   */
+  public cron(
+    name: string,
+    intervalMs: number,
+    fn: () => void | Promise<void>,
+    options: CronOptions = {}
+  ): this {
+    let running = false;
+    const tick = async () => {
+      if (running) return;
+      running = true;
+      try {
+        await fn();
+      } catch (err) {
+        options.onError?.(err);
+      } finally {
+        running = false;
+      }
+    };
+    const timer = setInterval(tick, intervalMs);
+    this.crons.push({ name, timer });
+    if (options.runOnStart) {
+      void tick();
+    }
+    return this;
+  }
+
   public async stop(closeActiveConnections = false): Promise<void> {
+    for (const c of this.crons) {
+      clearInterval(c.timer);
+    }
+    this.crons.length = 0;
+
     if (this.shutdownHandler) {
       process.off("SIGINT", this.shutdownHandler);
       process.off("SIGTERM", this.shutdownHandler);
@@ -178,8 +252,14 @@ export class BareJS extends BareRouter {
   }
 
 
+  declare public get: AddRoute<Derived, Routes, 'GET'>;
+  declare public post: AddRoute<Derived, Routes, 'POST'>;
+  declare public put: AddRoute<Derived, Routes, 'PUT'>;
+  declare public patch: AddRoute<Derived, Routes, 'PATCH'>;
+  declare public delete: AddRoute<Derived, Routes, 'DELETE'>;
+
   private _hasDerive = false;
-  public derive<T extends Record<string, any>>(fn: (ctx: Context) => Promise<T> | T): this {
+  public derive<T extends Record<string, any>>(fn: (ctx: Context & Derived) => Promise<T> | T): BareJS<Derived & T, Routes> {
     this._hasDerive = true;
     this.use(async (ctx: any, next: any) => {
       const derived = await fn(ctx);
@@ -196,7 +276,7 @@ export class BareJS extends BareRouter {
       }
       return next();
     });
-    return this;
+    return this as any;
   }
 
   // inherited use() from BareRouter handles router merging now
@@ -221,6 +301,25 @@ export class BareJS extends BareRouter {
         } finally {
           if (timer !== undefined) clearTimeout(timer);
         }
+      };
+    }
+
+    const cbMw = pipeline.find((fn) => fn?.__circuitBreaker);
+    if (cbMw) {
+      const runWithBreaker = cbMw.__circuitBreaker;
+      const innerPipeline = pipeline.filter((fn) => !fn?.__circuitBreaker);
+      const innerCompiled = this.compileHandler(innerPipeline, isLog);
+      return (ctx: Context, doLog?: any) => runWithBreaker(() => innerCompiled(ctx, doLog));
+    }
+
+    const compMw = pipeline.find((fn) => fn?.__compress);
+    if (compMw) {
+      const applyCompress = compMw.__compress;
+      const innerPipeline = pipeline.filter((fn) => !fn?.__compress);
+      const innerCompiled = this.compileHandler(innerPipeline, isLog);
+      return async (ctx: Context, doLog?: any) => {
+        const res = await innerCompiled(ctx, doLog);
+        return applyCompress(ctx, res);
       };
     }
 

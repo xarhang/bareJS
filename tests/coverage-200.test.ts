@@ -16,6 +16,8 @@ import {
   timeout,
   idempotency,
   createSingleflight,
+  circuitBreaker,
+  compress,
   staticFile,
   Hash,
   bareAuth,
@@ -785,6 +787,175 @@ describe("100% Line & Function Coverage + 200+ Total Tests Suite (50 Tests)", ()
     expect(results.filter((r) => !r.shared).length).toBe(1);
     expect(results.filter((r) => r.shared).length).toBe(99);
     expect(results[0]!.data).toEqual({ rows: 5000 });
+  });
+
+  test("59. circuitBreaker() handles CLOSED -> OPEN -> HALF_OPEN -> CLOSED and thrown errors", async () => {
+    const transitions: string[] = [];
+    const app = new BareJS();
+    let mode: "ok" | "500" | "throw" | "slow_ok" = "500";
+
+    app.get(
+      "/downstream",
+      circuitBreaker({
+        failureThreshold: 2,
+        resetTimeoutMs: 40,
+        onStateChange: (from, to) => transitions.push(`${from}->${to}`)
+      }),
+      async () => {
+        if (mode === "500") return new Response("fail", { status: 500 });
+        if (mode === "throw") throw new Error("db crashed");
+        if (mode === "slow_ok") {
+          await new Promise((r) => setTimeout(r, 25));
+          return { ok: true };
+        }
+        return { ok: true };
+      }
+    );
+
+    // 2 failures trip circuit to OPEN
+    expect((await app.fetch(new Request("http://localhost/downstream"))).status).toBe(500);
+    expect((await app.fetch(new Request("http://localhost/downstream"))).status).toBe(500);
+    expect(transitions).toEqual(["CLOSED->OPEN"]);
+
+    // While OPEN, fast-fails with 503 + Retry-After
+    const rOpen = await app.fetch(new Request("http://localhost/downstream"));
+    expect(rOpen.status).toBe(503);
+    expect(rOpen.headers.get("Retry-After")).toBeTruthy();
+
+    // Wait for resetTimeoutMs -> HALF_OPEN; if probe throws, re-opens
+    await new Promise((r) => setTimeout(r, 50));
+    mode = "throw";
+    const rThrow = await app.fetch(new Request("http://localhost/downstream"));
+    expect(rThrow.status).toBe(500);
+    expect(transitions).toEqual(["CLOSED->OPEN", "OPEN->HALF_OPEN", "HALF_OPEN->OPEN"]);
+
+    // Wait again -> HALF_OPEN; concurrent second request while probe is in-flight gets 503
+    await new Promise((r) => setTimeout(r, 50));
+    mode = "slow_ok";
+    const [p1, p2] = await Promise.all([
+      app.fetch(new Request("http://localhost/downstream")),
+      app.fetch(new Request("http://localhost/downstream"))
+    ]);
+    expect([p1.status, p2.status].sort()).toEqual([200, 503]);
+    expect(transitions).toEqual(["CLOSED->OPEN", "OPEN->HALF_OPEN", "HALF_OPEN->OPEN", "OPEN->HALF_OPEN", "HALF_OPEN->CLOSED"]);
+
+    // Direct standalone middleware call with no next()
+    const cb = circuitBreaker();
+    await cb({ req: new Request("http://localhost/") } as any);
+  });
+
+  test("60. compress() gzips large payloads via Bun.gzipSync and skips small, SSE, 204, or non-gzip requests", async () => {
+    const app = new BareJS();
+    app.use(compress({ minSize: 64, level: 6 }));
+
+    app.get("/big", () => ({ items: Array.from({ length: 20 }, (_, i) => `item-${i}`) }));
+    app.get("/small", () => ({ ok: 1 }));
+    app.get("/empty", () => new Response(null, { status: 204 }));
+    app.get("/pre", () => new Response("already", { headers: { "Content-Encoding": "br" } }));
+    app.get("/sse", (ctx) => ctx.sse(async (send) => { send({ a: 1 }); }));
+
+    // 1. Without Accept-Encoding: gzip -> uncompressed
+    const rNoGzip = await app.fetch(new Request("http://localhost/big"));
+    expect(rNoGzip.headers.get("Content-Encoding")).toBeNull();
+
+    // 2. With Accept-Encoding: gzip -> compressed
+    const rGzip = await app.fetch(new Request("http://localhost/big", { headers: { "Accept-Encoding": "gzip, deflate" } }));
+    expect(rGzip.headers.get("Content-Encoding")).toBe("gzip");
+    expect(rGzip.headers.get("Vary")).toBe("Accept-Encoding");
+    const decompressed = Bun.gunzipSync(new Uint8Array(await rGzip.arrayBuffer()));
+    expect(JSON.parse(new TextDecoder().decode(decompressed)).items.length).toBe(20);
+
+    // 3. Below minSize -> uncompressed
+    const rSmall = await app.fetch(new Request("http://localhost/small", { headers: { "Accept-Encoding": "gzip" } }));
+    expect(rSmall.headers.get("Content-Encoding")).toBeNull();
+
+    // 4. 204, pre-encoded, and SSE -> skipped
+    expect((await app.fetch(new Request("http://localhost/empty", { headers: { "Accept-Encoding": "gzip" } }))).status).toBe(204);
+    expect((await app.fetch(new Request("http://localhost/pre", { headers: { "Accept-Encoding": "gzip" } }))).headers.get("Content-Encoding")).toBe("br");
+    expect((await app.fetch(new Request("http://localhost/sse", { headers: { "Accept-Encoding": "gzip" } }))).headers.get("Content-Encoding")).toBeNull();
+
+    // 5. Direct standalone non-Response pass-through
+    const mw = compress();
+    const out = await mw({ req: new Request("http://localhost/", { headers: { "Accept-Encoding": "gzip" } }) } as any, async () => "plain" as any);
+    expect(out).toBe("plain");
+    expect(await mw({ req: new Request("http://localhost/") } as any)).toBeUndefined();
+  });
+
+  test("61. stripUnknown: true prevents Mass-Assignment attacks on validated request body", async () => {
+    const app = new BareJS();
+    app.post(
+      "/register",
+      {
+        body: Type.Object({ name: Type.String(), email: Type.String() }),
+        stripUnknown: true
+      },
+      (ctx) => ctx.body
+    );
+
+    const res = await app.fetch(
+      new Request("http://localhost/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Somsak", email: "s@example.com", role: "admin", isAdmin: true, balance: 99999 })
+      })
+    );
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toEqual({ name: "Somsak", email: "s@example.com" });
+    expect(data.role).toBeUndefined();
+    expect(data.isAdmin).toBeUndefined();
+  });
+
+  test("62. app.cron() executes tasks with overlap lock, handles errors, and clears timers on app.stop()", async () => {
+    const app = new BareJS();
+    let runs = 0;
+    const errors: string[] = [];
+
+    app.cron(
+      "heartbeat",
+      20,
+      async () => {
+        runs++;
+        await new Promise((r) => setTimeout(r, 35)); // longer than 20ms interval -> overlap lock skips concurrent tick
+        if (runs === 1) throw new Error("transient cron err");
+      },
+      {
+        runOnStart: true,
+        onError: (e) => errors.push(e.message)
+      }
+    );
+
+    await new Promise((r) => setTimeout(r, 90));
+    await app.stop();
+    const runsAtStop = runs;
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(runs).toBeGreaterThanOrEqual(2);
+    expect(runs).toBe(runsAtStop); // stopped cleanly
+    expect(errors).toEqual(["transient cron err"]);
+  });
+
+  test("63. End-to-End Compile-Time Type Inference works seamlessly with bareClient(app)", async () => {
+    const app = new BareJS()
+      .post(
+        "/orders",
+        {
+          body: Type.Object({ item: Type.String(), qty: Type.Number() }),
+          response: Type.Object({ orderId: Type.String(), total: Type.Number() })
+        },
+        (ctx) => ({
+          orderId: `ord_${ctx.body.item}`,
+          total: ctx.body.qty * 100
+        })
+      )
+      .get("/health", () => ({ ok: true }));
+
+    const client = bareClient(app);
+    const created = await client.post("/orders", { body: { item: "coffee", qty: 3 } });
+    const health = await client.get("/health");
+
+    expect(created).toEqual({ orderId: "ord_coffee", total: 300 });
+    expect(health).toEqual({ ok: true });
   });
 });
 

@@ -6,7 +6,8 @@
  */
 
 // --- 1. Core Engine ---
-export { BareJS, type WebSocketRouteHandler } from './core/bare';
+export { BareJS, type WebSocketRouteHandler, type CronOptions } from './core/bare';
+export { BareRouter, type InferSchema } from './core/router';
 
 /**
  * Plugin Interface for BareJS
@@ -64,10 +65,11 @@ export { csrf, type CsrfOptions } from './security/csrf';
 export { timeout, type TimeoutOptions } from './security/timeout';
 export { rateLimit, type RateLimitOptions } from './security/rateLimit';
 export { idempotency, createSingleflight, type IdempotencyOptions } from './security/idempotency';
+export { circuitBreaker, type CircuitBreakerOptions, type CircuitState } from './security/resilience';
 export { securityHeaders, type SecurityHeadersOptions } from './security/headers';
 export { staticFile, type StaticOptions } from './utils/static';
+export { compress, type CompressOptions } from './utils/compress';
 export { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from './utils/openapi';
-export { BareRouter } from './core/router';
 
 // --- 6. Authentication (Bun Native) ---
 // Always deploy using process.env [2026-01-06]

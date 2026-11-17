@@ -78,7 +78,7 @@ const buildUrl = (baseUrl: string, path: string, options?: ClientRequestOptions)
 };
 
 export const bareClient = <AppOrRoutes = any>(
-  baseUrlOrApp: string | { fetch: (req: Request) => any },
+  baseUrlOrApp: string | ({ fetch: (req: Request) => any } & AppOrRoutes),
   clientOptions: BareClientOptions = {}
 ): BareClient<AppOrRoutes extends { __routes?: infer R extends RouteSchema } ? R : RouteSchema> => {
   const isApp = typeof baseUrlOrApp === 'object' && baseUrlOrApp !== null && typeof baseUrlOrApp.fetch === 'function';

@@ -37,7 +37,7 @@ BareJS is engineered to beat both **ElysiaJS** and **Hono** across routing, midd
 | **7. Live SQLite Report (`SUM`/`AVG`/`GROUP BY`)** | **`91.53 µs`** (`p99: 218 µs`) | — | `94.51 µs` (`p99: 277 µs`) | `103.66 µs` (`p99: 543 µs`) |
 | **8. Live SQLite Write (`POST` + Validate + `INSERT`)** | **`88.37 µs`** (`2.84 KB`) | — | `88.51 µs` (`2.95 KB`) | `103.73 µs` (`3.33 KB`) |
 
-> Verified with **209 Automated Tests (2,878 assertions)** and **100.00% Function & 100.00% Line Coverage**.
+> Verified with **214 Automated Tests (2,906 assertions)** and **100.00% Function & 100.00% Line Coverage**.
 
 <!-- MARKER: PERFORMANCE_TABLE_START -->
 
@@ -60,13 +60,15 @@ BareJS is engineered to beat both **ElysiaJS** and **Hono** across routing, midd
 
 * **JIT Pipeline Compilation**: Flattens routes and middleware chains into direct JavaScript functions at startup, using `AsyncFunction` single-handler fast paths and conditional bytecode inlining.
 * **$O(1)$ Radix Jump-Table Router**: Compiles static branches, dynamic `:params`, and catch-all wildcards (`/*`) into inline `switch` jump-tables.
-* **Recursive JIT Response Projector (`compileProjector`)**: Compiles `response` schemas (**TypeBox**, **Zod**, or **Native**) into fixed-shape JS object literals that strip undeclared secret fields (`passwordHash`, `secretToken`) recursively at **`2.01 µs` (`653 B` RAM)**—19.4% faster and 27% lower memory than ElysiaJS.
-* **Built-In Payment Idempotency & Singleflight Coalescing**: Prevent double-charges and race conditions with `idempotency()` (`409 IDEMPOTENT_IN_FLIGHT` + `X-Idempotent-Replayed: true`), and eliminate cache-stampede / thundering-herd DB overload with `createSingleflight()`.
+* **Recursive JIT Response Projector & Mass-Assignment Guard**: Compiles `response` schemas into fixed-shape JS object literals (`1.89 µs`, 28% faster than ElysiaJS), and supports `stripUnknown: true` on `body` to prevent Mass-Assignment attacks.
+* **Built-In Resilience (`circuitBreaker`, `idempotency`, `createSingleflight`, `app.cron`)**: Prevent cascading failures (`503 Retry-After`), double-charges (`409 IDEMPOTENT_IN_FLIGHT`), cache stampedes (100 concurrent calls -> 1 DB hit), and overlapping background jobs.
+* **Native Zero-Dep Gzip (`compress`)**: Compresses responses via Bun's native C/Zig `Bun.gzipSync` with `minSize` threshold and automatic SSE/204/304 bypass.
+* **End-to-End Type Inference (`bareClient(app)`)**: Automatic compile-time inference of route paths, `params`, `body`, and `response` types directly from your `BareJS` app instance—with zero runtime overhead.
 * **Concurrency-Safe Object Pooling**: Recycles `Context` instances via a LIFO free-list stack with automatic cleanup on release—zero cross-request state leakage.
 * **Dual Response Ergonomics**: Return plain objects/strings directly (Elysia style) OR use chainable `ctx.json()`, `ctx.html()`, `ctx.text()`, `ctx.redirect()`, `ctx.send()` helpers (Hono/Express style).
 * **Unified Schema Validation & Auto-Coercion**: Validate `body`, `query`, `params`, `headers`, `response`, and `maxBodySize` (`413` DoS guard) in one object with **TypeBox**, **Zod**, or **Native JSON Schema**—with automatic `number`/`boolean` coercion on `query` and `params`.
 * **Batteries-Included Security Suite**: Built-in `securityHeaders()` (frozen zero-alloc), `cors()` (allowlist/predicate/credentials), `csrf()` (`Sec-Fetch-Site` + `Origin`/`Referer` + double-submit token), `timeout()` (`408`), `rateLimit()` (bounded LRU), `bareAuth()` (constant-time HS256 JWT), `Hash` (Argon2id), HMAC-signed `HttpOnly` cookies, and safe `ctx.upload()`.
-* **Real-Time, RPC, OpenAPI 3.1 & Zero-Network Client**: Native WebSocket (`app.ws`), Server-Sent Events (`ctx.sse`), JSON-RPC 2.0 (`app.rpc`), Scalar OpenAPI 3.1 UI (`app.docs`), and `bareClient(app | url)` (supports both in-memory zero-port execution and network HTTP).
+* **Real-Time, RPC & OpenAPI 3.1**: Native WebSocket (`app.ws`), Server-Sent Events (`ctx.sse`), JSON-RPC 2.0 (`app.rpc`), and Scalar OpenAPI 3.1 UI (`app.docs`).
 
 ---
 

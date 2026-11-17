@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794883799228,
+  "lastUpdate": 1794892566952,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2299,6 +2299,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5320.397507956931,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "d712af84eff8d3fa0e02495f37022a57b43358e5",
+          "message": "feat(v0.1.50): recursive JIT response projector, idempotency, singleflight, llms.txt & 209 tests (100% coverage)",
+          "timestamp": "2026-11-17T05:15:40Z",
+          "tree_id": "ac0dace0c5a0e6ed02682b85506044750ebccada",
+          "url": "https://github.com/xarhang/bareJS/commit/d712af84eff8d3fa0e02495f37022a57b43358e5"
+        },
+        "date": 1794892566527,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 569.251133401549,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 836.4076961911707,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3150.9066019953107,
             "unit": "undefined"
           }
         ]

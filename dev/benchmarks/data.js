@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794892566952,
+  "lastUpdate": 1794897828118,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2338,6 +2338,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3150.9066019953107,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "18a9f17ed2e4a905145f61e83b6848ba3f10321c",
+          "message": "fix(ci): increase playwright beforeAll timeout to 30s and skip if chromium missing",
+          "timestamp": "2026-11-17T06:43:28Z",
+          "tree_id": "b5f77873cf1a0641a994bdae9a2876ae8e2e83a8",
+          "url": "https://github.com/xarhang/bareJS/commit/18a9f17ed2e4a905145f61e83b6848ba3f10321c"
+        },
+        "date": 1794897827877,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1331.6337419668412,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1800.9208566108007,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5378.21674711719,
             "unit": "undefined"
           }
         ]

@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794897905368,
+  "lastUpdate": 1794898968288,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2416,6 +2416,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 4057.2669781317722,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "17cd677396f63d8d72a709525bde74cb0e9fab84",
+          "message": "feat: add End-to-End bareClient type inference, stripUnknown mass-assignment guard, circuitBreaker, compress, and app.cron (214 tests / 100% coverage)",
+          "timestamp": "2026-11-17T07:02:23Z",
+          "tree_id": "0de2b95431f2a41a10db57a0313faa2e16274c8b",
+          "url": "https://github.com/xarhang/bareJS/commit/17cd677396f63d8d72a709525bde74cb0e9fab84"
+        },
+        "date": 1794898968090,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 576.8672025276646,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 858.9878748390993,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3395.861189330482,
             "unit": "undefined"
           }
         ]

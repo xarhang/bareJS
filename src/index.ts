@@ -6,7 +6,7 @@
  */
 
 // --- 1. Core Engine ---
-export { BareJS } from './core/bare';
+export { BareJS, type WebSocketRouteHandler } from './core/bare';
 
 /**
  * Plugin Interface for BareJS
@@ -51,11 +51,23 @@ export {
 // --- 5. Middlewares & Utilities ---
 // export { logger } from './utils/logger';
 export { cors } from './security/cors';
+export { rateLimit, type RateLimitOptions } from './security/rateLimit';
+export { securityHeaders, type SecurityHeadersOptions } from './security/headers';
 export { staticFile } from './utils/static';
+export { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from './utils/openapi';
 export { BareRouter } from './core/router';
 
 // --- 6. Authentication (Bun Native) ---
 // Always deploy using process.env [2026-01-06]
-export { bareAuth, createToken } from './security/auth';
+export { bareAuth, createToken, basicAuth, hasRole } from './security/auth';
 // --- 7. Hashing ---
-export{Hash as Password, Hash} from './security/hash';
+export { Hash as Password, Hash } from './security/hash';
+
+// --- 8. Type-Safe RPC Client ---
+export {
+  bareClient,
+  type BareClient,
+  type BareClientOptions,
+  type ClientRequestOptions,
+  type RouteSchema
+} from './client/index';

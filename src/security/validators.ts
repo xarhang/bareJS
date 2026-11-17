@@ -30,9 +30,8 @@ const errorJSON = (data: any, status = 400) =>
 export const typebox = (schema: any): Middleware => {
   const check = Compiler.TypeCompiler.Compile(schema);
 
-  return async (ctx: Context, next?: Next) => {
+  const mw: Middleware = async (ctx: Context, next?: Next) => {
     try {
-      // const body = await ctx.req.json();
       const body = await ctx.jsonBody();
       
       if (!check.Check(body)) {
@@ -45,13 +44,14 @@ export const typebox = (schema: any): Middleware => {
         });
       }
 
-      // ✅ FIX TS18046: Cast to 'any' to allow assignment to 'unknown' body
       (ctx as any).body = body;
       return next ? next() : undefined;
     } catch {
       return errorJSON({ status: 'error', message: 'Malformed JSON payload' });
     }
   };
+  (mw as any).__schema = schema;
+  return mw;
 };
 
 /**
@@ -62,7 +62,7 @@ export const native = (schema: any): Middleware => {
   const keys = Object.keys(props);
   const kLen = keys.length;
 
-  return async (ctx: any, next?: any) => {
+  const mw: Middleware = async (ctx: any, next?: any) => {
     try {
       const isCtx = ctx instanceof Object && 'req' in ctx;
       const body = isCtx ? await ctx.jsonBody() : await ctx.json();
@@ -90,13 +90,15 @@ export const native = (schema: any): Middleware => {
       return errorJSON({ status: 'error', message: 'Invalid JSON payload' });
     }
   };
+  (mw as any).__schema = schema;
+  return mw;
 };
 
 /**
  * Zod Engine (z)
  */
 export const zod = (schema: z.ZodSchema): Middleware => {
-  return async (ctx: any, next?: any) => {
+  const mw: Middleware = async (ctx: any, next?: any) => {
     try {
       const isCtx = ctx instanceof Object && 'req' in ctx;
       const body = isCtx ? await ctx.jsonBody() : await ctx.json();
@@ -118,6 +120,8 @@ export const zod = (schema: z.ZodSchema): Middleware => {
       return errorJSON({ status: 'error', message: 'Invalid JSON payload' });
     }
   };
+  (mw as any).__schema = schema;
+  return mw;
 };
 
 /**

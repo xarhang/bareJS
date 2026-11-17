@@ -35,6 +35,7 @@ export class BareRouter {
   public put = (path: string, ...h: HandlersChain) => this._add("PUT", path, h);
   public patch = (path: string, ...h: HandlersChain) => this._add("PATCH", path, h);
   public delete = (path: string, ...h: HandlersChain) => this._add("DELETE", path, h);
+  public options = (path: string, ...h: HandlersChain) => this._add("OPTIONS", path, h);
 
   public group = (path: string, ...args: any[]) => {
     const callback = args.pop();

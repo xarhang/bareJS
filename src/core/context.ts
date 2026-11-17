@@ -12,19 +12,58 @@ export class Context {
   public _headers?: Record<string, string> | undefined = undefined;
   public store = new Map<string, any>();
   public body: any = undefined;
-  public query: Record<string, string> = {}; 
+  public _query: Record<string, string> | undefined = undefined;
   constructor() { }
 
+  public get query(): Record<string, string> {
+    if (this._query !== undefined) return this._query;
+    const result: Record<string, string> = {};
+    const url = this.req?.url;
+    if (url) {
+      const qIdx = url.indexOf('?');
+      if (qIdx !== -1) {
+        let start = qIdx + 1;
+        const len = url.length;
+        while (start < len) {
+          let amp = url.indexOf('&', start);
+          if (amp === -1) amp = len;
+          if (amp > start) {
+            const eq = url.indexOf('=', start);
+            let k: string;
+            let v: string;
+            if (eq !== -1 && eq < amp) {
+              k = url.slice(start, eq);
+              v = url.slice(eq + 1, amp);
+            } else {
+              k = url.slice(start, amp);
+              v = '';
+            }
+            try {
+              k = decodeURIComponent(k.replace(/\+/g, ' '));
+              v = decodeURIComponent(v.replace(/\+/g, ' '));
+            } catch { /* keep raw on malformed URI */ }
+            if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') {
+              result[k] = v;
+            }
+          }
+          start = amp + 1;
+        }
+      }
+    }
+    this._query = result;
+    return result;
+  }
+
+  public getQuery(key: string): string | undefined {
+    return this.query[key];
+  }
 
   public async jsonBody(): Promise<any> {
-
     if (this.body !== undefined) return this.body;
-
 
     const contentType = this.req.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       try {
-
         return this.body = await this.req.json();
       } catch {
         return this.body = null;
@@ -33,14 +72,13 @@ export class Context {
     return this.body = null;
   }
 
-
   public reset(req: Request): this {
     this.req = req;
     this._status = 200;
     this._headers = undefined;
     if (this.store.size > 0) this.store.clear();
     this.params = {};
-    this.query = {};
+    this._query = undefined;
     this.body = undefined;
     return this;
   }
@@ -108,5 +146,61 @@ export class Context {
       msg: message,
       ...extra
     });
+  }
+
+  public sse(
+    source:
+      | AsyncIterable<string | { event?: string; data: any; id?: string; retry?: number }>
+      | ((send: (data: any, event?: string, id?: string) => void, close: () => void) => Promise<void> | void)
+  ): Response {
+    const encoder = new TextEncoder();
+    const formatChunk = (chunk: string | { event?: string; data: any; id?: string; retry?: number }): Uint8Array => {
+      if (typeof chunk === 'string') {
+        return encoder.encode(`data: ${chunk}\n\n`);
+      }
+      let out = '';
+      if (chunk.id !== undefined) out += `id: ${chunk.id}\n`;
+      if (chunk.event !== undefined) out += `event: ${chunk.event}\n`;
+      if (chunk.retry !== undefined) out += `retry: ${chunk.retry}\n`;
+      const payload = typeof chunk.data === 'string' ? chunk.data : JSON.stringify(chunk.data);
+      out += `data: ${payload}\n\n`;
+      return encoder.encode(out);
+    };
+
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          if (typeof source === 'function') {
+            let closed = false;
+            const send = (data: any, event?: string, id?: string) => {
+              if (!closed) controller.enqueue(formatChunk({ data, event, id }));
+            };
+            const close = () => {
+              if (!closed) {
+                closed = true;
+                controller.close();
+              }
+            };
+            await source(send, close);
+            close();
+          } else {
+            for await (const item of source) {
+              controller.enqueue(formatChunk(item));
+            }
+            controller.close();
+          }
+        } catch (err) {
+          controller.error(err);
+        }
+      }
+    });
+
+    const headers: Record<string, string> = {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      'connection': 'keep-alive',
+      ...(this._headers || {})
+    };
+    return new Response(stream, { status: this._status || 200, headers });
   }
 }

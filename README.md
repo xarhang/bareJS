@@ -45,16 +45,17 @@ BareJS leads in complex, real-world scenarios. We measure engine efficiency usin
 ## 🚀 Key Features
 
 * **JIT Pipeline Compilation**: Routes and middleware chains are flattened into a single function at runtime.
-* **Object Pooling**: Recycles `Context` objects via a circular buffer, drastically reducing GC pressure.
+* **Concurrency-Safe Object Pooling**: Recycles `Context` objects via a free-list stack, drastically reducing GC pressure with zero cross-request leakage.
 * **Internal High-Performance Logger**: Zero-overhead logging integrated directly into the JIT engine.
-* **Precise Radix Router**: v0.1.46 introduces optimized segment matching for deep-nested paths.
-* **Mechanical Sympathy**: Intentionally designed to align with V8's optimization and Bun's I/O.
+* **Precise Radix Router**: Optimized segment matching for deep-nested paths and lazy query parsing (`ctx.query`).
+* **Real-Time & RPC Ready**: Built-in **Native WebSocket (`app.ws`)**, **SSE (`ctx.sse`)**, **JSON-RPC 2.0 (`app.rpc`)**, and **Type-Safe `bareClient`**.
+* **AOT OpenAPI 3.1 Docs**: Zero-runtime-cost `app.docs()` with Scalar UI generated from TypeBox, Zod, and Native schemas.
+* **Mechanical Sympathy**: Intentionally designed to align with JSC/V8 optimization and Bun's I/O.
 
 ## 🛠️ Installation
 
 ```bash
 bun add barejs
-
 ```
 
 ### The "Bare" Minimum
@@ -70,33 +71,37 @@ app.useLog(true);
 app.get('/', (ctx: Context) => ctx.json({ hello: "world" }));
 
 app.listen(3000);
-
 ```
 
 ---
 
 ## 📘 Comprehensive Guide
 
-### 1. ⚡ Standardized Response & Chaining
+### 1. ⚡ Standardized Response, Lazy Query & Error Hook
 
-BareJS v0.1.46 provides a fluent API for building responses.
+BareJS v0.1.49 provides a fluent API for responses, lazy query parsing, and centralized error handling.
 
 ```typescript
+app.onError((err, ctx) => {
+  ctx.status(500);
+  return { status: "error", message: err.message };
+});
+
 app.get('/api/v1/health', (ctx: Context) => {
-  // Chainable status and standardized send helper
-  return ctx.status(200).send("System is healthy", { 
-    uptime: process.uptime() 
+  const verbose = ctx.getQuery('verbose'); // Lazy-parsed only when accessed
+  return ctx.status(200).send("System is healthy", {
+    verbose: verbose === 'true',
+    uptime: process.uptime()
   });
 });
 
-// Output: { "status": "success", "msg": "System is healthy", "uptime": ... }
-
+// Output: { "status": "success", "msg": "System is healthy", "verbose": ..., "uptime": ... }
 ```
 
 ### 2. 🛡️ Security & Authentication (Dual-API)
 
 ```typescript
-import { bareAuth, createToken, Password, Hash, type Context } from 'barejs';
+import { bareAuth, createToken, basicAuth, hasRole, Password, Hash, type Context } from 'barejs';
 
 const SECRET = process.env.JWT_SECRET || "your-secret";
 
@@ -110,16 +115,15 @@ app.post('/register', async (ctx: Context) => {
   const isValid = await Hash.verify(body.password, hash);
   
   if (isValid) {
-    const token = await createToken({ id: 1 }, SECRET);
+    const token = await createToken({ id: 1, role: 'admin' }, SECRET);
     return { token };
   }
 });
 
-// Protect routes with built-in JWT middleware
-app.get('/me', bareAuth(SECRET), (ctx: Context) => {
+// Protect routes with constant-time JWT middleware & RBAC
+app.get('/me', bareAuth(SECRET), hasRole('admin'), (ctx: Context) => {
   return ctx.send("Authenticated", { user: ctx.get('user') });
 });
-
 ```
 
 ### 3. ✅ Data Validation (3 Styles)
@@ -131,7 +135,6 @@ import { typebox, zod, native, t, type Context } from 'barejs';
 import { z } from 'zod';
 
 // Style A: TypeBox (JIT Optimized - Recommended)
-// Pre-compiled validation to outperform competitors by 55%
 const Schema = t.Object({ name: t.String() });
 app.post('/user', typebox(Schema), (ctx) => ctx.json(ctx.body));
 
@@ -141,17 +144,48 @@ app.post('/age', zod(ZodSchema), (ctx) => ctx.json(ctx.body));
 
 // Style C: Native (Zero Dependency - Simple Checks)
 app.post('/native', native({ properties: { id: { type: 'number' } } }), (ctx) => ctx.json(ctx.body));
-
 ```
 
-### 4. 🔌 Essential Middleware
+### 4. 🔌 Essential Production Middleware
 
 ```typescript
-import { cors, staticFile } from 'barejs';
+import { cors, rateLimit, securityHeaders, staticFile } from 'barejs';
 
-app.use(cors());
+app.use(securityHeaders());
+app.use(cors({ origin: 'https://example.com' }));
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 app.use(staticFile("public"));
+```
 
+### 5. 📡 Real-Time (WebSocket, SSE), OpenAPI & RPC
+
+```typescript
+import { BareJS, bareClient } from 'barejs';
+
+const app = new BareJS();
+
+// Native Bun WebSocket
+app.ws('/ws/chat', {
+  open: (ws) => ws.send('connected'),
+  message: (ws, msg) => ws.send(`echo: ${msg}`)
+});
+
+// Server-Sent Events (SSE)
+app.get('/events', (ctx) => ctx.sse(async (send) => {
+  send({ step: 1, msg: 'streaming...' }, 'progress', '1');
+}));
+
+// JSON-RPC 2.0 Endpoint (single & batch)
+app.rpc('/rpc', {
+  add: ({ a, b }: { a: number; b: number }) => a + b
+});
+
+// Auto OpenAPI 3.1 Spec (/docs/json) + Scalar UI (/docs)
+app.docs('/docs', { title: 'My BareJS API', version: '1.0.0' });
+
+// Type-Safe HTTP RPC Client
+const client = bareClient('http://localhost:3000');
+const user = await client.get('/users/:id', { params: { id: 42 }, query: { full: true } });
 ```
 
 ---
@@ -162,10 +196,13 @@ app.use(staticFile("public"));
 | --- | --- |
 | `ctx.req` | Raw incoming Bun `Request` object. |
 | `ctx.params` | Route parameters (e.g., `:id`). |
+| `ctx.query` | **Lazy** parsed query parameters object. |
+| `ctx.getQuery(key)` | Returns a single query parameter value lazily. |
 | `ctx.jsonBody()` | **[Async]** Parses and caches JSON body for performance. |
 | `ctx.status(code)` | Sets the HTTP status code (**Chainable**). |
 | `ctx.send(msg, ext)` | Returns a standardized JSON response. |
 | `ctx.json(data)` | Returns an optimized raw JSON response. |
+| `ctx.sse(source)` | Streams Server-Sent Events (`text/event-stream`). |
 | `ctx.setHeader(k, v)` | Sets a response header. |
 | `ctx.set / ctx.get` | Manual storage within the request lifecycle. |
 

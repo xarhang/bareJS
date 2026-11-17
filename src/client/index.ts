@@ -78,10 +78,12 @@ const buildUrl = (baseUrl: string, path: string, options?: ClientRequestOptions)
 };
 
 export const bareClient = <AppOrRoutes = any>(
-  baseUrl: string,
+  baseUrlOrApp: string | { fetch: (req: Request) => any },
   clientOptions: BareClientOptions = {}
 ): BareClient<AppOrRoutes extends { __routes?: infer R extends RouteSchema } ? R : RouteSchema> => {
-  const fetchImpl = clientOptions.fetch ?? fetch;
+  const isApp = typeof baseUrlOrApp === 'object' && baseUrlOrApp !== null && typeof baseUrlOrApp.fetch === 'function';
+  const baseUrl = isApp ? 'http://localhost' : (baseUrlOrApp as string);
+  const fetchImpl = clientOptions.fetch ?? (isApp ? ((input: any, init?: RequestInit) => baseUrlOrApp.fetch(new Request(String(input), init))) as any : fetch);
   const defaultHeaders = clientOptions.headers ?? {};
 
   const request = async (method: string, path: string, options?: ClientRequestOptions) => {

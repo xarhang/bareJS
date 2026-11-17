@@ -29,10 +29,45 @@ export class BareJS extends BareRouter {
   private _useLog: boolean = false;
   private errorHandler?: (err: any, ctx: Context) => any;
   private wsRoutes = new Map<string, WebSocketRouteHandler>();
+  private startHooks: (() => void | Promise<void>)[] = [];
+  private stopHooks: (() => void | Promise<void>)[] = [];
+  private server?: ReturnType<typeof Bun.serve>;
+  private shutdownHandler?: () => Promise<void>;
+  private wsAdapter = {
+    open(ws: any) { ws.data?.open?.(ws); },
+    message(ws: any, msg: any) { ws.data?.message?.(ws, msg); },
+    close(ws: any, code: any, reason: any) { ws.data?.close?.(ws, code, reason); },
+    drain(ws: any) { ws.data?.drain?.(ws); }
+  };
 
   public useLog(enabled: boolean = true): this {
     this._useLog = enabled;
     return this;
+  }
+
+  public onStart(fn: () => void | Promise<void>): this {
+    this.startHooks.push(fn);
+    return this;
+  }
+
+  public onStop(fn: () => void | Promise<void>): this {
+    this.stopHooks.push(fn);
+    return this;
+  }
+
+  public async stop(closeActiveConnections = false): Promise<void> {
+    if (this.shutdownHandler) {
+      process.off("SIGINT", this.shutdownHandler);
+      process.off("SIGTERM", this.shutdownHandler);
+      this.shutdownHandler = undefined;
+    }
+    if (this.server) {
+      this.server.stop(closeActiveConnections);
+      this.server = undefined;
+    }
+    for (const hook of this.stopHooks) {
+      await hook();
+    }
   }
   constructor(poolSize: number = 1024) {
     super();
@@ -129,6 +164,9 @@ export class BareJS extends BareRouter {
         return ctx.status(400).json({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' }, id: null });
       }
       if (Array.isArray(payload)) {
+        if (payload.length === 0) {
+          return ctx.status(400).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request' }, id: null });
+        }
         const results = (await Promise.all(payload.map((item) => execCall(item, ctx)))).filter(Boolean);
         return results.length > 0 ? results : new Response(null, { status: 204 });
       }
@@ -140,10 +178,57 @@ export class BareJS extends BareRouter {
   }
 
 
+  private _hasDerive = false;
+  public derive<T extends Record<string, any>>(fn: (ctx: Context) => Promise<T> | T): this {
+    this._hasDerive = true;
+    this.use(async (ctx: any, next: any) => {
+      const derived = await fn(ctx);
+      if (derived && typeof derived === 'object') {
+        const keys = Object.keys(derived);
+        if (!ctx._derivedKeys) ctx._derivedKeys = [];
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i]!;
+          if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') {
+            ctx[k] = (derived as any)[k];
+            ctx._derivedKeys.push(k);
+          }
+        }
+      }
+      return next();
+    });
+    return this;
+  }
+
   // inherited use() from BareRouter handles router merging now
 
   private compileHandler(pipeline: any[], isLog: boolean): Function {
+    const timeoutMw = pipeline.find((fn) => fn?.__timeout);
+    if (timeoutMw) {
+      const { ms, status, message } = timeoutMw.__timeout;
+      const innerPipeline = pipeline.filter((fn) => !fn?.__timeout);
+      const innerCompiled = this.compileHandler(innerPipeline, isLog);
+      return async (ctx: Context, doLog?: any) => {
+        const res = innerCompiled(ctx, doLog);
+        if (!res || !res.then) return res;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const timeoutPromise = new Promise<Response>((resolve) => {
+            timer = setTimeout(() => {
+              resolve(Response.json({ status: 'error', code: 'REQUEST_TIMEOUT', message }, { status }));
+            }, ms);
+          });
+          return await Promise.race([res, timeoutPromise]);
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
+        }
+      };
+    }
+
     const len = pipeline.length;
+    const rFilterMw = pipeline.find((fn) => fn?.__responseFilter);
+    const rFilter = rFilterMw?.__responseFilter;
+    const idemMw = pipeline.find((fn) => fn?.__idempotencyCommit);
+    const idemCommit = idemMw?.__idempotencyCommit;
 
     // Static ResponseInit for 200 OK (Zero Allocation)
     const json200 = { status: 200, headers: { "content-type": "application/json" } };
@@ -154,37 +239,59 @@ export class BareJS extends BareRouter {
 
     // Inline Finalizer
     const finalizeCode = `
+      ${rFilter ? 'res = rFilter(res);' : ''}
       if (res instanceof Response) {
+        if (ctx._headers) {
+          for (const k in ctx._headers) {
+            if (!res.headers.has(k)) res.headers.set(k, ctx._headers[k]);
+          }
+        }
+        if (ctx._setCookies) {
+          for (let i = 0; i < ctx._setCookies.length; i++) res.headers.append('Set-Cookie', ctx._setCookies[i]);
+        }
         ${logResCode}
         return res;
       }
       
       const finalStatus = ctx._status || 200;
+      ${idemCommit ? 'idemCommit(ctx, res, finalStatus);' : ''}
       ${logStatusCode}
 
+      let outRes;
       if (typeof res === 'string') {
-        if (finalStatus === 200 && !ctx._headers) return new Response(res, text200);
-        const h = ctx._headers;
-        if (h && !h["content-type"]) h["content-type"] = "text/plain";
-        return new Response(res, {
+        if (finalStatus === 200 && !ctx._headers) {
+          outRes = new Response(res, text200);
+        } else {
+          outRes = new Response(res, {
+            status: finalStatus,
+            headers: ctx._headers || text200.headers
+          });
+        }
+      } else if (finalStatus === 200 && !ctx._headers) {
+        outRes = Response.json(res ?? null, json200);
+      } else {
+        outRes = Response.json(res ?? null, {
           status: finalStatus,
-          headers: h || text200.headers
+          headers: ctx._headers || json200.headers
         });
       }
-      
-      if (finalStatus === 200 && !ctx._headers) return Response.json(res ?? null, json200);
-      const h = ctx._headers;
-      if (h && !h["content-type"]) h["content-type"] = "application/json";
-      return Response.json(res ?? null, {
-        status: finalStatus,
-        headers: h || json200.headers
-      });
+
+      if (ctx._setCookies) {
+        for (let i = 0; i < ctx._setCookies.length; i++) outRes.headers.append('Set-Cookie', ctx._setCookies[i]);
+      }
+      return outRes;
     `;
 
     const argSig = isLog ? 'ctx, doLog' : 'ctx';
 
     if (len === 1) {
-      const fn0 = pipeline[0];
+      const fn0 = pipeline[0]!;
+      if (fn0.constructor.name === 'AsyncFunction') {
+        return new Function('fn0', 'json200', 'text200', `return async function(${argSig}) {
+          const res = await fn0(ctx);
+          ${finalizeCode}
+        }`)(fn0, json200, text200);
+      }
       return new Function('fn0', 'json200', 'text200', `return function(${argSig}) {
         const res = fn0(ctx);
         if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
@@ -218,8 +325,8 @@ export class BareJS extends BareRouter {
         code += `if (r${i} && r${i} instanceof Response) { ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
       }
       code += `
-        const res = fn${len - 1}(ctx);
-        if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
+        let res = fn${len - 1}(ctx);
+        if (res && res.then) return res.then(v => { let res = v; ${finalizeCode} });
         ${finalizeCode}
       `;
     }
@@ -229,7 +336,7 @@ export class BareJS extends BareRouter {
       ? `return async function(${argSig})`
       : `return function(${argSig})`;
 
-    return new Function(...fnNames, 'noop', 'json200', 'text200', `${fnHeader} { ${code} }`)(...pipeline, noop, json200, text200);
+    return new Function(...fnNames, 'noop', 'json200', 'text200', ...(rFilter ? ['rFilter'] : []), ...(idemCommit ? ['idemCommit'] : []), `${fnHeader} { ${code} }`)(...pipeline, noop, json200, text200, ...(rFilter ? [rFilter] : []), ...(idemCommit ? [idemCommit] : []));
   }
 
   public compile() {
@@ -252,6 +359,12 @@ export class BareJS extends BareRouter {
         if (typeof res === 'string') return new Response(res, { status });
         return Response.json(res ?? null, { status });
       }
+      if (err?.status >= 400 && err?.status < 500) {
+        return Response.json({
+          status: err.status,
+          message: err.message || 'Bad Request'
+        }, { status: err.status });
+      }
       return Response.json({
         status: 500,
         message: process.env.NODE_ENV === 'development' ? (err?.message || "Internal Server Error") : "Internal Server Error",
@@ -270,12 +383,26 @@ export class BareJS extends BareRouter {
     const EMPTY_PARAMS = Object.freeze({});
     const hNames = hoistedHandlers.map((_, i) => `h${i}`);
 
+    const hasIdem = this.routes.some((r: any) => r.handlers.some((h: any) => h?.__idempotencyCommit));
+    const deriveCleanup = this._hasDerive
+      ? `if (ctx._derivedKeys) { for (let i = 0; i < ctx._derivedKeys.length; i++) delete ctx[ctx._derivedKeys[i]]; ctx._derivedKeys = undefined; }`
+      : '';
+    const idemCleanup = hasIdem
+      ? `if (ctx._idempotencyKey) { ctx._idemInFlight.delete(ctx._idempotencyKey); ctx._idempotencyKey = undefined; ctx._idemInFlight = undefined; }`
+      : '';
+
     const releaseCode = `
       if (ctx.store.size > 0) ctx.store.clear();
+      ${deriveCleanup}
+      ${idemCleanup}
       ctx.req = undefined;
+      ctx._status = 200;
       ctx.body = undefined;
       ctx._query = undefined;
+      ctx._cookies = undefined;
+      ctx._setCookies = undefined;
       ctx._headers = undefined;
+      ctx._requestId = undefined;
       ctx.params = EMPTY_PARAMS;
       if (poolTop < maxPool) pool[poolTop++] = ctx;
     `;
@@ -300,8 +427,50 @@ export class BareJS extends BareRouter {
         }`
       : '';
 
-    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'EMPTY_PARAMS', ...(hasGlobalMw ? ['hOptions'] : []), ...hNames];
-    const values = [pool, maxPool, Context, hNotFound, hError, EMPTY_PARAMS, ...(hasGlobalMw ? [hOptions] : []), ...hoistedHandlers];
+    const staticMws = this.groupMiddleware.filter((m: any) => m.__isStatic);
+    const hasStaticMw = staticMws.length > 0;
+    const runStatic = hasStaticMw
+      ? async (ctx: Context) => {
+          const noop = () => {};
+          for (let i = 0; i < staticMws.length; i++) {
+            const r = await staticMws[i](ctx, noop);
+            if (r instanceof Response) {
+              if (ctx._headers) {
+                for (const k in ctx._headers) {
+                  const val = ctx._headers[k];
+                  if (val !== undefined && !r.headers.has(k)) r.headers.set(k, val);
+                }
+              }
+              return r;
+            }
+          }
+          return undefined;
+        }
+      : undefined;
+
+    const staticFallback = hasStaticMw
+      ? `if (method === 'GET' || method === 'HEAD') {
+          out = runStatic(ctx);
+          if (out && out.then) {
+            return out.then((v) => {
+              if (v instanceof Response) { ${isLog ? 'doLog(v.status);' : ''} ${releaseCode} return v; }
+              const errorBody = hNotFound();
+              const status = errorBody.status || 404;
+              ${isLog ? 'doLog(status);' : ''}
+              ${releaseCode}
+              return Response.json(errorBody, { status });
+            }, (e) => {
+              const errRes = hError(e, ctx);
+              ${releaseCode}
+              ${isLog ? 'doLog(errRes.status || 500);' : ''}
+              return errRes;
+            });
+          }
+        }`
+      : '';
+
+    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'EMPTY_PARAMS', ...(hasGlobalMw ? ['hOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...hNames];
+    const values = [pool, maxPool, Context, hNotFound, hError, EMPTY_PARAMS, ...(hasGlobalMw ? [hOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...hoistedHandlers];
 
     const logInit = isLog ? `
     const start = performance.now();
@@ -333,16 +502,12 @@ export class BareJS extends BareRouter {
 
     try {
       ctx.req = req;
-      ctx._status = 200;
-      ctx._headers = undefined;
-      if (ctx.store.size > 0) ctx.store.clear();
-      ctx.params = EMPTY_PARAMS;
-      ctx.body = undefined;
-      ctx._query = undefined;
 
       ${routerCode}
 
       ${optionsFallback}
+
+      ${staticFallback}
 
       const errorBody = hNotFound();
       const status = errorBody.status || 404;
@@ -420,12 +585,7 @@ export class BareJS extends BareRouter {
             }
             return baseFetch(req);
           },
-          websocket: {
-            open(ws) { ws.data?.open?.(ws); },
-            message(ws, msg) { ws.data?.message?.(ws, msg); },
-            close(ws, code, reason) { ws.data?.close?.(ws, code, reason); },
-            drain(ws) { ws.data?.drain?.(ws); }
-          }
+          websocket: this.wsAdapter
         })
       : Bun.serve({
           port: finalPort,
@@ -434,26 +594,30 @@ export class BareJS extends BareRouter {
           fetch: baseFetch
         });
 
-    const shutdown = () => {
+    this.server = server;
+    for (const hook of this.startHooks) {
+      Promise.resolve(hook()).catch((e) => console.error(`[${this.name}] onStart error:`, e));
+    }
+
+    const shutdown = async () => {
       const isProd = process.env.NODE_ENV === 'production';
       const serverName = this.name;
       const supportsEmoji = process.stdout.isTTY;
 
       if (isProd) {
         console.log(`[${serverName}] INFO: Stopping server...`);
+        await this.stop(false);
       } else {
-
         const stopIcon = supportsEmoji ? "🛑" : "!";
         const checkIcon = supportsEmoji ? "✅" : "v";
-
-
         process.stdout.write(`\n\x1b[31m${stopIcon} Stopping ${serverName}...\x1b[0m\n`);
-        server.stop();
+        await this.stop(false);
         process.stdout.write(`\x1b[32m${checkIcon} ${serverName} has been stopped.\x1b[0m\n`);
       }
       process.exit(0);
     };
 
+    this.shutdownHandler = shutdown;
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
     return server;

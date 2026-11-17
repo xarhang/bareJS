@@ -58,7 +58,8 @@ export const createToken = async (payload: object, secret: string): Promise<stri
  * 1. BARE TOKEN AUTH (Standard JWT Middleware)
  * High-performance, constant-time JWT middleware for BareJS
  */
-export const bareAuth = (secret: string) => {
+export const bareAuth = (secretOrOpts: string | { secret: string }) => {
+  const secret = typeof secretOrOpts === 'string' ? secretOrOpts : secretOrOpts.secret;
   return (ctx: any, next: any) => {
     const authHeader = ctx.req.headers.get('Authorization');
 

@@ -1,6 +1,6 @@
 {
   "name": "barejs",
-  "version": "0.1.49",
+  "version": "0.1.50",
   "author": "xarhang",
   "description": "High-performance JIT-specialized web framework for Bun",
   "main": "./dist/index.js",
@@ -56,6 +56,7 @@
     "elysia": "latest",
     "hono": "latest",
     "mitata": "^1.0.34",
+    "playwright-core": "^1.65.1",
     "typescript": "latest",
     "zod": "^3.25.76"
   },
@@ -63,6 +64,7 @@
     "dist",
     "src",
     "README.md",
+    "llms.txt",
     "LICENSE"
   ]
 }

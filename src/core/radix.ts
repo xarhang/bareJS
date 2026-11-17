@@ -5,13 +5,18 @@ export class RadixNode {
   public staticKeys: string[] = [];
   public paramNode: RadixNode | null = null;
   public paramName: string | null = null;
+  public wildcardNode: RadixNode | null = null;
   public handlers: Record<string, Function> = {};
 
   public insert(path: string, method: string, handler: Function) {
     let node: RadixNode = this;
     const parts = path.split('/').filter(Boolean);
     for (const part of parts) {
-      if (part.startsWith(':')) {
+      if (part === '*') {
+        if (!node.wildcardNode) node.wildcardNode = new RadixNode();
+        node = node.wildcardNode;
+        break;
+      } else if (part.startsWith(':')) {
         if (!node.paramNode) node.paramNode = new RadixNode();
         node.paramName = part.slice(1);
         node = node.paramNode;
@@ -69,6 +74,9 @@ export class RadixNode {
         if (node.paramNode) {
           ctx.params[node.paramName!] = url.slice(i, j);
           node = node.paramNode;
+        } else if (node.wildcardNode) {
+          ctx.params['*'] = url.slice(i);
+          return node.wildcardNode.handlers[method] || null;
         } else return null;
       }
       i = j + 1;
@@ -125,8 +133,19 @@ export class RadixNode {
         code += `${indent}  }\n`;
         code += `${indent}}\n`;
 
+      } else if (this.staticKeys.length > 4) {
+        code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
+        code += `${indent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
+        code += `${indent}switch (${pathPrefix}.slice(${idxPrefix}, slash${level})) {\n`;
+        for (const key of this.staticKeys) {
+          code += `${indent}  case ${JSON.stringify(key)}: {\n`;
+          const child = this.children[key]!;
+          code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramAccumulator);
+          code += `${indent}    break;\n`;
+          code += `${indent}  }\n`;
+        }
+        code += `${indent}}\n`;
       } else {
-  
         code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
         code += `${indent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
         code += `${indent}const len${level} = slash${level} - (${idxPrefix});\n\n`; 
@@ -165,7 +184,7 @@ export class RadixNode {
     // 2. Param Node Logic (Fallback)
     if (this.paramNode) {
       const pNode = this.paramNode;
-      if (this.staticKeys.length === 0) {
+      if (this.staticKeys.length <= 1) {
         code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
         code += `${indent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
       }
@@ -175,6 +194,21 @@ export class RadixNode {
 
       const newAccumulator = [...paramAccumulator, { name: this.paramName!, varName: pVar }];
       code += pNode.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, newAccumulator);
+    }
+
+    // 3. Wildcard Node Logic (Catch-All *)
+    if (this.wildcardNode && Object.keys(this.wildcardNode.handlers).length > 0) {
+      const wVar = `wL${level}`;
+      code += `${indent}const ${wVar} = ${pathPrefix}.slice(${idxPrefix}, urlLen);\n`;
+      const wAcc = [...paramAccumulator, { name: '*', varName: wVar }];
+      const props = wAcc.map((p: any) => `${JSON.stringify(p.name)}: ${p.varName}`).join(', ');
+      code += `${indent}ctx.params = { ${props} };\n`;
+      code += `${indent}switch(method) {\n`;
+      for (const [m, h] of Object.entries(this.wildcardNode.handlers)) {
+        const hName = register(h as Function);
+        code += `${indent}  case ${JSON.stringify(m)}: return ${hName}(ctx);\n`;
+      }
+      code += `${indent}}\n`;
     }
 
     return code;

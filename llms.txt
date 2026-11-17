@@ -1,0 +1,138 @@
+# BareJS (`barejs`) — AI Quick Reference (`llms.txt`)
+
+> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`) with built-in security (Argon2id, HS256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Idempotency-Key double-charge protection, Singleflight request coalescing, Security Headers, DoS body/upload limits, Prototype Pollution guards) and **100% Function & Line Test Coverage (209 tests / 2,878 assertions)**.
+
+## 1. Installation & Minimal App
+```ts
+import { BareJS, Context, Type } from 'barejs';
+
+const app = new BareJS();
+
+// Direct return (Elysia style — auto-detects JSON, text, or Response)
+app.get('/hello/:name', (ctx: Context) => ({ hello: ctx.params.name }));
+app.get('/ping', () => 'pong');
+
+// Wildcard catch-all route (`ctx.params['*']`)
+app.get('/files/*', (ctx: Context) => ({ filePath: ctx.params['*'] }));
+
+app.listen(3000);
+```
+
+## 2. Routing, Plugins & Unified Schema Validation
+Methods: `app.get`, `app.post`, `app.put`, `app.patch`, `app.delete`, `app.options`, `app.useAll`, `app.group(prefix, fn)`, `app.use(mwOrRouterOrPlugin)`.
+Pass a `RouteSchemas` object directly before the handler for AOT-compiled validation + auto-coercion (`number`/`integer`/`boolean` on `query` & `params`):
+```ts
+app.post('/users/:id', {
+  detail: { summary: 'Update user', description: 'Updates user profile', tags: ['Users'] },
+  params: Type.Object({ id: Type.Integer() }),
+  query: Type.Object({ active: Type.Optional(Type.Boolean()) }),
+  headers: Type.Object({ 'x-client': Type.Optional(Type.String()) }),
+  body: Type.Object({ name: Type.String({ minLength: 1 }) }),
+  response: Type.Object({ id: Type.Number(), name: Type.String() }), // Recursive JIT projector auto-strips undeclared fields (e.g. password_hash)!
+  maxBodySize: 1024 * 1024 // default 1MB (returns 413 on overflow)
+}, (ctx: Context) => ({
+  id: ctx.params.id,        // auto-coerced to number
+  active: ctx.query.active, // auto-coerced to boolean
+  name: ctx.body.name,
+  password_hash: 'secret'   // automatically stripped before sending to client!
+}));
+```
+Supports **TypeBox** (`Type`, `t`), **Zod** (`Z`, `z`), or **Native** (`native({ properties: { a: { type: 'string' }, b: { type: 'number' } }, required: ['a'] })`).
+
+### Modular Routers & Plugins
+```ts
+// Sub-router
+const api = new BareRouter();
+api.get('/items', () => []);
+app.use('/api/v1', api);
+
+// Reusable Plugin
+app.use({
+  name: 'metrics-plugin',
+  install(app) {
+    app.get('/metrics', () => ({ uptime: process.uptime() }));
+  }
+});
+```
+
+## 3. Context (`ctx`) Complete API
+- `ctx.req`: Raw incoming Bun `Request`.
+- `ctx.params`: Route params (`Record<string, any>`, including `ctx.params['*']` for wildcards).
+- `ctx.query` / `ctx.getQuery(key)`: Lazy, prototype-pollution-safe query parser (fast-path when no `%` or `+`).
+- `await ctx.jsonBody(maxBytes = 1048576)`: Cached JSON body parser with native fast-path and `413` DoS limit.
+- `await ctx.upload({ maxFileSize, maxFiles, allowedTypes })`: Safe `multipart/form-data` parser; returns `{ fields, files }` with `safeName` (sanitized against path traversal) and enforces `413` (size/count) and `415` (MIME type).
+- `ctx.cookies`: Lazy parsed request cookies (`Record<string, string>`).
+- `await ctx.setCookie(name, value, { secret?, httpOnly?, sameSite?, secure?, maxAge?, expires?, domain?, path? })`: Defaults to `HttpOnly; SameSite=Lax; Path=/`. Pass `secret` for HMAC-SHA256 signing.
+- `await ctx.getSignedCookie(name, secret)`: Verifies HMAC signature with `timingSafeEqual`; returns `null` if tampered or missing.
+- `ctx.deleteCookie(name, opts?)`: Expires cookie immediately (`Max-Age=0`).
+- `ctx.requestId`: Lazy `x-request-id` header or generated `crypto.randomUUID()`.
+- `ctx.ip`: Client IP extracted from `x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, or `'127.0.0.1'`.
+- `ctx.user`: Authenticated user payload populated by `bareAuth` or `basicAuth`.
+- `ctx.store` / `ctx.set(k, v)` / `ctx.get(k)`: Per-request `Map<string, any>` (automatically cleared on pool release).
+- **Response Helpers (Hono / Express style):**
+  - `ctx.status(code)` (chainable)
+  - `ctx.setHeader(name, val)` (chainable, copy-on-write safe)
+  - `ctx.json(data)` -> `application/json`
+  - `ctx.send(message, extra?)` -> `{ status: 'success' | 'error', msg: message, ...extra }`
+  - `ctx.html(html, status?)` -> `text/html; charset=utf-8`
+  - `ctx.text(text, status?)` -> `text/plain; charset=utf-8`
+  - `ctx.redirect(url, status = 302)` -> `Location: url`
+  - `ctx.sse(async (send, close) => { send(data, event?, id?); })` or `ctx.sse(asyncIterable)` -> `text/event-stream`
+
+## 4. Context Enrichment (`app.derive`)
+```ts
+const derivedApp = app.derive((ctx) => ({
+  requestTime: Date.now(),
+  tenant: ctx.req.headers.get('x-tenant') || 'public'
+}));
+```
+Derived properties are attached directly onto `ctx` with TypeScript inference (`Bare<Derived>`) and automatically cleaned up when `Context` returns to the pool.
+
+## 5. Built-in Security Middlewares, Idempotency & Singleflight
+```ts
+import {
+  cors, csrf, timeout, rateLimit, securityHeaders,
+  idempotency, createSingleflight,
+  bareAuth, createToken, basicAuth, hasRole, Hash, staticFile
+} from 'barejs';
+
+app.use(securityHeaders());
+app.use(cors({ origin: ['https://app.example.com'], credentials: true }));
+app.use(csrf({ allowedOrigins: ['https://app.example.com'], requireToken: true }));
+app.use(timeout(10_000, { status: 408, message: 'Timed out' }));
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
+app.use(staticFile('public', { maxAge: 3600, etag: true })); // ETag, 304, Range 206/416, HEAD
+
+// Idempotency-Key double-charge & race condition guard (409 IDEMPOTENT_IN_FLIGHT + X-Idempotent-Replayed: true)
+app.post('/pay', idempotency({ ttlMs: 86_400_000, maxKeys: 10_000 }), (ctx) => ({ paid: true }));
+
+// Thundering-herd / Cache-stampede request coalescer
+const sf = createSingleflight();
+app.get('/report', () => sf.do('report-key', async () => ({ total: 100 })));
+
+// Auth & Hashing
+const hash = await Hash.make('password'); // Argon2id (64MB default)
+const ok = await Hash.verify('password', hash);
+const token = await createToken({ id: 1, role: 'admin', exp: Math.floor(Date.now() / 1000) + 3600 }, process.env.JWT_SECRET!);
+
+// bareAuth accepts either secret string or { secret } object
+app.get('/admin', bareAuth(process.env.JWT_SECRET!), hasRole('admin'), (ctx) => ctx.user);
+```
+
+## 6. Real-Time, RPC, OpenAPI & Client
+- **WebSocket**: `app.ws('/ws/chat', { open(ws){}, message(ws, msg){}, close(ws){}, drain(ws){} })`
+- **JSON-RPC 2.0**: `app.rpc('/rpc', { add: ({ a, b }, ctx) => a + b })` (supports single, batch, notifications, and standard `-32700`/`-32600`/`-32601`/`-32603` error codes)
+- **OpenAPI 3.1 + Scalar UI**: `app.docs('/docs', { title: 'My API', version: '1.0.0' })` (serves `/docs` & `/docs/json` with full `params`, `query`, `headers`, `body`, `response`, and `detail`)
+- **Type-Safe Client (URL or Zero-Network In-Memory `app`)**:
+  - Network: `const api = bareClient('http://localhost:3000');`
+  - In-Memory (SSR / Unit Tests): `const api = bareClient(app); await api.get('/users/:id', { params: { id: 1 } });`
+
+## 7. Lifecycle & Error Handling
+```ts
+app.onStart(() => console.log('Server started'));
+app.onStop(async () => await db.close());
+app.onError((err, ctx) => ctx.status(err.status || 500).json({ error: err.message, requestId: ctx.requestId }));
+app.setNotFound(() => ({ status: 404, message: 'Custom Not Found' }));
+await app.stop(); // Graceful shutdown & removes SIGINT/SIGTERM listeners
+```
+> **Note**: In `NODE_ENV=production`, unhandled 500 errors automatically mask internal `err.message` and `stack` unless overridden by `app.onError()`, while preserving client 4xx errors (`400`, `413`, `415`).

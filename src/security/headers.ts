@@ -29,11 +29,20 @@ export const securityHeaders = (options: SecurityHeadersOptions = {}): Middlewar
   headersToSet.push(['X-XSS-Protection', '0']);
 
   const len = headersToSet.length;
-
-  return (ctx, next) => {
+  const headersObj: Record<string, string> = Object.freeze((() => {
+    const o: Record<string, string> = {};
     for (let i = 0; i < len; i++) {
       const pair = headersToSet[i]!;
-      ctx.setHeader(pair[0], pair[1]);
+      o[pair[0].toLowerCase()] = pair[1];
+    }
+    return o;
+  })());
+
+  return (ctx, next) => {
+    if (!ctx._headers) {
+      ctx._headers = headersObj;
+    } else {
+      ctx._headers = { ...ctx._headers, ...headersObj };
     }
 
     const res = next?.();

@@ -3,8 +3,9 @@ import {
   type Handler,
   type GroupCallback
 } from '../core/context';
+import { schemaValidator, type RouteSchemas } from '../security/validators';
 
-type HandlersChain = (Middleware | Handler)[];
+type HandlersChain = (Middleware | Handler | RouteSchemas)[];
 
 export class BareRouter {
   public routes: any[] = [];
@@ -16,16 +17,24 @@ export class BareRouter {
 
   private _add(method: string, path: string, handlers: HandlersChain) {
     let fullPath = (this.prefix + "/" + path)
-        .replace(/\/+/g, "/")
-
-
+        .replace(/\/+/g, "/");
 
     if (fullPath.endsWith("/")) fullPath = fullPath.slice(0, -1);
+
+    const resolvedHandlers: any[] = [];
+    for (let i = 0; i < handlers.length; i++) {
+      const h = handlers[i];
+      if (typeof h === 'function') {
+        resolvedHandlers.push(h);
+      } else if (h && typeof h === 'object') {
+        resolvedHandlers.push(schemaValidator(h as RouteSchemas));
+      }
+    }
 
     this.routes.push({
       method: method.toUpperCase(),
       path: fullPath || "", 
-      handlers: [...this.groupMiddleware, ...handlers]
+      handlers: [...this.groupMiddleware, ...resolvedHandlers]
     });
     return this;
 }
@@ -53,6 +62,8 @@ export class BareRouter {
   public use(mw: any) {
     if (mw instanceof BareRouter || (mw && mw.routes)) {
       this.routes.push(...mw.routes);
+    } else if (mw && typeof mw.install === 'function') {
+      mw.install(this);
     } else {
       this.groupMiddleware.push(mw);
     }

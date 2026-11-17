@@ -52,19 +52,36 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
 
     const method = route.method.toLowerCase();
     const params: any[] = [];
-    const paramMatches = route.path.matchAll(/:([a-zA-Z0-9_]+)/g);
-    for (const m of paramMatches) {
-      params.push({
-        name: m[1],
-        in: 'path',
-        required: true,
-        schema: { type: 'string' }
-      });
-    }
-
     let requestBody: any = undefined;
+    let responseSchema: any = undefined;
+    let detail: any = undefined;
+    let paramSchemaObj: Record<string, any> | null = null;
+
     for (const h of route.handlers) {
-      if (h && (h as any).__schema) {
+      if (!h) continue;
+      const rs = (h as any).__routeSchemas;
+      if (rs) {
+        if (rs.detail) detail = rs.detail;
+        if (rs.params) paramSchemaObj = extractSchema(rs.params);
+        if (rs.query) {
+          const qSchema = extractSchema(rs.query);
+          const qReq = new Set<string>(qSchema.required || []);
+          for (const [k, prop] of Object.entries(qSchema.properties || {})) {
+            params.push({ name: k, in: 'query', required: qReq.has(k), schema: prop });
+          }
+        }
+        if (rs.headers) {
+          const hSchema = extractSchema(rs.headers);
+          const hReq = new Set<string>(hSchema.required || []);
+          for (const [k, prop] of Object.entries(hSchema.properties || {})) {
+            params.push({ name: k, in: 'header', required: hReq.has(k), schema: prop });
+          }
+        }
+        if (rs.response) {
+          responseSchema = extractSchema(rs.response);
+        }
+      }
+      if ((h as any).__schema && !requestBody) {
         requestBody = {
           required: true,
           content: {
@@ -73,16 +90,34 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
             }
           }
         };
-        break;
       }
     }
 
+    const paramMatches = route.path.matchAll(/:([a-zA-Z0-9_]+)/g);
+    for (const m of paramMatches) {
+      const pName = m[1]!;
+      const pProp = paramSchemaObj?.properties?.[pName] || { type: 'string' };
+      params.unshift({
+        name: pName,
+        in: 'path',
+        required: true,
+        schema: pProp
+      });
+    }
+
     paths[openApiPath][method] = {
-      summary: `${route.method} ${openApiPath}`,
+      summary: detail?.summary || `${route.method} ${openApiPath}`,
+      ...(detail?.description ? { description: detail.description } : {}),
+      ...(detail?.tags ? { tags: detail.tags } : {}),
       ...(params.length ? { parameters: params } : {}),
       ...(requestBody ? { requestBody } : {}),
       responses: {
-        '200': { description: 'Success' }
+        '200': {
+          description: 'Success',
+          ...(responseSchema
+            ? { content: { 'application/json': { schema: responseSchema } } }
+            : {})
+        }
       }
     };
   }

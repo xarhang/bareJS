@@ -16,13 +16,17 @@ export interface BarePlugin {
 }
 
 // --- 2. Context & Types ---
+export { Context } from './core/context';
 export type {
   Middleware,
   Handler,
   Next,
-  Context,
   Params,
-  AuthUser
+  AuthUser,
+  CookieOptions,
+  UploadOptions,
+  UploadedFile,
+  UploadResult
 } from './core/context';
 
 // --- 3. The Validation Suite (Builders - สำหรับสร้าง Schema) ---
@@ -30,7 +34,7 @@ import { Type } from "@sinclair/typebox";
 export { Type, Type as T, Type as TypeBox };
 
 // --- 4. The Validation Suite (Engines - สำหรับเป็น Middleware) ---
-import { typebox, zod, native, validate, Z } from './security/validators';
+import { typebox, zod, native, validate, schemaValidator, createResponseFilter, Z, type RouteSchemas, type RouteDetail } from './security/validators';
 export { 
   // TypeBox Engine
   typebox, 
@@ -45,15 +49,23 @@ export {
   native as n,
   // Auto-Detect Engine
   validate, 
-  validate as v 
+  validate as v,
+  // Unified Route Schema Engine (body, query, params, headers, response, detail, maxBodySize)
+  schemaValidator,
+  createResponseFilter,
+  type RouteSchemas,
+  type RouteDetail
 };
 
 // --- 5. Middlewares & Utilities ---
 // export { logger } from './utils/logger';
 export { cors } from './security/cors';
+export { csrf, type CsrfOptions } from './security/csrf';
+export { timeout, type TimeoutOptions } from './security/timeout';
 export { rateLimit, type RateLimitOptions } from './security/rateLimit';
+export { idempotency, createSingleflight, type IdempotencyOptions } from './security/idempotency';
 export { securityHeaders, type SecurityHeadersOptions } from './security/headers';
-export { staticFile } from './utils/static';
+export { staticFile, type StaticOptions } from './utils/static';
 export { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from './utils/openapi';
 export { BareRouter } from './core/router';
 

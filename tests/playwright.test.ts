@@ -3,14 +3,16 @@ import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import { chromium, type Browser } from "playwright-core";
 import { BareJS, Context, securityHeaders, cors, Type } from "../src/index";
 
-const chromiumPath = [
-  process.env.CHROMIUM_PATH,
-  "/usr/bin/chromium",
-  "/usr/bin/chromium-browser",
-  "/usr/bin/google-chrome"
-].find((p): p is string => Boolean(p && existsSync(p)));
+const chromiumPath = process.env.CI
+  ? process.env.CHROMIUM_PATH
+  : [
+      process.env.CHROMIUM_PATH,
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/google-chrome"
+    ].find((p): p is string => Boolean(p && existsSync(p)));
 
-describe.skipIf(!chromiumPath)("Playwright Real Browser E2E & Security Tests", () => {
+describe.skipIf(!process.env.CI && !chromiumPath)("Playwright Real Browser E2E & Security Tests", () => {
   let browser: Browser;
   let server: any;
   let baseUrl: string;

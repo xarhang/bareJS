@@ -31,11 +31,11 @@ BareJS leads in complex, real-world scenarios. We measure engine efficiency usin
 
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **1.45 µs** | **Baseline** |
-| Elysia | 1.94 µs | 1.34x slower |
-| Hono | 5.62 µs | 3.87x slower |
+| **BareJS** | **0.85 µs** | **Baseline** |
+| Elysia | 1.30 µs | 1.52x slower |
+| Hono | 5.00 µs | 5.88x slower |
 
-> Last Updated: 2026-11-13 (github action)
+> Last Updated: 2026-11-17 (github action)
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 

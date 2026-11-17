@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794897828118,
+  "lastUpdate": 1794897905368,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2377,6 +2377,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5378.21674711719,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "ec6bfe0ff73e0e763a72cff844a0fadcdda50d26",
+          "message": "fix(ci): install playwright bundled chromium in GitHub Actions",
+          "timestamp": "2026-11-17T06:44:46Z",
+          "tree_id": "5787263406ef817da12dac99c89d93fc270da6c6",
+          "url": "https://github.com/xarhang/bareJS/commit/ec6bfe0ff73e0e763a72cff844a0fadcdda50d26"
+        },
+        "date": 1794897905133,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 951.8717311560762,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1173.916124126788,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 4057.2669781317722,
             "unit": "undefined"
           }
         ]

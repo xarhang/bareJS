@@ -10,7 +10,7 @@ const chromiumPath = [
   "/usr/bin/google-chrome"
 ].find((p): p is string => Boolean(p && existsSync(p)));
 
-describe("Playwright Real Browser E2E & Security Tests", () => {
+describe.skipIf(!chromiumPath)("Playwright Real Browser E2E & Security Tests", () => {
   let browser: Browser;
   let server: any;
   let baseUrl: string;
@@ -76,7 +76,7 @@ describe("Playwright Real Browser E2E & Security Tests", () => {
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await browser?.close();

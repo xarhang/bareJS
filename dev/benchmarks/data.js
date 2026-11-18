@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794898968288,
+  "lastUpdate": 1795018947251,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2455,6 +2455,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3395.861189330482,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "496b911e80b540c5fb82abfa8eb0f5c43f128e84",
+          "message": "feat: add logger, healthcheck, trustProxy, JWT revocation, bareClient inference, security hardenings & 268 tests (100% coverage)",
+          "timestamp": "2026-11-18T16:22:06Z",
+          "tree_id": "0c8b60707d07d961a0a9f63954ea7a8769e5e89b",
+          "url": "https://github.com/xarhang/bareJS/commit/496b911e80b540c5fb82abfa8eb0f5c43f128e84"
+        },
+        "date": 1795018947026,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1307.382113153863,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1750.86656100545,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 4966.781055542751,
             "unit": "undefined"
           }
         ]

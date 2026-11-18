@@ -43,9 +43,9 @@ BareJS is engineered to beat both **ElysiaJS** and **Hono** across routing, midd
 
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **1.31 µs** | **Baseline** |
-| Elysia | 1.75 µs | 1.34x slower |
-| Hono | 4.97 µs | 3.80x slower |
+| **BareJS** | **0.87 µs** | **Baseline** |
+| Elysia | 1.14 µs | 1.31x slower |
+| Hono | 3.84 µs | 4.39x slower |
 
 > Last Updated: 2026-11-18 (github action)
 

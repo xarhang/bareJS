@@ -195,6 +195,16 @@ async function main() {
     });
   });
 
+  // Fair warmup for all 3 HTTP + SQLite servers before measurement
+  for (let i = 0; i < 50; i++) {
+    await fetch(`${baseBare}/reports?category=electronics`).then((r) => r.arrayBuffer());
+    await fetch(`${baseElysia}/reports?category=electronics`).then((r) => r.arrayBuffer());
+    await fetch(`${baseHono}/reports?category=electronics`).then((r) => r.arrayBuffer());
+    await fetch(`${baseBare}/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload }).then((r) => r.arrayBuffer());
+    await fetch(`${baseElysia}/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload }).then((r) => r.arrayBuffer());
+    await fetch(`${baseHono}/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload }).then((r) => r.arrayBuffer());
+  }
+
   const results: any = await run();
   const benches = (results?.benchmarks || []).map(extractStats);
 

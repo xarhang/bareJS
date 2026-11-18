@@ -382,11 +382,16 @@ export class BareJS<
         }
       } else if (finalStatus === 200 && !ctx._headers) {
         outRes = Response.json(res ?? null, json200);
+      } else if (finalStatus === 200 && ctx._headers === lastHdrs) {
+        outRes = Response.json(res ?? null, lastInit200);
       } else {
-        outRes = Response.json(res ?? null, {
-          status: finalStatus,
-          headers: ctx._headers || json200.headers
-        });
+        const hdrs = ctx._headers || json200.headers;
+        const init = { status: finalStatus, headers: hdrs };
+        if (finalStatus === 200 && Object.isFrozen(hdrs)) {
+          lastHdrs = hdrs;
+          lastInit200 = init;
+        }
+        outRes = Response.json(res ?? null, init);
       }
 
       if (ctx._setCookies) {
@@ -434,14 +439,14 @@ export class BareJS<
       const fn0 = pipeline[0]!;
       if (fn0.constructor.name === 'AsyncFunction') {
         return wrapIdem(
-          new Function('fn0', 'json200', 'text200', ...extraNames, `return async function(${argSig}) {
+          new Function('fn0', 'json200', 'text200', ...extraNames, `let lastHdrs = null, lastInit200 = null; return async function(${argSig}) {
             const res = await fn0(ctx);
             ${finalizeCode}
           }`)(fn0, json200, text200, ...extraVals)
         );
       }
       return wrapIdem(
-        new Function('fn0', 'json200', 'text200', ...extraNames, `return function(${argSig}) {
+        new Function('fn0', 'json200', 'text200', ...extraNames, `let lastHdrs = null, lastInit200 = null; return function(${argSig}) {
           const res = fn0(ctx);
           if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
           ${finalizeCode}
@@ -483,8 +488,8 @@ export class BareJS<
 
     const noop = () => { };
     const fnHeader = isAsync
-      ? `return async function(${argSig})`
-      : `return function(${argSig})`;
+      ? `let lastHdrs = null, lastInit200 = null; return async function(${argSig})`
+      : `let lastHdrs = null, lastInit200 = null; return function(${argSig})`;
 
     return wrapIdem(
       new Function(...fnNames, 'noop', 'json200', 'text200', ...extraNames, `${fnHeader} { ${code} }`)(...pipeline, noop, json200, text200, ...extraVals)

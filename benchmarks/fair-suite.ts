@@ -226,6 +226,13 @@ async function main() {
     bench("Elysia", () => elysiaResSchema.handle(reqResSchema));
   });
 
+  // Fair warmup for live HTTP servers so the first framework doesn't pay cold-start penalty
+  for (let i = 0; i < 50; i++) {
+    await fetch(urlBare).then((r) => r.arrayBuffer());
+    await fetch(urlElysia).then((r) => r.arrayBuffer());
+    await fetch(urlHono).then((r) => r.arrayBuffer());
+  }
+
   const results: any = await run();
   const benches = (results?.benchmarks || []).map(extractStats);
 

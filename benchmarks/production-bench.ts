@@ -56,6 +56,9 @@ const elysiaApp = new Elysia()
   .onAfterHandle(({ set }) => {
     set.headers["x-content-type-options"] = "nosniff";
     set.headers["x-frame-options"] = "DENY";
+    set.headers["referrer-policy"] = "strict-origin-when-cross-origin";
+    set.headers["strict-transport-security"] = "max-age=31536000; includeSubDomains";
+    set.headers["x-xss-protection"] = "0";
   })
   .post(
     "/orders",
@@ -81,6 +84,9 @@ const honoApp = new Hono()
     await next();
     c.header("x-content-type-options", "nosniff");
     c.header("x-frame-options", "DENY");
+    c.header("referrer-policy", "strict-origin-when-cross-origin");
+    c.header("strict-transport-security", "max-age=31536000; includeSubDomains");
+    c.header("x-xss-protection", "0");
   })
   .post("/orders", async (c) => {
     const body = await c.req.json();

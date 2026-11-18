@@ -228,19 +228,28 @@ export class Context {
     return this;
   }
 
+  private static readonly JSON_200_INIT = { status: 200 };
+
   public json(data: any): Response {
     const status = this._status || 200;
     let res: Response;
 
     if (!this._headers) {
-      res = Response.json(data, { status });
+      res = status === 200
+        ? Response.json(data, Context.JSON_200_INIT)
+        : Response.json(data, { status });
     } else {
-      if (this._headers["content-type"] === undefined) {
-        this._headers["content-type"] = "application/json";
+      let headers = this._headers;
+      if (headers["content-type"] === undefined) {
+        if (Object.isFrozen(headers)) {
+          headers = { ...headers };
+          this._headers = headers;
+        }
+        headers["content-type"] = "application/json";
       }
       res = Response.json(data, {
         status,
-        headers: this._headers as any
+        headers: headers as any
       });
     }
 

@@ -234,15 +234,13 @@ export class Context {
     return this;
   }
 
-  private static readonly JSON_200_INIT = { status: 200 };
-
   public json(data: any): Response {
     const status = this._status || 200;
     let res: Response;
 
     if (!this._headers) {
       res = status === 200
-        ? Response.json(data, Context.JSON_200_INIT)
+        ? Response.json(data)
         : Response.json(data, { status });
     } else {
       let headers = this._headers;

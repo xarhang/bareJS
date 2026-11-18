@@ -381,7 +381,7 @@ export class BareJS<
           });
         }
       } else if (finalStatus === 200 && !ctx._headers) {
-        outRes = Response.json(res ?? null, json200);
+        outRes = Response.json(res ?? null);
       } else if (finalStatus === 200 && ctx._headers === lastHdrs) {
         outRes = Response.json(res ?? null, lastInit200);
       } else {

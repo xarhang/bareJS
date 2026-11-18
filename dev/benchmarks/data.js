@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795024613859,
+  "lastUpdate": 1795025073527,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2845,6 +2845,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3142.2488940755015,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "93747f6384fa9c6578e0918f8f354cc06ca4b12b",
+          "message": "chore(bench): remove noisy TCP fetch overhead and measure pure in-process framework & SQLite performance",
+          "timestamp": "2026-11-18T18:03:33Z",
+          "tree_id": "dfcb2dfdf699325f8fa83be5de4874d94f904929",
+          "url": "https://github.com/xarhang/bareJS/commit/93747f6384fa9c6578e0918f8f354cc06ca4b12b"
+        },
+        "date": 1795025073039,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 507.1692574921396,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 828.6344059056784,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3091.7135431316733,
             "unit": "undefined"
           }
         ]

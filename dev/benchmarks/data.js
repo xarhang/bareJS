@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795023919963,
+  "lastUpdate": 1795024054941,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2728,6 +2728,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3195.6336883955555,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "92c44e6028175773d58775fb7a80c467cf0e7e65",
+          "message": "docs(bench): put p99 on its own clean sub-line in README table",
+          "timestamp": "2026-11-18T17:46:36Z",
+          "tree_id": "b9ac653fc3f19ac2cb108f72da3e45d70669a8d8",
+          "url": "https://github.com/xarhang/bareJS/commit/92c44e6028175773d58775fb7a80c467cf0e7e65"
+        },
+        "date": 1795024054366,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 778.2073190964898,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 923.7369574242355,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3433.743407023511,
             "unit": "undefined"
           }
         ]

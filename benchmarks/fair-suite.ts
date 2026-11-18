@@ -109,25 +109,7 @@ const honoQuery = new Hono().get("/search", async (c) =>
 const reqQuery = new Request("http://localhost/search?q=barejs&page=2&sort=desc");
 
 // ----------------------------------------------------------------------------
-// Scenario 5: Live HTTP Server (Bun.serve TCP Round-Trip)
-// ----------------------------------------------------------------------------
-const bareSrv = new BareJS().get("/ping/:id", (ctx: Context) => ctx.json({ id: ctx.params.id }));
-const elysiaSrv = new Elysia().get("/ping/:id", ({ params }) => ({ id: params.id }));
-const honoSrv = new Hono().get("/ping/:id", (c) => c.json({ id: c.req.param("id") }));
-
-const prevEnv = process.env.NODE_ENV;
-process.env.NODE_ENV = "production";
-const sBare = bareSrv.listen(0, "127.0.0.1", false);
-const sElysia = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: elysiaSrv.fetch });
-const sHono = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: honoSrv.fetch });
-process.env.NODE_ENV = prevEnv;
-
-const urlBare = `http://127.0.0.1:${sBare.port}/ping/42`;
-const urlElysia = `http://127.0.0.1:${sElysia.port}/ping/42`;
-const urlHono = `http://127.0.0.1:${sHono.port}/ping/42`;
-
-// ----------------------------------------------------------------------------
-// Scenario 6: Response Schema Secret Stripping & Validation
+// Scenario 5: Response Schema Secret Stripping & Validation
 // ----------------------------------------------------------------------------
 const bareResSchema = new BareJS();
 bareResSchema.get(
@@ -206,32 +188,10 @@ async function main() {
     bench("Hono", () => honoQuery.fetch(reqQuery));
   });
 
-  group("5. Live HTTP Server (Bun.serve + fetch)", () => {
-    bench("BareJS", async () => {
-      const r = await fetch(urlBare);
-      await r.arrayBuffer();
-    });
-    bench("Elysia", async () => {
-      const r = await fetch(urlElysia);
-      await r.arrayBuffer();
-    });
-    bench("Hono", async () => {
-      const r = await fetch(urlHono);
-      await r.arrayBuffer();
-    });
-  });
-
-  group("6. Response Schema Secret Stripping", () => {
+  group("5. Response Schema Secret Stripping", () => {
     bench("BareJS", () => bareResSchema.fetch(reqResSchema));
     bench("Elysia", () => elysiaResSchema.handle(reqResSchema));
   });
-
-  // Fair warmup for live HTTP servers so the first framework doesn't pay cold-start penalty
-  for (let i = 0; i < 50; i++) {
-    await fetch(urlBare).then((r) => r.arrayBuffer());
-    await fetch(urlElysia).then((r) => r.arrayBuffer());
-    await fetch(urlHono).then((r) => r.arrayBuffer());
-  }
 
   const results: any = await run();
   const benches = (results?.benchmarks || []).map(extractStats);
@@ -241,16 +201,11 @@ async function main() {
     { scenario: "2. 10 Middlewares + Deep Path", results: benches.slice(3, 6) },
     { scenario: "3. POST JSON + Schema Validation", results: benches.slice(6, 9) },
     { scenario: "4. Async Handler + Query Parsing", results: benches.slice(9, 12) },
-    { scenario: "5. Live HTTP Server (`Bun.serve` + `fetch`)", results: benches.slice(12, 15) },
-    { scenario: "6. Response Schema Secret Stripping", results: benches.slice(15, 17) }
+    { scenario: "5. Response Schema Secret Stripping", results: benches.slice(12, 14) }
   ];
 
   writeFileSync("fair-suite-result.json", JSON.stringify(scenarios, null, 2));
   console.log("✅ fair-suite-result.json generated successfully.");
-
-  sBare.stop(true);
-  sElysia.stop(true);
-  sHono.stop(true);
 }
 
 main();

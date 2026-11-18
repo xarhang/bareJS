@@ -106,37 +106,16 @@ const honoApp = new Hono()
     return c.json({ report: row });
   });
 
-const prevEnv = process.env.NODE_ENV;
-process.env.NODE_ENV = "production";
-const sBare = bareApp.listen(0, "127.0.0.1", false);
-const sElysia = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: elysiaApp.fetch });
-const sHono = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: honoApp.fetch });
-process.env.NODE_ENV = prevEnv;
-
-const baseBare = `http://127.0.0.1:${sBare.port}`;
-const baseElysia = `http://127.0.0.1:${sElysia.port}`;
-const baseHono = `http://127.0.0.1:${sHono.port}`;
+bareApp.compile();
 
 const payload = JSON.stringify({ category: "electronics", amount: 150, qty: 2 });
-
-async function runConcurrencyTest(name: string, baseUrl: string, count = 1000) {
-  const start = performance.now();
-  const tasks = Array.from({ length: count }, (_, i) => {
-    if (i % 2 === 0) {
-      return fetch(`${baseUrl}/orders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload
-      }).then((r) => r.text().then(() => r.status));
-    }
-    return fetch(`${baseUrl}/reports?category=electronics`).then((r) => r.text().then(() => r.status));
+const reqReport = new Request("http://localhost/reports?category=electronics");
+const makeOrderReq = () =>
+  new Request("http://localhost/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: payload
   });
-  const statuses = await Promise.all(tasks);
-  const ms = performance.now() - start;
-  const ok = statuses.filter((s) => s === 200).length;
-  const rps = Math.round((count / ms) * 1000);
-  console.log(`  ${name.padEnd(8)} | ${count} reqs in ${ms.toFixed(2)} ms | ${rps.toLocaleString()} req/s | OK: ${ok}/${count}`);
-}
 
 import { writeFileSync } from "fs";
 
@@ -153,77 +132,29 @@ function extractStats(b: any) {
 async function main() {
   console.log("🚀 Production DB Benchmark (SQLite + Security Headers + Validation + Reports)\n");
 
-  group("A. Live HTTP DB Report (SQL Aggregation + Query)", () => {
-    bench("BareJS", async () => {
-      const r = await fetch(`${baseBare}/reports?category=electronics`);
-      await r.arrayBuffer();
-    });
-    bench("Elysia", async () => {
-      const r = await fetch(`${baseElysia}/reports?category=electronics`);
-      await r.arrayBuffer();
-    });
-    bench("Hono", async () => {
-      const r = await fetch(`${baseHono}/reports?category=electronics`);
-      await r.arrayBuffer();
-    });
+  group("6. SQLite Report (SUM/AVG/GROUP BY)", () => {
+    bench("BareJS", () => bareApp.fetch(reqReport));
+    bench("Elysia", () => elysiaApp.handle(reqReport));
+    bench("Hono", () => honoApp.fetch(reqReport));
   });
 
-  group("B. Live HTTP DB Write (POST JSON + Validation + INSERT)", () => {
-    bench("BareJS", async () => {
-      const r = await fetch(`${baseBare}/orders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload
-      });
-      await r.arrayBuffer();
-    });
-    bench("Elysia", async () => {
-      const r = await fetch(`${baseElysia}/orders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload
-      });
-      await r.arrayBuffer();
-    });
-    bench("Hono", async () => {
-      const r = await fetch(`${baseHono}/orders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload
-      });
-      await r.arrayBuffer();
-    });
+  group("7. SQLite Write (POST + Validate + INSERT)", () => {
+    bench("BareJS", () => bareApp.fetch(makeOrderReq()));
+    bench("Elysia", () => elysiaApp.handle(makeOrderReq()));
+    bench("Hono", () => honoApp.fetch(makeOrderReq()));
   });
-
-  // Fair warmup for all 3 HTTP + SQLite servers before measurement
-  for (let i = 0; i < 50; i++) {
-    await fetch(`${baseBare}/reports?category=electronics`).then((r) => r.arrayBuffer());
-    await fetch(`${baseElysia}/reports?category=electronics`).then((r) => r.arrayBuffer());
-    await fetch(`${baseHono}/reports?category=electronics`).then((r) => r.arrayBuffer());
-    await fetch(`${baseBare}/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload }).then((r) => r.arrayBuffer());
-    await fetch(`${baseElysia}/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload }).then((r) => r.arrayBuffer());
-    await fetch(`${baseHono}/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload }).then((r) => r.arrayBuffer());
-  }
 
   const results: any = await run();
   const benches = (results?.benchmarks || []).map(extractStats);
 
   const scenarios = [
-    { scenario: "7. Live SQLite Report (`SUM`/`AVG`/`GROUP BY`)", results: benches.slice(0, 3) },
-    { scenario: "8. Live SQLite Write (`POST` + Validate + `INSERT`)", results: benches.slice(3, 6) }
+    { scenario: "6. SQLite Report (`SUM`/`AVG`/`GROUP BY`)", results: benches.slice(0, 3) },
+    { scenario: "7. SQLite Write (`POST` + Validate + `INSERT`)", results: benches.slice(3, 6) }
   ];
 
   writeFileSync("production-result.json", JSON.stringify(scenarios, null, 2));
   console.log("✅ production-result.json generated successfully.");
 
-  console.log("\n🔥 C. 1,000 Concurrent Mixed DB Requests (500 Writes + 500 Report Reads):");
-  await runConcurrencyTest("BareJS", baseBare, 1000);
-  await runConcurrencyTest("Elysia", baseElysia, 1000);
-  await runConcurrencyTest("Hono", baseHono, 1000);
-
-  sBare.stop(true);
-  sElysia.stop(true);
-  sHono.stop(true);
   dbBare.close();
   dbElysia.close();
   dbHono.close();

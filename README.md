@@ -30,14 +30,14 @@ All benchmark numbers below are **automatically generated on every push to `main
 
 | Scenario (`benchmarks/fair-suite.ts` & `production-bench.ts`) | **BareJS** 🏆 | **ElysiaJS** | **Hono** |
 | :--- | :---: | :---: | :---: |
-| **1. 100 Routes + Dynamic Params** | **`1.02 µs`** (`p99: 6.34 µs`) | `1.29 µs` (`p99: 6.52 µs`) | `2.72 µs` (`p99: 11.38 µs`) |
-| **2. 10 Middlewares + Deep Path** | **`928 ns`** (`p99: 5.48 µs`) | `1.28 µs` (`p99: 5.97 µs`) | `2.87 µs` (`p99: 11.19 µs`) |
-| **3. POST JSON + Schema Validation** | **`2.62 µs`** (`p99: 9.58 µs`) | `2.99 µs` (`p99: 10.21 µs`) | `3.03 µs` (`p99: 10.89 µs`) |
-| **4. Async Handler + Query Parsing** | **`1.49 µs`** (`p99: 6.86 µs`) | `1.55 µs` (`p99: 6.90 µs`) | `1.60 µs` (`p99: 2.09 µs`) |
-| **5. Live HTTP Server (`Bun.serve` + `fetch`)** | **`61.70 µs`** (`p99: 90.55 µs`) | `61.79 µs` (`p99: 90.37 µs`) | `64.65 µs` (`p99: 95.85 µs`) |
-| **6. Response Schema Secret Stripping** | **`1.03 µs`** (`p99: 5.34 µs`) | `1.24 µs` (`p99: 5.86 µs`) | — |
-| **7. Live SQLite Report (`SUM`/`AVG`/`GROUP BY`)** | **`92.97 µs`** (`p99: 129.99 µs`) | `98.43 µs` (`p99: 135.60 µs`) | `110.32 µs` (`p99: 153.91 µs`) |
-| **8. Live SQLite Write (`POST` + Validate + `INSERT`)** | `100.60 µs` (`p99: 135.26 µs`) | **`99.81 µs`** (`p99: 142.21 µs`) | `108.14 µs` (`p99: 156.40 µs`) |
+| **1. 100 Routes + Dynamic Params** | **`613 ns`** (`p99: 3.06 µs`) | `900 ns` (`p99: 3.99 µs`) | `2.02 µs` (`p99: 8.37 µs`) |
+| **2. 10 Middlewares + Deep Path** | **`568 ns`** (`p99: 2.97 µs`) | `875 ns` (`p99: 3.84 µs`) | `2.33 µs` (`p99: 8.64 µs`) |
+| **3. POST JSON + Schema Validation** | **`2.02 µs`** (`p99: 9.57 µs`) | `2.22 µs` (`p99: 9.69 µs`) | `2.32 µs` (`p99: 11.64 µs`) |
+| **4. Async Handler + Query Parsing** | **`1.04 µs`** (`p99: 3.89 µs`) | `1.12 µs` (`p99: 4.08 µs`) | `1.56 µs` (`p99: 6.68 µs`) |
+| **5. Live HTTP Server (`Bun.serve` + `fetch`)** | `58.12 µs` (`p99: 84.90 µs`) | `42.43 µs` (`p99: 84.59 µs`) | **`38.62 µs`** (`p99: 65.82 µs`) |
+| **6. Response Schema Secret Stripping** | **`403 ns`** (`p99: 520 ns`) | `802 ns` (`p99: 3.48 µs`) | — |
+| **7. Live SQLite Report (`SUM`/`AVG`/`GROUP BY`)** | **`58.14 µs`** (`p99: 106.65 µs`) | `69.89 µs` (`p99: 111.65 µs`) | `67.39 µs` (`p99: 119.16 µs`) |
+| **8. Live SQLite Write (`POST` + Validate + `INSERT`)** | `70.34 µs` (`p99: 107.15 µs`) | **`65.80 µs`** (`p99: 109.74 µs`) | `79.44 µs` (`p99: 115.26 µs`) |
 
 > Last Updated: 2026-11-18 (github action)
 
@@ -49,9 +49,9 @@ All benchmark numbers below are **automatically generated on every push to `main
 
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **0.87 µs** | **Baseline** |
-| Elysia | 1.15 µs | 1.32x slower |
-| Hono | 3.80 µs | 4.35x slower |
+| **BareJS** | **0.55 µs** | **Baseline** |
+| Elysia | 0.83 µs | 1.50x slower |
+| Hono | 3.20 µs | 5.80x slower |
 
 > Last Updated: 2026-11-18 (github action)
 

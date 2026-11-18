@@ -132,6 +132,18 @@ async function runConcurrencyTest(name: string, baseUrl: string, count = 1000) {
   console.log(`  ${name.padEnd(8)} | ${count} reqs in ${ms.toFixed(2)} ms | ${rps.toLocaleString()} req/s | OK: ${ok}/${count}`);
 }
 
+import { writeFileSync } from "fs";
+
+function extractStats(b: any) {
+  const stats = b?.stats ?? b?.runs?.[0]?.stats ?? {};
+  return {
+    name: String(b?.alias || b?.name || "Unknown").trim(),
+    avg: Number(stats.avg ?? stats.mean ?? 0),
+    min: Number(stats.min ?? 0),
+    p99: Number(stats.p99 ?? 0)
+  };
+}
+
 async function main() {
   console.log("🚀 Production DB Benchmark (SQLite + Security Headers + Validation + Reports)\n");
 
@@ -177,7 +189,16 @@ async function main() {
     });
   });
 
-  await run();
+  const results: any = await run();
+  const benches = (results?.benchmarks || []).map(extractStats);
+
+  const scenarios = [
+    { scenario: "7. Live SQLite Report (`SUM`/`AVG`/`GROUP BY`)", results: benches.slice(0, 3) },
+    { scenario: "8. Live SQLite Write (`POST` + Validate + `INSERT`)", results: benches.slice(3, 6) }
+  ];
+
+  writeFileSync("production-result.json", JSON.stringify(scenarios, null, 2));
+  console.log("✅ production-result.json generated successfully.");
 
   console.log("\n🔥 C. 1,000 Concurrent Mixed DB Requests (500 Writes + 500 Report Reads):");
   await runConcurrencyTest("BareJS", baseBare, 1000);

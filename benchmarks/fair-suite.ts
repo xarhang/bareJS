@@ -120,25 +120,11 @@ process.env.NODE_ENV = "production";
 const sBare = bareSrv.listen(0, "127.0.0.1", false);
 const sElysia = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: elysiaSrv.fetch });
 const sHono = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: honoSrv.fetch });
-const sNative = Bun.serve({
-  port: 0,
-  hostname: "127.0.0.1",
-  fetch(req) {
-    const url = req.url;
-    const s = url.indexOf("/", 8);
-    const path = s === -1 ? "/" : url.slice(s);
-    if (path.startsWith("/ping/")) {
-      return Response.json({ id: path.slice(6) });
-    }
-    return new Response("Not Found", { status: 404 });
-  }
-});
 process.env.NODE_ENV = prevEnv;
 
 const urlBare = `http://127.0.0.1:${sBare.port}/ping/42`;
 const urlElysia = `http://127.0.0.1:${sElysia.port}/ping/42`;
 const urlHono = `http://127.0.0.1:${sHono.port}/ping/42`;
-const urlNative = `http://127.0.0.1:${sNative.port}/ping/42`;
 
 // ----------------------------------------------------------------------------
 // Scenario 6: Response Schema Secret Stripping & Validation
@@ -183,6 +169,18 @@ const elysiaResSchema = new Elysia().get(
 
 const reqResSchema = new Request("http://localhost/user-safe");
 
+import { writeFileSync } from "fs";
+
+function extractStats(b: any) {
+  const stats = b?.stats ?? b?.runs?.[0]?.stats ?? {};
+  return {
+    name: String(b?.alias || b?.name || "Unknown").trim(),
+    avg: Number(stats.avg ?? stats.mean ?? 0),
+    min: Number(stats.min ?? 0),
+    p99: Number(stats.p99 ?? 0)
+  };
+}
+
 async function main() {
   group("1. 100 Routes + Dynamic Params", () => {
     bench("BareJS", () => bare100.fetch(req100));
@@ -208,11 +206,7 @@ async function main() {
     bench("Hono", () => honoQuery.fetch(reqQuery));
   });
 
-  group("5. Live HTTP Server (Bun.serve fetch)", () => {
-    bench("Bun Native", async () => {
-      const r = await fetch(urlNative);
-      await r.arrayBuffer();
-    });
+  group("5. Live HTTP Server (Bun.serve + fetch)", () => {
     bench("BareJS", async () => {
       const r = await fetch(urlBare);
       await r.arrayBuffer();
@@ -227,17 +221,29 @@ async function main() {
     });
   });
 
-  group("6. Response Schema Secret Stripping & Validation", () => {
+  group("6. Response Schema Secret Stripping", () => {
     bench("BareJS", () => bareResSchema.fetch(reqResSchema));
     bench("Elysia", () => elysiaResSchema.handle(reqResSchema));
   });
 
-  await run();
+  const results: any = await run();
+  const benches = (results?.benchmarks || []).map(extractStats);
+
+  const scenarios = [
+    { scenario: "1. 100 Routes + Dynamic Params", results: benches.slice(0, 3) },
+    { scenario: "2. 10 Middlewares + Deep Path", results: benches.slice(3, 6) },
+    { scenario: "3. POST JSON + Schema Validation", results: benches.slice(6, 9) },
+    { scenario: "4. Async Handler + Query Parsing", results: benches.slice(9, 12) },
+    { scenario: "5. Live HTTP Server (`Bun.serve` + `fetch`)", results: benches.slice(12, 15) },
+    { scenario: "6. Response Schema Secret Stripping", results: benches.slice(15, 17) }
+  ];
+
+  writeFileSync("fair-suite-result.json", JSON.stringify(scenarios, null, 2));
+  console.log("✅ fair-suite-result.json generated successfully.");
 
   sBare.stop(true);
   sElysia.stop(true);
   sHono.stop(true);
-  sNative.stop(true);
 }
 
 main();

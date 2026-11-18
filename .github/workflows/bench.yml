@@ -28,8 +28,10 @@ jobs:
 
       - name: Run Benchmark Engine
         run: |
-          # Ensure we run the benchmark which generates result.json
-          bun run bench 
+          # Ensure we run the benchmarks which generate result JSON files
+          bun run bench
+          bun run benchmarks/fair-suite.ts
+          bun run benchmarks/production-bench.ts
           if [ -f result.json ]; then
             cp result.json /tmp/result.json
           else

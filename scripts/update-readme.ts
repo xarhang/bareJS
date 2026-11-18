@@ -34,7 +34,11 @@ function fmtNs(ns: number): string {
 function fmtCell(entry: { avg: number; min?: number; p99?: number } | undefined, isFastest: boolean): string {
   if (!entry || !entry.avg) return '—';
   const avgStr = fmtNs(entry.avg);
-  return isFastest ? `**\`${avgStr}\`**` : `\`${avgStr}\``;
+  const main = isFastest ? `**\`${avgStr}\`**` : `\`${avgStr}\``;
+  if (entry.p99 && entry.p99 > 0) {
+    return `${main}<br><sub>\`p99: ${fmtNs(entry.p99)}\`</sub>`;
+  }
+  return main;
 }
 
 try {

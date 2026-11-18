@@ -65,6 +65,8 @@ export class Context {
       if (qIdx !== -1) {
         let start = qIdx + 1;
         const len = url.length;
+        const hasPlus = url.indexOf('+', start) !== -1;
+        const hasPct = url.indexOf('%', start) !== -1;
         while (start < len) {
           let amp = url.indexOf('&', start);
           if (amp === -1) amp = len;
@@ -79,13 +81,17 @@ export class Context {
               k = url.slice(start, amp);
               v = '';
             }
-            if (k.indexOf('+') !== -1) k = k.replaceAll('+', ' ');
-            if (k.indexOf('%') !== -1) {
-              try { k = decodeURIComponent(k); } catch { /* keep raw */ }
+            if (hasPlus) {
+              if (k.indexOf('+') !== -1) k = k.replaceAll('+', ' ');
+              if (v.indexOf('+') !== -1) v = v.replaceAll('+', ' ');
             }
-            if (v.indexOf('+') !== -1) v = v.replaceAll('+', ' ');
-            if (v.indexOf('%') !== -1) {
-              try { v = decodeURIComponent(v); } catch { /* keep raw */ }
+            if (hasPct) {
+              if (k.indexOf('%') !== -1) {
+                try { k = decodeURIComponent(k); } catch { /* keep raw */ }
+              }
+              if (v.indexOf('%') !== -1) {
+                try { v = decodeURIComponent(v); } catch { /* keep raw */ }
+              }
             }
             if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') {
               result[k] = v;

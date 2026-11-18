@@ -2,7 +2,7 @@
 
 All notable changes to **BareJS** are documented in this file.
 
-## [Unreleased]
+## [0.1.51] - 2026-11-18
 
 ### Added
 - **`logger()` Middleware** (`src/utils/logger.ts`): Lightweight structured (`json`) and `pretty` request logger with `X-Request-Id` header attachment, `skip` predicate, and custom `onLog` sink.

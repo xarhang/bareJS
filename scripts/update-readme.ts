@@ -34,11 +34,7 @@ function fmtNs(ns: number): string {
 function fmtCell(entry: { avg: number; min?: number; p99?: number } | undefined, isFastest: boolean): string {
   if (!entry || !entry.avg) return '—';
   const avgStr = fmtNs(entry.avg);
-  const main = isFastest ? `**\`${avgStr}\`**` : `\`${avgStr}\``;
-  if (entry.p99 && entry.p99 > 0) {
-    return `${main} (\`p99: ${fmtNs(entry.p99)}\`)`;
-  }
-  return main;
+  return isFastest ? `**\`${avgStr}\`**` : `\`${avgStr}\``;
 }
 
 try {
@@ -109,7 +105,7 @@ try {
     });
 
     const multiTable = [
-      '| Scenario (`benchmarks/fair-suite.ts` & `production-bench.ts`) | **BareJS** 🏆 | **ElysiaJS** | **Hono** |',
+      '| Scenario | **BareJS** 🏆 | **ElysiaJS** | **Hono** |',
       '| :--- | :---: | :---: | :---: |',
       ...rows
     ].join('\n');

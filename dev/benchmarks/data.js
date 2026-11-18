@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795020700800,
+  "lastUpdate": 1795022258064,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2572,6 +2572,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5139.831335616438,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "707b996eeb91d3d28b2c85aaeece2c5481b4446b",
+          "message": "chore(bench): automate multi-scenario and head-to-head benchmarks in CI without Bun Native",
+          "timestamp": "2026-11-18T17:16:33Z",
+          "tree_id": "cd4195c88cf3754ff1d39d76b0ac3258a2280a23",
+          "url": "https://github.com/xarhang/bareJS/commit/707b996eeb91d3d28b2c85aaeece2c5481b4446b"
+        },
+        "date": 1795022257641,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 590.1642152865297,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 867.8458996671612,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3289.20471446774,
             "unit": "undefined"
           }
         ]

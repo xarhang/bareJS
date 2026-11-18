@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795022918119,
+  "lastUpdate": 1795023687019,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2650,6 +2650,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 2882.703512656635,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "5693640ff5ffbaac6a88e6fc23e030f246ddad15",
+          "message": "perf(bare): cache ResponseInit for immutable headers & add fair HTTP warmup in benchmarks",
+          "timestamp": "2026-11-18T17:40:31Z",
+          "tree_id": "7222250a1642dbcd972af1a67fae043d193c8daf",
+          "url": "https://github.com/xarhang/bareJS/commit/5693640ff5ffbaac6a88e6fc23e030f246ddad15"
+        },
+        "date": 1795023686574,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 873.3100942701778,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1151.0090752358603,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3798.9088275439426,
             "unit": "undefined"
           }
         ]

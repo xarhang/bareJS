@@ -274,6 +274,7 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
   const bodyProjector = schemas.stripUnknown && schemas.body ? compileProjector(schemas.body) : null;
   const responseFilter = schemas.response ? createResponseFilter(schemas.response) : null;
   const maxBodySize = schemas.maxBodySize ?? 1048576;
+  const hasSyncParts = Boolean(paramsCheck || queryCheck || headersCheck);
 
   const validateSyncParts = (ctx: Context): Response | undefined => {
     if (paramsCheck) {
@@ -299,8 +300,10 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
 
   if (!bodyCheck) {
     const syncMw: Middleware = (ctx: Context, next?: Next) => {
-      const errRes = validateSyncParts(ctx);
-      if (errRes) return errRes;
+      if (hasSyncParts) {
+        const errRes = validateSyncParts(ctx);
+        if (errRes) return errRes;
+      }
       return next ? next() : undefined;
     };
     (syncMw as any).__routeSchemas = schemas;
@@ -309,8 +312,10 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
   }
 
   const mw: Middleware = async (ctx: Context, next?: Next) => {
-    const errRes = validateSyncParts(ctx);
-    if (errRes) return errRes;
+    if (hasSyncParts) {
+      const errRes = validateSyncParts(ctx);
+      if (errRes) return errRes;
+    }
 
     let body: any;
     try {

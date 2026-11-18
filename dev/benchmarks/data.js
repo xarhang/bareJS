@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795022258064,
+  "lastUpdate": 1795022918119,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2611,6 +2611,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3289.20471446774,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "011bbe10b7515cc2ca201dd45a85a28ef283403a",
+          "message": "perf(context): reuse static status 200 init in ctx.json & guard frozen headers; make production-bench headers fair",
+          "timestamp": "2026-11-18T17:27:44Z",
+          "tree_id": "28d152d295ecd84b3d4ca4d1f4ec3744c6119f89",
+          "url": "https://github.com/xarhang/bareJS/commit/011bbe10b7515cc2ca201dd45a85a28ef283403a"
+        },
+        "date": 1795022917864,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 615.8640607795639,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 828.3442093216346,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 2882.703512656635,
             "unit": "undefined"
           }
         ]

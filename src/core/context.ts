@@ -52,6 +52,8 @@ export class Context {
   public _cookies: Record<string, string> | undefined = undefined;
   public _setCookies: string[] | undefined = undefined;
   public _requestId: string | undefined = undefined;
+  public _peerIp: string | undefined = undefined;
+  public _trustProxy: boolean = true;
   constructor() { }
 
   public get query(): Record<string, string> {
@@ -217,6 +219,7 @@ export class Context {
     this._cookies = undefined;
     this._setCookies = undefined;
     this.body = undefined;
+    this._peerIp = undefined;
     return this;
   }
 
@@ -368,13 +371,15 @@ export class Context {
   }
 
   public get ip(): string {
-    const xff = this.req?.headers?.get('x-forwarded-for');
-    if (xff) return xff.split(',')[0]!.trim();
-    return (
-      this.req?.headers?.get('x-real-ip') ||
-      this.req?.headers?.get('cf-connecting-ip') ||
-      '127.0.0.1'
-    );
+    if (this._trustProxy) {
+      const xff = this.req?.headers?.get('x-forwarded-for');
+      if (xff) return xff.split(',')[0]!.trim();
+      const forwarded =
+        this.req?.headers?.get('x-real-ip') ||
+        this.req?.headers?.get('cf-connecting-ip');
+      if (forwarded) return forwarded;
+    }
+    return this._peerIp || '127.0.0.1';
   }
 
   public async upload(options: UploadOptions = {}): Promise<UploadResult> {

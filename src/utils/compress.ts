@@ -16,6 +16,7 @@ export const compress = (options: CompressOptions = {}): Middleware => {
   const level = options.level ?? 6;
 
   const applyCompress = async (ctx: Context, res: any) => {
+    if (ctx.req.method === 'HEAD') return res;
     const accept = ctx.req.headers.get('accept-encoding');
     if (!accept || !accept.includes('gzip')) return res;
     if (!(res instanceof Response)) return res;

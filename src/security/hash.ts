@@ -5,8 +5,14 @@ export const Hash = {
   make: (data: string): Promise<string> => 
     Bun.password.hash(data, BARE_CONFIG.hash),
 
-  verify: (data: string, hash: string): Promise<boolean> => 
-    Bun.password.verify(data, hash),
+  verify: async (data: string, hash: string): Promise<boolean> => {
+    if (!hash || typeof hash !== 'string') return false;
+    try {
+      return await Bun.password.verify(data, hash);
+    } catch {
+      return false;
+    }
+  },
 
   needsRehash: (hash: string): boolean => {
     const { algorithm, memoryCost, timeCost } = BARE_CONFIG.hash;

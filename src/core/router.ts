@@ -53,11 +53,17 @@ export class BareRouter<Routes extends RouteSchema = {}> {
   public patch: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("PATCH", path, h);
   public delete: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("DELETE", path, h);
   public options: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("OPTIONS", path, h);
+  public head: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("HEAD", path, h);
+  public all: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => {
+    for (const m of ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]) {
+      this._add(m, path, h);
+    }
+    return this;
+  };
 
   public group = (path: string, ...args: any[]) => {
     const callback = args.pop();
     const middleware = args;
-
 
     const newPrefix = (this.prefix + "/" + path).replace(/\/+/g, "/");
     const subRouter = new BareRouter(newPrefix, [...this.groupMiddleware, ...middleware]);
@@ -65,9 +71,11 @@ export class BareRouter<Routes extends RouteSchema = {}> {
     callback(subRouter);
     this.routes.push(...subRouter.routes);
     return this;
-};
+  };
 
-  public use(mw: any) {
+  public use<R2 extends RouteSchema = {}>(mw: BareRouter<R2>): BareRouter<Routes & R2>;
+  public use(mw: any): BareRouter<Routes>;
+  public use(mw: any): any {
     if (mw instanceof BareRouter || (mw && mw.routes)) {
       this.routes.push(...mw.routes);
     } else if (mw && typeof mw.install === 'function') {

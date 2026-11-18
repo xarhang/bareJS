@@ -59,7 +59,8 @@ export {
 };
 
 // --- 5. Middlewares & Utilities ---
-// export { logger } from './utils/logger';
+export { logger, type LoggerOptions, type LogEntry } from './utils/logger';
+export { healthcheck, type HealthcheckOptions, type HealthCheckFn } from './utils/health';
 export { cors } from './security/cors';
 export { csrf, type CsrfOptions } from './security/csrf';
 export { timeout, type TimeoutOptions } from './security/timeout';
@@ -73,7 +74,7 @@ export { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from './util
 
 // --- 6. Authentication (Bun Native) ---
 // Always deploy using process.env [2026-01-06]
-export { bareAuth, createToken, basicAuth, hasRole } from './security/auth';
+export { bareAuth, createToken, basicAuth, hasRole, revokeToken, isTokenRevoked, type BareAuthOptions } from './security/auth';
 // --- 7. Hashing ---
 export { Hash as Password, Hash } from './security/hash';
 
@@ -83,5 +84,6 @@ export {
   type BareClient,
   type BareClientOptions,
   type ClientRequestOptions,
+  type RouteEndpoint,
   type RouteSchema
 } from './client/index';

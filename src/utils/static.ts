@@ -1,5 +1,5 @@
 import { resolve, sep } from 'node:path';
-import { stat } from 'node:fs/promises';
+import { stat, realpath } from 'node:fs/promises';
 
 export interface StaticOptions {
   maxAge?: number;
@@ -9,6 +9,7 @@ export interface StaticOptions {
 export const staticFile = (root: string = 'public', options: StaticOptions = {}) => {
   const rootDir = resolve(process.cwd(), root);
   const rootPrefix = rootDir.endsWith(sep) ? rootDir : rootDir + sep;
+  let realRootPromise: Promise<string> | null = null;
   const maxAge = options.maxAge ?? 3600;
   const enableEtag = options.etag !== false;
 
@@ -44,7 +45,15 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
     let fileSize = 0;
     let mtimeMs = 0;
     try {
-      const st = await stat(filePath);
+      const [realRoot, realFile] = await Promise.all([
+        (realRootPromise ??= realpath(rootDir)),
+        realpath(filePath)
+      ]);
+      const realPrefix = realRoot.endsWith(sep) ? realRoot : realRoot + sep;
+      if (realFile !== realRoot && !realFile.startsWith(realPrefix)) {
+        return ctx.status(403).send('Forbidden');
+      }
+      const st = await stat(realFile);
       if (st.isDirectory()) return next();
       fileSize = st.size;
       mtimeMs = Math.floor(st.mtimeMs);

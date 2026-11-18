@@ -18,12 +18,7 @@ export const rateLimit = (options: RateLimitOptions = {}): Middleware => {
   const max = options.max ?? 100;
   const message = options.message ?? 'Too many requests, please try again later.';
   const maxEntries = options.maxEntries ?? 10_000;
-  const keyGenerator =
-    options.keyGenerator ??
-    ((ctx: Context) =>
-      ctx.req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      ctx.req.headers.get('x-real-ip') ||
-      'global');
+  const keyGenerator = options.keyGenerator ?? ((ctx: Context) => ctx.ip);
 
   const buckets = new Map<string, RateBucket>();
 

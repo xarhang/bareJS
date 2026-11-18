@@ -48,6 +48,7 @@ export const circuitBreaker = (options: CircuitBreakerOptions = {}): Middleware 
       setState('HALF_OPEN');
     }
 
+    let isHalfOpenProbe = false;
     if (state === 'HALF_OPEN') {
       if (halfOpenInFlight) {
         return Response.json(
@@ -56,30 +57,31 @@ export const circuitBreaker = (options: CircuitBreakerOptions = {}): Middleware 
         );
       }
       halfOpenInFlight = true;
+      isHalfOpenProbe = true;
     }
 
     try {
       const res = await exec();
       if (isFailure(res)) {
         failures++;
-        if (state === 'HALF_OPEN' || failures >= failureThreshold) {
+        if (isHalfOpenProbe || failures >= failureThreshold) {
           openedAt = Date.now();
           setState('OPEN');
         }
       } else {
         failures = 0;
-        if (state === 'HALF_OPEN') setState('CLOSED');
+        if (isHalfOpenProbe) setState('CLOSED');
       }
       return res;
     } catch (err) {
       failures++;
-      if (state === 'HALF_OPEN' || failures >= failureThreshold) {
+      if (isHalfOpenProbe || failures >= failureThreshold) {
         openedAt = Date.now();
         setState('OPEN');
       }
       throw err;
     } finally {
-      if (halfOpenInFlight) halfOpenInFlight = false;
+      if (isHalfOpenProbe) halfOpenInFlight = false;
     }
   };
 

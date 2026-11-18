@@ -28,13 +28,23 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
   const inFlight = new Set<string>();
 
   const mw: Middleware = (ctx: Context) => {
-    const key = ctx.req.headers.get(headerName);
-    if (!key) return undefined;
+    const rawKey = ctx.req.headers.get(headerName);
+    if (!rawKey) {
+      (ctx as any)._idempotencyKey = undefined;
+      return undefined;
+    }
+
+    const rawUrl = ctx.req.url;
+    const s = rawUrl.indexOf('/', 8);
+    const q = s === -1 ? -1 : rawUrl.indexOf('?', s);
+    const path = s === -1 ? '/' : (q === -1 ? rawUrl.slice(s) : rawUrl.slice(s, q));
+    const key = `${ctx.req.method}:${path}:${rawKey}`;
 
     const now = Date.now();
     const existing = cache.get(key);
     if (existing) {
       if (now < existing.expiresAt) {
+        (ctx as any)._idempotencyKey = undefined;
         return Response.json(existing.body, {
           status: existing.status,
           headers: { 'X-Idempotent-Replayed': 'true' }
@@ -44,6 +54,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     }
 
     if (inFlight.has(key)) {
+      (ctx as any)._idempotencyKey = undefined;
       return Response.json(
         { status: 'error', code: 'IDEMPOTENT_IN_FLIGHT', message: 'Duplicate request is currently in flight' },
         { status: 409 }
@@ -52,13 +63,13 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
 
     inFlight.add(key);
     (ctx as any)._idempotencyKey = key;
-    (ctx as any)._idemInFlight = inFlight;
     return undefined;
   };
 
   (mw as any).__idempotencyCommit = (ctx: Context, resVal: any, status: number) => {
     const key = (ctx as any)._idempotencyKey;
     if (!key) return;
+    (ctx as any)._idempotencyKey = undefined;
     inFlight.delete(key);
     if (status >= 200 && status < 300 && !(resVal instanceof Response)) {
       if (cache.size >= maxKeys) {
@@ -70,6 +81,14 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
         body: resVal,
         expiresAt: Date.now() + ttlMs
       });
+    }
+  };
+
+  (mw as any).__idempotencyRelease = (ctx: Context) => {
+    const key = (ctx as any)._idempotencyKey;
+    if (key) {
+      (ctx as any)._idempotencyKey = undefined;
+      inFlight.delete(key);
     }
   };
 

@@ -2,6 +2,10 @@ export interface OpenAPIOptions {
   title?: string;
   version?: string;
   description?: string;
+  servers?: Array<{ url: string; description?: string }>;
+  tags?: Array<{ name: string; description?: string }>;
+  securitySchemes?: Record<string, Record<string, any>>;
+  security?: Array<Record<string, string[]>>;
 }
 
 const zodToJsonSchema = (schema: any): Record<string, any> => {
@@ -129,6 +133,12 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
       version: options.version || '1.0.0',
       ...(options.description ? { description: options.description } : {})
     },
+    ...(options.servers?.length ? { servers: options.servers } : {}),
+    ...(options.tags?.length ? { tags: options.tags } : {}),
+    ...(options.securitySchemes
+      ? { components: { securitySchemes: options.securitySchemes } }
+      : {}),
+    ...(options.security?.length ? { security: options.security } : {}),
     paths
   };
 };

@@ -17,49 +17,82 @@ type ExtractParams<Path extends string> =
       ? { [K in Param]: string | number }
       : Record<string, never>;
 
-export type RouteSchema = Record<string, {
+export interface RouteEndpoint {
   method: string;
+  path?: string;
   params?: Record<string, any>;
+  query?: Record<string, any>;
+  headers?: Record<string, any>;
   body?: any;
   response?: any;
-}>;
+}
+
+export type RouteSchema = Record<string, RouteEndpoint>;
+
+type RouteKey<M extends string, P extends string> = `${M} ${P}`;
 
 type PathsForMethod<Routes extends RouteSchema, M extends string> = {
-  [K in keyof Routes]: Routes[K]['method'] extends M ? K : never;
+  [K in keyof Routes]: Routes[K]['method'] extends M
+    ? (Routes[K]['path'] extends string ? Routes[K]['path'] : K & string)
+    : never;
 }[keyof Routes] & string;
+
+type LookupRoute<Routes extends RouteSchema, M extends string, P extends string> =
+  RouteKey<M, P> extends keyof Routes
+    ? Routes[RouteKey<M, P>]
+    : P extends keyof Routes
+      ? Routes[P]
+      : never;
+
+type EndpointOptions<R extends RouteEndpoint, P extends string, WithBody extends boolean> =
+  Omit<ClientRequestOptions, 'params' | 'query' | 'headers' | (WithBody extends true ? 'body' : never)> & {
+    params?: R['params'] extends Record<string, any> ? R['params'] : ExtractParams<P>;
+    query?: R['query'] extends Record<string, any> ? R['query'] : ClientRequestOptions['query'];
+    headers?: R['headers'] extends Record<string, any> ? R['headers'] & Record<string, string> : ClientRequestOptions['headers'];
+  } & (WithBody extends true ? { body?: R['body'] } : {});
 
 export interface BareClient<Routes extends RouteSchema = RouteSchema> {
   get<P extends PathsForMethod<Routes, 'GET'> | (string & {})>(
     path: P,
-    options?: ClientRequestOptions & (P extends keyof Routes ? { params?: ExtractParams<P & string> } : {})
-  ): Promise<P extends keyof Routes ? Routes[P]['response'] : any>;
+    options?: LookupRoute<Routes, 'GET', P & string> extends infer R extends RouteEndpoint
+      ? EndpointOptions<R, P & string, false>
+      : ClientRequestOptions
+  ): Promise<LookupRoute<Routes, 'GET', P & string> extends infer R extends RouteEndpoint ? R['response'] : any>;
 
   post<P extends PathsForMethod<Routes, 'POST'> | (string & {})>(
     path: P,
-    options?: ClientRequestOptions & (P extends keyof Routes ? { params?: ExtractParams<P & string>; body?: Routes[P]['body'] } : {})
-  ): Promise<P extends keyof Routes ? Routes[P]['response'] : any>;
+    options?: LookupRoute<Routes, 'POST', P & string> extends infer R extends RouteEndpoint
+      ? EndpointOptions<R, P & string, true>
+      : ClientRequestOptions
+  ): Promise<LookupRoute<Routes, 'POST', P & string> extends infer R extends RouteEndpoint ? R['response'] : any>;
 
   put<P extends PathsForMethod<Routes, 'PUT'> | (string & {})>(
     path: P,
-    options?: ClientRequestOptions & (P extends keyof Routes ? { params?: ExtractParams<P & string>; body?: Routes[P]['body'] } : {})
-  ): Promise<P extends keyof Routes ? Routes[P]['response'] : any>;
+    options?: LookupRoute<Routes, 'PUT', P & string> extends infer R extends RouteEndpoint
+      ? EndpointOptions<R, P & string, true>
+      : ClientRequestOptions
+  ): Promise<LookupRoute<Routes, 'PUT', P & string> extends infer R extends RouteEndpoint ? R['response'] : any>;
 
   patch<P extends PathsForMethod<Routes, 'PATCH'> | (string & {})>(
     path: P,
-    options?: ClientRequestOptions & (P extends keyof Routes ? { params?: ExtractParams<P & string>; body?: Routes[P]['body'] } : {})
-  ): Promise<P extends keyof Routes ? Routes[P]['response'] : any>;
+    options?: LookupRoute<Routes, 'PATCH', P & string> extends infer R extends RouteEndpoint
+      ? EndpointOptions<R, P & string, true>
+      : ClientRequestOptions
+  ): Promise<LookupRoute<Routes, 'PATCH', P & string> extends infer R extends RouteEndpoint ? R['response'] : any>;
 
   delete<P extends PathsForMethod<Routes, 'DELETE'> | (string & {})>(
     path: P,
-    options?: ClientRequestOptions & (P extends keyof Routes ? { params?: ExtractParams<P & string> } : {})
-  ): Promise<P extends keyof Routes ? Routes[P]['response'] : any>;
+    options?: LookupRoute<Routes, 'DELETE', P & string> extends infer R extends RouteEndpoint
+      ? EndpointOptions<R, P & string, false>
+      : ClientRequestOptions
+  ): Promise<LookupRoute<Routes, 'DELETE', P & string> extends infer R extends RouteEndpoint ? R['response'] : any>;
 }
 
 const buildUrl = (baseUrl: string, path: string, options?: ClientRequestOptions): string => {
   let finalPath = path;
   if (options?.params) {
     for (const [k, v] of Object.entries(options.params)) {
-      finalPath = finalPath.replace(`:${k}`, encodeURIComponent(String(v)));
+      finalPath = finalPath.replaceAll(`:${k}`, encodeURIComponent(String(v)));
     }
   }
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
@@ -102,8 +135,16 @@ export const bareClient = <AppOrRoutes = any>(
     }
 
     const res = await fetchImpl(url, init);
-    const ct = res.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await res.json() : await res.text();
+    let data: any = null;
+    if (res.status !== 204 && res.status !== 205 && res.status !== 304) {
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const text = await res.text();
+        data = text ? JSON.parse(text) : null;
+      } else {
+        data = await res.text();
+      }
+    }
     if (!res.ok) {
       const err: any = new Error(`HTTP ${res.status}`);
       err.status = res.status;

@@ -42,15 +42,19 @@ type AddRoute<Derived extends Record<string, any>, Routes extends RouteSchema, M
     path: P,
     schemas: S,
     handler: TypedRouteHandler<Derived, S, Res>
-  ): BareJS<Derived, Routes & Record<P, {
+  ): BareJS<Derived, Routes & Record<`${M} ${P}`, {
     method: M;
+    path: P;
+    params: S extends { params: infer Pa } ? InferSchema<Pa> : Record<string, any>;
+    query: S extends { query: infer Q } ? InferSchema<Q> : Record<string, any>;
+    headers: S extends { headers: infer H } ? InferSchema<H> : Record<string, string>;
     body: S extends { body: infer B } ? InferSchema<B> : any;
     response: S extends { response: infer R } ? InferSchema<R> : Awaited<Res>;
   }>>;
   <P extends string, Res = any>(
     path: P,
     ...handlers: any[]
-  ): BareJS<Derived, Routes & Record<P, { method: M; response: Awaited<Res> }>>;
+  ): BareJS<Derived, Routes & Record<`${M} ${P}`, { method: M; path: P; response: Awaited<Res> }>>;
 };
 
 export class BareJS<
@@ -257,6 +261,14 @@ export class BareJS<
   declare public put: AddRoute<Derived, Routes, 'PUT'>;
   declare public patch: AddRoute<Derived, Routes, 'PATCH'>;
   declare public delete: AddRoute<Derived, Routes, 'DELETE'>;
+  declare public options: AddRoute<Derived, Routes, 'OPTIONS'>;
+  declare public head: AddRoute<Derived, Routes, 'HEAD'>;
+  declare public all: AddRoute<Derived, Routes, 'ALL'>;
+
+  declare public use: {
+    <R2 extends RouteSchema = {}>(mw: BareRouter<R2>): BareJS<Derived, Routes & R2>;
+    (mw: any): BareJS<Derived, Routes>;
+  };
 
   private _hasDerive = false;
   public derive<T extends Record<string, any>>(fn: (ctx: Context & Derived) => Promise<T> | T): BareJS<Derived & T, Routes> {
@@ -328,6 +340,7 @@ export class BareJS<
     const rFilter = rFilterMw?.__responseFilter;
     const idemMw = pipeline.find((fn) => fn?.__idempotencyCommit);
     const idemCommit = idemMw?.__idempotencyCommit;
+    const idemRelease = idemMw?.__idempotencyRelease;
 
     // Static ResponseInit for 200 OK (Zero Allocation)
     const json200 = { status: 200, headers: { "content-type": "application/json" } };
@@ -340,6 +353,7 @@ export class BareJS<
     const finalizeCode = `
       ${rFilter ? 'res = rFilter(res);' : ''}
       if (res instanceof Response) {
+        ${idemRelease ? 'idemRelease(ctx);' : ''}
         if (ctx._headers) {
           for (const k in ctx._headers) {
             if (!res.headers.has(k)) res.headers.set(k, ctx._headers[k]);
@@ -383,19 +397,56 @@ export class BareJS<
 
     const argSig = isLog ? 'ctx, doLog' : 'ctx';
 
+    const extraNames = [
+      ...(rFilter ? ['rFilter'] : []),
+      ...(idemCommit ? ['idemCommit'] : []),
+      ...(idemRelease ? ['idemRelease'] : [])
+    ];
+    const extraVals = [
+      ...(rFilter ? [rFilter] : []),
+      ...(idemCommit ? [idemCommit] : []),
+      ...(idemRelease ? [idemRelease] : [])
+    ];
+
+    const wrapIdem = (compiled: Function): Function => {
+      if (!idemRelease) return compiled;
+      return (ctx: Context, doLog?: any) => {
+        try {
+          const out = compiled(ctx, doLog);
+          if (out && typeof out.then === 'function') {
+            return out.then(
+              (v: any) => v,
+              (err: any) => {
+                idemRelease(ctx);
+                throw err;
+              }
+            );
+          }
+          return out;
+        } catch (err) {
+          idemRelease(ctx);
+          throw err;
+        }
+      };
+    };
+
     if (len === 1) {
       const fn0 = pipeline[0]!;
       if (fn0.constructor.name === 'AsyncFunction') {
-        return new Function('fn0', 'json200', 'text200', `return async function(${argSig}) {
-          const res = await fn0(ctx);
-          ${finalizeCode}
-        }`)(fn0, json200, text200);
+        return wrapIdem(
+          new Function('fn0', 'json200', 'text200', ...extraNames, `return async function(${argSig}) {
+            const res = await fn0(ctx);
+            ${finalizeCode}
+          }`)(fn0, json200, text200, ...extraVals)
+        );
       }
-      return new Function('fn0', 'json200', 'text200', `return function(${argSig}) {
-        const res = fn0(ctx);
-        if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
-        ${finalizeCode}
-      }`)(fn0, json200, text200);
+      return wrapIdem(
+        new Function('fn0', 'json200', 'text200', ...extraNames, `return function(${argSig}) {
+          const res = fn0(ctx);
+          if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
+          ${finalizeCode}
+        }`)(fn0, json200, text200, ...extraVals)
+      );
     }
 
     // Check async
@@ -435,7 +486,9 @@ export class BareJS<
       ? `return async function(${argSig})`
       : `return function(${argSig})`;
 
-    return new Function(...fnNames, 'noop', 'json200', 'text200', ...(rFilter ? ['rFilter'] : []), ...(idemCommit ? ['idemCommit'] : []), `${fnHeader} { ${code} }`)(...pipeline, noop, json200, text200, ...(rFilter ? [rFilter] : []), ...(idemCommit ? [idemCommit] : []));
+    return wrapIdem(
+      new Function(...fnNames, 'noop', 'json200', 'text200', ...extraNames, `${fnHeader} { ${code} }`)(...pipeline, noop, json200, text200, ...extraVals)
+    );
   }
 
   public compile() {
@@ -637,13 +690,27 @@ export class BareJS<
   };
   public name: string = "App";
 
-  public listen(port?: number, hostname: string = '0.0.0.0', reusePort: boolean = true) {
-    if (!this.compiled) this.compile();
+  public trustProxy(enabled: boolean = true): this {
+    for (let i = 0; i < this.pool.length; i++) {
+      this.pool[i]!._trustProxy = enabled;
+    }
+    return this;
+  }
 
+  public listen(
+    port?: number,
+    hostname: string = '0.0.0.0',
+    reusePort: boolean = true,
+    options: { maxRequestBodySize?: number; trustProxy?: boolean } = {}
+  ) {
+    if (!this.compiled) this.compile();
+    if (options.trustProxy !== undefined) {
+      this.trustProxy(options.trustProxy);
+    }
+    const maxRequestBodySize = options.maxRequestBodySize ?? 10 * 1024 * 1024;
 
     const { BARE_CONFIG } = require("./config");
 
- 
     const finalPort = port || BARE_CONFIG.port || 3000;
     const isProd = process.env.NODE_ENV === 'production';
 
@@ -670,15 +737,44 @@ export class BareJS<
           port: finalPort,
           hostname,
           reusePort,
+          maxRequestBodySize,
           fetch(req: Request, srv: any) {
-            if (req.headers.get('upgrade') === 'websocket') {
+            if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
               const url = req.url;
               const s = url.indexOf('/', 8);
               const q = s === -1 ? -1 : url.indexOf('?', s);
               const path = s === -1 ? '/' : (q === -1 ? url.slice(s) : url.slice(s, q));
               const normalized = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
-              const handler = wsRoutes.get(normalized);
-              if (handler && srv.upgrade(req, { data: handler })) {
+              let handler = wsRoutes.get(normalized);
+              let params: Record<string, string> | undefined;
+              if (!handler) {
+                const reqParts = normalized.split('/').filter(Boolean);
+                for (const [pattern, h] of wsRoutes) {
+                  if (!pattern.includes(':') && !pattern.includes('*')) continue;
+                  const patParts = pattern.split('/').filter(Boolean);
+                  const matched: Record<string, string> = {};
+                  let ok = true;
+                  for (let i = 0; i < patParts.length; i++) {
+                    const pp = patParts[i]!;
+                    if (pp === '*') {
+                      matched['*'] = reqParts.slice(i).join('/');
+                      break;
+                    }
+                    if (i >= reqParts.length) { ok = false; break; }
+                    if (pp.startsWith(':')) {
+                      matched[pp.slice(1)] = reqParts[i]!;
+                    } else if (pp !== reqParts[i]) {
+                      ok = false; break;
+                    }
+                  }
+                  if (ok && (patParts.includes('*') || patParts.length === reqParts.length)) {
+                    handler = h;
+                    params = matched;
+                    break;
+                  }
+                }
+              }
+              if (handler && srv.upgrade(req, { data: params ? { ...handler, params } : handler })) {
                 return undefined as any;
               }
             }
@@ -690,6 +786,7 @@ export class BareJS<
           port: finalPort,
           hostname,
           reusePort,
+          maxRequestBodySize,
           fetch: baseFetch
         });
 

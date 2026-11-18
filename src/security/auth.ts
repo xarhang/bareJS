@@ -54,13 +54,62 @@ export const createToken = async (payload: object, secret: string): Promise<stri
   return `${data}.${encodedSig}`;
 };
 
+const revokedTokens = new Map<string, number>();
+
+/**
+ * Revoke a JWT token or JTI for ttlMs (default: 1 hour).
+ */
+export const revokeToken = (tokenOrJti: string, ttlMs: number = 3600_000): void => {
+  if (revokedTokens.size >= 10_000) {
+    const now = Date.now();
+    for (const [k, exp] of revokedTokens) {
+      if (now >= exp) revokedTokens.delete(k);
+    }
+    if (revokedTokens.size >= 10_000) {
+      const oldest = revokedTokens.keys().next().value;
+      if (oldest !== undefined) revokedTokens.delete(oldest);
+    }
+  }
+  revokedTokens.set(tokenOrJti, Date.now() + ttlMs);
+};
+
+export const isTokenRevoked = (tokenOrJti: string): boolean => {
+  const exp = revokedTokens.get(tokenOrJti);
+  if (exp === undefined) return false;
+  if (Date.now() >= exp) {
+    revokedTokens.delete(tokenOrJti);
+    return false;
+  }
+  return true;
+};
+
+export interface BareAuthOptions {
+  secret: string;
+  isRevoked?: (payload: any, token: string) => boolean | Promise<boolean>;
+}
+
 /**
  * 1. BARE TOKEN AUTH (Standard JWT Middleware)
  * High-performance, constant-time JWT middleware for BareJS
  */
-export const bareAuth = (secretOrOpts: string | { secret: string }) => {
+export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
   const secret = typeof secretOrOpts === 'string' ? secretOrOpts : secretOrOpts.secret;
-  return (ctx: any, next: any) => {
+  const customRevoked = typeof secretOrOpts === 'object' ? secretOrOpts.isRevoked : undefined;
+
+  const finishAuth = (ctx: any, decoded: any, next: any) => {
+    ctx.set('user', decoded);
+    if (Array.isArray(next)) {
+      if (next.length === 0) return;
+      const [current, ...rest] = next;
+      return current(ctx, rest);
+    }
+    if (typeof next === 'function') {
+      return next();
+    }
+    return;
+  };
+
+  const verifySync = (ctx: any, next: any) => {
     const authHeader = ctx.req.headers.get('Authorization');
 
     if (!authHeader?.startsWith('Bearer ')) {
@@ -101,23 +150,30 @@ export const bareAuth = (secretOrOpts: string | { secret: string }) => {
         return ctx.status(401).send("Token not active");
       }
 
-      ctx.set('user', decoded);
-
-      if (Array.isArray(next)) {
-        if (next.length === 0) return;
-        const [current, ...rest] = next;
-        return current(ctx, rest);
+      if (isTokenRevoked(token) || (decoded?.jti && isTokenRevoked(String(decoded.jti)))) {
+        return ctx.status(401).send("Token revoked");
       }
 
-      if (typeof next === 'function') {
-        return next();
+      if (customRevoked) {
+        const rev = customRevoked(decoded, token);
+        if (rev && typeof (rev as Promise<boolean>).then === 'function') {
+          return (rev as Promise<boolean>).then((isRev) =>
+            isRev ? ctx.status(401).send("Token revoked") : finishAuth(ctx, decoded, next)
+          );
+        }
+        if (rev) return ctx.status(401).send("Token revoked");
       }
 
-      return;
+      return finishAuth(ctx, decoded, next);
     } catch {
       return ctx.status(401).send("Token verification failed");
     }
   };
+
+  if (customRevoked) {
+    return async (ctx: any, next: any) => verifySync(ctx, next);
+  }
+  return verifySync;
 };
 
 const sha256 = (value: string): Buffer => createHash('sha256').update(value).digest();

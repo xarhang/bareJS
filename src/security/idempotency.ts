@@ -82,17 +82,24 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
       if (!key) return;
       (ctx as any)._idempotencyKey = undefined;
       (ctx as any)._idemInFlight = undefined;
-      void externalStore.release(key);
-      if (status >= 200 && status < 300) {
-        if (resVal instanceof Response) {
-          const ct = resVal.headers.get('content-type') || 'application/json';
-          resVal.clone().arrayBuffer().then((buf) =>
-            externalStore.set(key, { status, rawBody: buf, contentType: ct, expiresAt: Date.now() + ttlMs }, ttlMs)
-          ).catch(() => {});
-        } else {
-          void externalStore.set(key, { status, body: resVal, expiresAt: Date.now() + ttlMs }, ttlMs);
+      const clonedRes = status >= 200 && status < 300 && resVal instanceof Response ? resVal.clone() : null;
+      const ct = clonedRes ? (clonedRes.headers.get('content-type') || 'application/json') : undefined;
+      void (async () => {
+        try {
+          if (status >= 200 && status < 300) {
+            if (clonedRes) {
+              const buf = await clonedRes.arrayBuffer();
+              await externalStore.set(key, { status, rawBody: buf, contentType: ct, expiresAt: Date.now() + ttlMs }, ttlMs);
+            } else {
+              await externalStore.set(key, { status, body: resVal, expiresAt: Date.now() + ttlMs }, ttlMs);
+            }
+          }
+        } catch {
+          // Best-effort cache write
+        } finally {
+          await externalStore.release(key);
         }
-      }
+      })();
     };
 
     (mw as any).__idempotencyRelease = (ctx: Context) => {

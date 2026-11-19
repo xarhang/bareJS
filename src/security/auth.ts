@@ -101,6 +101,8 @@ export interface BareAuthOptions {
   publicKey?: string | CryptoKey;
   jwksUri?: string;
   jwksCacheTtlMs?: number;
+  issuer?: string | string[];
+  audience?: string | string[];
   revocationStore?: RevocationStore;
   isRevoked?: (payload: any, token: string) => boolean | Promise<boolean>;
 }
@@ -156,6 +158,8 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
   const jwksUri = opts.jwksUri;
   const jwksCacheTtlMs = opts.jwksCacheTtlMs ?? 300_000;
   const allowedAlgs: JwtAlgorithm[] = opts.algorithms ?? (publicKey || jwksUri ? ['RS256', 'ES256'] : ['HS256']);
+  const expectedIss = opts.issuer === undefined ? null : (Array.isArray(opts.issuer) ? opts.issuer : [opts.issuer]);
+  const expectedAud = opts.audience === undefined ? null : (Array.isArray(opts.audience) ? opts.audience : [opts.audience]);
 
   const finishAuth = (ctx: any, decoded: any, next: any) => {
     ctx.set('user', decoded);
@@ -171,12 +175,25 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
   };
 
   const checkClaimsAndRevocation = (ctx: any, decoded: any, token: string, next: any) => {
+    if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
+      return ctx.status(401).send("Invalid token payload");
+    }
+
     const nowSec = Date.now() * 0.001;
     if (typeof decoded.exp === 'number' && nowSec >= decoded.exp) {
       return ctx.status(401).send("Token expired");
     }
     if (typeof decoded.nbf === 'number' && nowSec < decoded.nbf) {
       return ctx.status(401).send("Token not active");
+    }
+    if (expectedIss && (typeof decoded.iss !== 'string' || !expectedIss.includes(decoded.iss))) {
+      return ctx.status(401).send("Invalid token issuer");
+    }
+    if (expectedAud) {
+      const tokenAud = Array.isArray(decoded.aud) ? decoded.aud : (typeof decoded.aud === 'string' ? [decoded.aud] : []);
+      if (!tokenAud.some((a: any) => typeof a === 'string' && expectedAud.includes(a))) {
+        return ctx.status(401).send("Invalid token audience");
+      }
     }
 
     if (isTokenRevoked(token) || (decoded?.jti && isTokenRevoked(String(decoded.jti)))) {
@@ -266,21 +283,45 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
 
   // Asymmetric (RS256 / ES256) and/or JWKS verification path
   let jwksFetchedAt = 0;
+  let lastForceRefreshAt = 0;
   let jwksKeys: any[] = [];
+  let inFlightJwks: Promise<any[]> | null = null;
   const jwkKeyCache = new Map<string, CryptoKey>();
+  const JWKS_FORCE_COOLDOWN_MS = 15_000;
 
   const loadJwks = async (forceRefresh = false): Promise<any[]> => {
     const now = Date.now();
     if (!forceRefresh && jwksKeys.length > 0 && now - jwksFetchedAt < jwksCacheTtlMs) {
       return jwksKeys;
     }
-    const res = await fetch(jwksUri!);
-    if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
-    const body = (await res.json()) as { keys?: any[] };
-    jwksKeys = Array.isArray(body?.keys) ? body.keys : [];
-    jwksFetchedAt = now;
-    if (forceRefresh) jwkKeyCache.clear();
-    return jwksKeys;
+    if (forceRefresh && now - lastForceRefreshAt < JWKS_FORCE_COOLDOWN_MS && jwksKeys.length > 0) {
+      return jwksKeys;
+    }
+    if (inFlightJwks) return inFlightJwks;
+
+    if (forceRefresh) lastForceRefreshAt = now;
+    inFlightJwks = (async () => {
+      const res = await fetch(jwksUri!, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
+      const body = (await res.json()) as { keys?: any[] };
+      jwksKeys = Array.isArray(body?.keys) ? body.keys : [];
+      jwksFetchedAt = Date.now();
+      if (forceRefresh) jwkKeyCache.clear();
+      return jwksKeys;
+    })().finally(() => {
+      inFlightJwks = null;
+    });
+    return inFlightJwks;
+  };
+
+  const matchJwk = (keys: any[], kid: string | undefined, alg: 'RS256' | 'ES256') => {
+    const isUsable = (k: any) =>
+      k &&
+      k.use !== 'enc' &&
+      (!k.alg || k.alg === alg);
+    return kid
+      ? keys.find((k) => k.kid === kid && isUsable(k))
+      : keys.find((k) => isUsable(k));
   };
 
   const resolveJwksKey = async (kid: string | undefined, alg: 'RS256' | 'ES256'): Promise<CryptoKey | null> => {
@@ -289,10 +330,10 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
     if (cached && Date.now() - jwksFetchedAt < jwksCacheTtlMs) return cached;
 
     let keys = await loadJwks(false);
-    let match = kid ? keys.find((k) => k.kid === kid) : keys[0];
+    let match = matchJwk(keys, kid, alg);
     if (!match && kid) {
       keys = await loadJwks(true);
-      match = keys.find((k) => k.kid === kid);
+      match = matchJwk(keys, kid, alg);
     }
     if (!match) return null;
 

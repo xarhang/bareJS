@@ -64,29 +64,37 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
     }
   };
 
+  const setExpiry = async (fullKey: string, windowMs: number): Promise<void> => {
+    if (useSend) {
+      await client.send('PEXPIRE', [fullKey, String(windowMs)]);
+    } else if (typeof client.pexpire === 'function') {
+      await client.pexpire(fullKey, windowMs);
+    } else if (typeof client.expire === 'function') {
+      await client.expire(fullKey, Math.max(1, Math.ceil(windowMs / 1000)));
+    }
+  };
+
   return {
     async increment(key: string, windowMs: number): Promise<{ count: number; resetAt: number }> {
       const fullKey = `${prefix}rl:${key}`;
       const count = Number(await cmdIncr(fullKey));
       if (count === 1) {
-        if (useSend) {
-          await client.send('PEXPIRE', [fullKey, String(windowMs)]);
-        } else if (typeof client.pexpire === 'function') {
-          await client.pexpire(fullKey, windowMs);
-        } else if (typeof client.expire === 'function') {
-          await client.expire(fullKey, Math.max(1, Math.ceil(windowMs / 1000)));
-        }
+        await setExpiry(fullKey, windowMs);
       }
       let pttl = windowMs;
+      let rawPttl: number | null = null;
       if (useSend) {
-        const res = Number(await client.send('PTTL', [fullKey]));
-        if (Number.isFinite(res) && res > 0) pttl = res;
+        rawPttl = Number(await client.send('PTTL', [fullKey]));
       } else if (typeof client.pttl === 'function') {
-        const res = Number(await client.pttl(fullKey));
-        if (Number.isFinite(res) && res > 0) pttl = res;
+        rawPttl = Number(await client.pttl(fullKey));
       } else if (typeof client.ttl === 'function') {
-        const res = Number(await client.ttl(fullKey));
-        if (Number.isFinite(res) && res > 0) pttl = res * 1000;
+        const t = Number(await client.ttl(fullKey));
+        rawPttl = t < 0 ? t : t * 1000;
+      }
+      if (rawPttl === -1) {
+        await setExpiry(fullKey, windowMs);
+      } else if (rawPttl !== null && Number.isFinite(rawPttl) && rawPttl > 0) {
+        pttl = rawPttl;
       }
       return { count, resetAt: Date.now() + pttl };
     },
@@ -96,7 +104,7 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
       if (!raw) return undefined;
       try {
         const parsed = JSON.parse(typeof raw === 'string' ? raw : String(raw));
-        if (parsed.rawBodyBase64) {
+        if (typeof parsed.rawBodyBase64 === 'string') {
           const buf = Buffer.from(parsed.rawBodyBase64, 'base64');
           return {
             status: parsed.status,

@@ -107,7 +107,7 @@ app.post('/pay', idempotency({ ttlMs: 86_400_000, maxKeys: 10_000, store }), (ct
 
 // Thundering-herd / Cache-stampede request coalescer
 const sf = createSingleflight();
-app.get('/report', () => sf.do('report-key', async () => ({ total: 100 })));
+app.get('/report', () => sf('report-key', async () => ({ total: 100 })));
 
 // Auth & Hashing (HS256 sync fast-path + RS256/ES256/JWKS async verification + revocationStore)
 const hash = await Hash.make('password'); // Argon2id (64MB default)

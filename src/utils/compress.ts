@@ -22,13 +22,25 @@ export const compress = (options: CompressOptions = {}): Middleware => {
   const encodings: CompressionEncoding[] = options.encodings ?? ['zstd', 'br', 'gzip'];
   const hasZstd = typeof (Bun as any).zstdCompressSync === 'function';
 
+  const isAccepted = (lower: string, enc: CompressionEncoding): boolean => {
+    const idx = lower.indexOf(enc);
+    if (idx === -1) return false;
+    const comma = lower.indexOf(',', idx);
+    const segment = comma === -1 ? lower.slice(idx) : lower.slice(idx, comma);
+    const qIdx = segment.indexOf(';q=');
+    if (qIdx !== -1) {
+      const qVal = parseFloat(segment.slice(qIdx + 3));
+      if (Number.isFinite(qVal) && qVal <= 0) return false;
+    }
+    return true;
+  };
+
   const negotiate = (accept: string): CompressionEncoding | null => {
     const lower = accept.toLowerCase();
     for (let i = 0; i < encodings.length; i++) {
       const enc = encodings[i]!;
-      if (enc === 'zstd' && hasZstd && lower.includes('zstd')) return 'zstd';
-      if (enc === 'br' && lower.includes('br')) return 'br';
-      if (enc === 'gzip' && lower.includes('gzip')) return 'gzip';
+      if (enc === 'zstd' && !hasZstd) continue;
+      if (isAccepted(lower, enc)) return enc;
     }
     return null;
   };

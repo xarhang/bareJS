@@ -65,6 +65,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
       return ctx.status(403).send('Forbidden');
     }
 
+    let realFile = filePath;
     let fileSize = 0;
     let mtimeMs = 0;
     let etag = '';
@@ -74,21 +75,23 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
       // Refresh LRU position
       metaCache!.delete(filePath);
       metaCache!.set(filePath, cached);
+      realFile = cached.realFile;
       fileSize = cached.fileSize;
       mtimeMs = cached.mtimeMs;
       etag = cached.etag;
     } else {
       try {
-        const [realRoot, realFile] = await Promise.all([
+        const [realRoot, resolvedFile] = await Promise.all([
           (realRootPromise ??= realpath(rootDir)),
           realpath(filePath)
         ]);
         const realPrefix = realRoot.endsWith(sep) ? realRoot : realRoot + sep;
-        if (realFile !== realRoot && !realFile.startsWith(realPrefix)) {
+        if (resolvedFile !== realRoot && !resolvedFile.startsWith(realPrefix)) {
           return ctx.status(403).send('Forbidden');
         }
-        const st = await stat(realFile);
+        const st = await stat(resolvedFile);
         if (st.isDirectory()) return next();
+        realFile = resolvedFile;
         fileSize = st.size;
         mtimeMs = Math.floor(st.mtimeMs);
         etag = enableEtag ? `W/"${fileSize.toString(16)}-${mtimeMs.toString(16)}"` : '';
@@ -111,7 +114,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
       }
     }
 
-    const file = Bun.file(filePath);
+    const file = Bun.file(realFile);
 
     const headers: Record<string, string> = {
       'Cache-Control': `public, max-age=${maxAge}`,

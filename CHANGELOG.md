@@ -2,6 +2,39 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.52] - 2026-11-19
+
+### Added
+- **Pluggable External Store & Redis Adapter** (`src/security/store.ts`, `rateLimit.ts`, `idempotency.ts`, `auth.ts`):
+  - Exported `redisStore(client)` adapter (compatible with `Bun.redis` via `client.send()` and `ioredis`) implementing `RateLimitStore`, `IdempotencyStore`, and `RevocationStore`.
+  - Added optional `store` support to `rateLimit()`, `idempotency()`, and `bareAuth()` token revocation while preserving the zero-overhead in-memory fast path by default.
+- **Asymmetric JWT & JWKS in `bareAuth()`** (`src/security/auth.ts`):
+  - Added `algorithms` (`HS256`, `RS256`, `ES256`), `publicKey`, and `jwksUri` (with `kid` caching and `crypto.subtle.verify`) while keeping the synchronous `HS256` fast path untouched.
+- **Testing Helper `app.request(path, init?)`** (`src/core/bare.ts`):
+  - Added ergonomic in-memory request helper normalizing relative paths to `http://localhost` and delegating directly to `app.fetch()`.
+- **Prefix Mounting & End-to-End Type Inference** (`src/core/router.ts`, `src/core/bare.ts`):
+  - Added `app.route(prefix, router)` and `app.use(prefix, router)` with `PrefixRoutes<P, R2>` type-level path prefixing so `bareClient(app)` preserves full type inference for mounted sub-routers.
+- **Multi-Encoding Compression (`zstd`, `br`, `gzip`)** (`src/utils/compress.ts`):
+  - Added `Accept-Encoding` negotiation supporting `zstd` (`Bun.zstdCompressSync`), Brotli (`br`), and `gzip` with configurable `encodings` priority.
+- **Static File Metadata Cache** (`src/utils/static.ts`):
+  - Added optional `cacheMetadata` (LRU + TTL) in `staticFile()` to cache `realpath`, `stat`, and `ETag` and avoid repeated filesystem syscalls.
+- **Test Suites**: Added `tests/audit-fixes.test.ts` and `tests/enhancements-v2.test.ts`.
+
+### Performance
+- Used 1-arg `Response.json(data)` fast path for default 200 responses (`src/core/bare.ts`, `src/core/context.ts`).
+- Pre-checked `+` and `%` before decoding in query string parsing (`src/core/context.ts`).
+- Skipped `validateSyncParts` when routes define no `params`, `query`, or `headers` schemas (`src/security/validators.ts`).
+- Cached immutable `ResponseInit` objects and guarded frozen headers (`src/core/bare.ts`, `src/core/context.ts`).
+- Automated multi-scenario and head-to-head benchmarks in CI (`benchmarks/fair-suite.ts`, `benchmarks/production-bench.ts`, `scripts/update-readme.ts`).
+
+### Fixed
+- **`trustProxy(false)` Overflow & `_peerIp`** (`src/core/bare.ts`, `src/core/context.ts`): Propagated `_trustProxy` to overflow `Context` instances and wired `server.requestIP(req)?.address` into `ctx._peerIp`.
+- **Error Response Headers & CRLF Guard** (`src/core/bare.ts`): Applied `ctx._headers` and `Set-Cookie` to error and `404` responses via `applyCtxHeaders` with `try/catch` protection against invalid CRLF header values.
+- **`async onError()` Support** (`src/core/bare.ts`): Awaited async custom error handlers before serializing plain objects/strings into responses.
+- **`idempotency()` Response Caching** (`src/security/idempotency.ts`): Cloned and cached direct `Response` returns (e.g. `ctx.status(201).json(...)`) for faithful replay.
+
+---
+
 ## [0.1.51] - 2026-11-18
 
 ### Added

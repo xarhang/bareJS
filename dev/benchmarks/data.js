@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795062750510,
+  "lastUpdate": 1795069897175,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3274,6 +3274,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 2536.700438511951,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "2582d539dc694fa23c345c041c9409579a4ac378",
+          "message": "fix(security): dynamic cors raw response, staticFallback middleware chain, client param boundaries (v0.1.54)",
+          "timestamp": "2026-11-19T06:30:43Z",
+          "tree_id": "475d82746823b5567543e01268851afe8b4a6253",
+          "url": "https://github.com/xarhang/bareJS/commit/2582d539dc694fa23c345c041c9409579a4ac378"
+        },
+        "date": 1795069896834,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1094.4698924731183,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1570.096144309447,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 4973.721489747326,
             "unit": "undefined"
           }
         ]

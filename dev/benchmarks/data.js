@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795059470407,
+  "lastUpdate": 1795060297413,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3118,6 +3118,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5006.469104133519,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "67e1ad1e343bfff6427049df640581d163350b48",
+          "message": "fix(security): harden JWKS cooldown/claims, static realFile, idempotency lock order, redis TTL recovery, and compress q=0",
+          "timestamp": "2026-11-19T03:50:45Z",
+          "tree_id": "1fd3f860f56e72a9098d10772d1ecb30607bad90",
+          "url": "https://github.com/xarhang/bareJS/commit/67e1ad1e343bfff6427049df640581d163350b48"
+        },
+        "date": 1795060297165,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1145.2326235326236,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1761.2251907314444,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5247.977641664156,
             "unit": "undefined"
           }
         ]

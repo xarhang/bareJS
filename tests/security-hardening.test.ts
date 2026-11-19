@@ -292,4 +292,19 @@ describe('Security Hardening & Bug Fixes', () => {
     const out = filter({ name: 'alice', extra: 'secret' });
     expect(out).toEqual({ name: 'alice' });
   });
+
+  it('radix JIT does not match /users or /users/ to /users/:id with empty param', async () => {
+    const app = new BareJS();
+    app.get('/users/:id', (ctx) => ({ id: ctx.params.id }));
+
+    const r1 = await app.request('/users');
+    expect(r1.status).toBe(404);
+
+    const r2 = await app.request('/users/');
+    expect(r2.status).toBe(404);
+
+    const r3 = await app.request('/users/42');
+    expect(r3.status).toBe(200);
+    expect(await r3.json()).toEqual({ id: '42' });
+  });
 });

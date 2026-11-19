@@ -1,4 +1,5 @@
 import type { Context, Middleware, Next } from '../core/context';
+import { timingSafeEqual } from 'node:crypto';
 
 export interface CsrfOptions {
   /** Allowed origins for state-changing requests (defaults to same-origin matching request Host) */
@@ -71,7 +72,13 @@ export const csrf = (options: CsrfOptions = {}): Middleware => {
     if (requireToken) {
       const cookieToken = ctx.cookies[cookieName];
       const headerToken = ctx.req.headers.get(headerName);
-      if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+      let tokensMatch = false;
+      if (cookieToken && headerToken) {
+        const a = Buffer.from(cookieToken);
+        const b = Buffer.from(headerToken);
+        tokensMatch = a.length === b.length && timingSafeEqual(a, b);
+      }
+      if (!tokensMatch) {
         return Response.json(
           { status: 'error', code: 'CSRF_TOKEN_INVALID', message: 'Invalid or missing CSRF token' },
           { status: 403 }

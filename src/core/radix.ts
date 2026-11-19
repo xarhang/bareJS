@@ -190,10 +190,12 @@ export class RadixNode {
       }
 
       const pVar = `pL${level}`;
-      code += `${indent}const ${pVar} = ${pathPrefix}.slice(${idxPrefix}, slash${level});\n`;
+      code += `${indent}if (slash${level} > ${idxPrefix}) {\n`;
+      code += `${indent}  const ${pVar} = ${pathPrefix}.slice(${idxPrefix}, slash${level});\n`;
 
       const newAccumulator = [...paramAccumulator, { name: this.paramName!, varName: pVar }];
       code += pNode.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, newAccumulator);
+      code += `${indent}}\n`;
     }
 
     // 3. Wildcard Node Logic (Catch-All *)

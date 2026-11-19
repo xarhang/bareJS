@@ -519,12 +519,14 @@ export class BareJS<
       if (ctx._headers) {
         for (const k in ctx._headers) {
           const val = ctx._headers[k];
-          if (val !== undefined && !res.headers.has(k)) res.headers.set(k, val);
+          if (val !== undefined && !res.headers.has(k)) {
+            try { res.headers.set(k, val); } catch { /* ignore invalid header values on error path */ }
+          }
         }
       }
       if (ctx._setCookies) {
         for (let i = 0; i < ctx._setCookies.length; i++) {
-          res.headers.append('Set-Cookie', ctx._setCookies[i]!);
+          try { res.headers.append('Set-Cookie', ctx._setCookies[i]!); } catch { /* ignore */ }
         }
       }
       return res;

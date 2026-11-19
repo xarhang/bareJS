@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795056350560,
+  "lastUpdate": 1795056988164,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2962,6 +2962,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3062.71853089979,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "d8b839b94dabe794232bb3c49d5ae70c8ddfd4d3",
+          "message": "feat: add pluggable redisStore, app.request, typed route/use prefix inference, RS256/ES256/JWKS auth, zstd/br compress & staticFile metadata cache",
+          "timestamp": "2026-11-19T02:55:35Z",
+          "tree_id": "bfb0f14c116301ee92ce162eb32e99620b2d4d01",
+          "url": "https://github.com/xarhang/bareJS/commit/d8b839b94dabe794232bb3c49d5ae70c8ddfd4d3"
+        },
+        "date": 1795056987811,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1117.2426038662823,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1680.801107444488,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5001.325426439233,
             "unit": "undefined"
           }
         ]

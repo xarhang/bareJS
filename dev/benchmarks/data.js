@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795060543417,
+  "lastUpdate": 1795060920505,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3196,6 +3196,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3981.034360123215,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "40d9d4222ee43c200ca88fb24ff5a435f60b9d70",
+          "message": "fix(radix,csrf): prevent empty param matching in JIT router and use timingSafeEqual for CSRF token",
+          "timestamp": "2026-11-19T04:01:09Z",
+          "tree_id": "6759cb483f75fb841fd5c37fa5f45665b5769729",
+          "url": "https://github.com/xarhang/bareJS/commit/40d9d4222ee43c200ca88fb24ff5a435f60b9d70"
+        },
+        "date": 1795060920271,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 870.3579727657201,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1304.0135274224378,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 4283.167672974144,
             "unit": "undefined"
           }
         ]

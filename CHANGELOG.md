@@ -2,6 +2,23 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.55] - 2026-11-19
+
+### Fixed
+- **Short-Circuit & Timeout Headers** (`src/core/bare.ts`): Middleware that short-circuits with a `Response` (`rateLimit` 429, `bareAuth` 401, `csrf` 403) and `timeout()` 408 responses now retain `ctx._headers` (CORS, security headers, `x-request-id`) and `Set-Cookie`. Empty pipelines no longer crash `compileHandler`; replaced `require('./config')` with an ESM import.
+- **`next?.()` Safety** (`auth.ts`, `csrf.ts`, `logger.ts`, `static.ts`): Prevented `TypeError` when middleware runs as the terminal handler (e.g. `OPTIONS` fallback).
+- **Validators** (`src/security/validators.ts`): Standalone `typebox`/`zod`/`native` now return `413` on oversized bodies; `native()` correctly checks `array`/`integer`/`object`; response/body projector no longer emits `undefined` keys; `coerceFields` unwraps `ZodOptional`/`ZodDefault`/`ZodNullable`.
+- **Idempotency** (`src/security/idempotency.ts`): Whitespace-only keys ignored; SSE streams are never cached.
+- **`Hash.needsRehash`**: Guards `null`/non-string input.
+
+### Security
+- **SSE Injection** (`src/core/context.ts`): Strip CR/LF from `id`/`event`, validate `retry`, and emit `data:` per line for multi-line payloads.
+- **`ctx.ip`**: Skips empty `X-Forwarded-For` segments and falls back correctly.
+- **`ctx.upload()`**: `allowedTypes` matched case-insensitively/trimmed. `deleteCookie()` accepts `secure`/`sameSite`.
+- **Tests**: Added `tests/qa-audit.test.ts` (**316 tests / 5,833 assertions**).
+
+---
+
 ## [0.1.54] - 2026-11-19
 
 ### Fixed

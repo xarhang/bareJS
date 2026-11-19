@@ -1,6 +1,6 @@
 # BareJS (`barejs`) — AI Quick Reference (`llms.txt`)
 
-> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`) with built-in security (Argon2id, HS256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip `compress`, `app.cron`, Security Headers, DoS limits) and **100% Function & Line Test Coverage (214 tests / 2,906 assertions)**.
+> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`) with built-in security (Argon2id, HS256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip `compress`, `app.cron`, Security Headers, DoS limits) and **100% Function & Line Test Coverage (316 tests / 5,833 assertions)**.
 
 ## 1. Installation & Minimal App
 ```ts
@@ -61,7 +61,7 @@ const typedApp = app.route('/api/v1', api); // or app.use('/api/v1', api)
 - `await ctx.getSignedCookie(name, secret)`: Verifies HMAC signature with `timingSafeEqual`; returns `null` if tampered or missing.
 - `ctx.deleteCookie(name, opts?)`: Expires cookie immediately (`Max-Age=0`).
 - `ctx.requestId`: Lazy `x-request-id` header or generated `crypto.randomUUID()`.
-- `ctx.ip`: Client IP extracted from `x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, or `'127.0.0.1'`.
+- `ctx.ip`: Client IP from `x-forwarded-for` (first non-empty), `x-real-ip`, `cf-connecting-ip` (only when `trustProxy` is enabled), else peer IP or `'127.0.0.1'`.
 - `ctx.user`: Authenticated user payload populated by `bareAuth` or `basicAuth`.
 - `ctx.store` / `ctx.set(k, v)` / `ctx.get(k)`: Per-request `Map<string, any>` (automatically cleared on pool release).
 - **Response Helpers (Hono / Express style):**

@@ -208,7 +208,7 @@ app.use(securityHeaders());
 app.use(cors({ origin: ['https://app.example.com'], credentials: true }));
 app.use(csrf({ allowedOrigins: ['https://app.example.com'] }));
 app.use(timeout(10_000)); // Returns 408 if handler exceeds 10s
-app.use(compress({ threshold: 1024, encodings: ['zstd', 'br', 'gzip'] })); // Negotiates zstd / br / gzip
+app.use(compress({ minSize: 1024, encodings: ['zstd', 'br', 'gzip'] })); // Negotiates zstd / br / gzip
 app.use(rateLimit({ windowMs: 60_000, max: 100, store }));
 app.use(staticFile('public', { maxAge: 3600, etag: true, cacheMetadata: { maxEntries: 1024, ttlMs: 30_000 } }));
 

@@ -98,7 +98,7 @@ app.use(securityHeaders());
 app.use(cors({ origin: ['https://app.example.com'], credentials: true }));
 app.use(csrf({ allowedOrigins: ['https://app.example.com'], requireToken: true }));
 app.use(timeout(10_000, { status: 408, message: 'Timed out' }));
-app.use(compress({ threshold: 1024, encodings: ['zstd', 'br', 'gzip'] })); // Negotiates zstd / br / gzip
+app.use(compress({ minSize: 1024, encodings: ['zstd', 'br', 'gzip'] })); // Negotiates zstd / br / gzip
 app.use(rateLimit({ windowMs: 60_000, max: 100, store })); // Omit store for zero-overhead in-memory Map
 app.use(staticFile('public', { maxAge: 3600, etag: true, cacheMetadata: { maxEntries: 1024, ttlMs: 30_000 } }));
 

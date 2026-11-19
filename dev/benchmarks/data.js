@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795059107261,
+  "lastUpdate": 1795059470407,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3079,6 +3079,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5218.400727685426,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "7dc36f81aa6300154f5829ce6e026a474dbcf457",
+          "message": "docs: fix compress minSize option name in README and llms.txt",
+          "timestamp": "2026-11-19T03:37:00Z",
+          "tree_id": "3b1b0c7759db221309219035470f021b70bb62c6",
+          "url": "https://github.com/xarhang/bareJS/commit/7dc36f81aa6300154f5829ce6e026a474dbcf457"
+        },
+        "date": 1795059470161,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1150.5243690851735,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1656.3679416620803,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5006.469104133519,
             "unit": "undefined"
           }
         ]

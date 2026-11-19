@@ -229,7 +229,7 @@ describe("Enhancements v2", () => {
         headers: { "idempotency-key": "err-1" },
       });
       expect(errRes.status).toBe(500);
-      expect(await store.get("idem:err-1")).toBeNull();
+      expect(await store.get("err-1")).toBeUndefined();
     });
 
     test("custom BareStore implementation works with rateLimit", async () => {

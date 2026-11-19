@@ -229,4 +229,67 @@ describe('Security Hardening & Bug Fixes', () => {
       rmSync(outside, { recursive: true, force: true });
     }
   });
+
+  it('jsonBody rejects oversized payload even with non-numeric Content-Length', async () => {
+    const app = new BareJS();
+    app.post('/limited', async (ctx) => {
+      const body = await ctx.jsonBody(20);
+      return { body };
+    });
+
+    const bigPayload = JSON.stringify({ data: 'a'.repeat(50) });
+    const res = await app.request('/limited', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': 'invalid-number'
+      },
+      body: bigPayload
+    });
+    expect(res.status).toBe(413);
+  });
+
+  it('setCookie sanitizes name/path/domain and applies Set-Cookie on redirect/html/text without duplicates', async () => {
+    const { Context } = await import('../src/index');
+    const c = new Context();
+    expect(() => c.setCookie('bad;name', '1')).toThrow();
+    expect(() => c.setCookie('ok', '1', { path: '/\r\nSet-Cookie: evil=1' })).toThrow();
+    expect(() => c.setCookie('ok', '1', { domain: 'a.com; evil' })).toThrow();
+
+    const app = new BareJS();
+    app.get('/mw-redirect', (ctx, next) => {
+      ctx.setCookie('sid', 'abc123');
+      return ctx.redirect('/login');
+    }, () => ({ unreachable: true }));
+
+    app.get('/html-cookie', (ctx) => ctx.setCookie('theme', 'dark').html('<h1>hi</h1>'));
+
+    const redir = await app.request('/mw-redirect');
+    expect(redir.status).toBe(302);
+    expect(redir.headers.get('set-cookie')).toContain('sid=abc123');
+
+    const html = await app.request('/html-cookie');
+    expect(html.status).toBe(200);
+    expect(html.headers.getSetCookie()).toHaveLength(1);
+    expect(html.headers.get('set-cookie')).toContain('theme=dark');
+  });
+
+  it('getQuery ignores Object.prototype keys and response projector ignores __proto__', async () => {
+    const { Type, createResponseFilter } = await import('../src/index');
+    const app = new BareJS();
+    app.get('/q', (ctx) => ({
+      toStringVal: ctx.getQuery('toString') ?? null,
+      constructorVal: ctx.getQuery('constructor') ?? null,
+      real: ctx.getQuery('a') ?? null
+    }));
+
+    const res = await app.request('/q?a=1');
+    const data = await res.json();
+    expect(data).toEqual({ toStringVal: null, constructorVal: null, real: '1' });
+
+    const schema = Type.Object({ name: Type.String(), ['__proto__']: Type.Optional(Type.Any()) } as any);
+    const filter = createResponseFilter(schema);
+    const out = filter({ name: 'alice', extra: 'secret' });
+    expect(out).toEqual({ name: 'alice' });
+  });
 });

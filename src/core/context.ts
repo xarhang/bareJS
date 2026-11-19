@@ -108,7 +108,8 @@ export class Context {
   }
 
   public getQuery(key: string): string | undefined {
-    return this.query[key];
+    const q = this.query;
+    return Object.hasOwn(q, key) ? q[key] : undefined;
   }
 
   public get cookies(): Record<string, string> {
@@ -140,13 +141,23 @@ export class Context {
   }
 
   public setCookie(name: string, value: string, options: CookieOptions = {}): this {
+    if (!name || /[\r\n;= \t]/.test(name)) {
+      throw new Error('Invalid cookie name');
+    }
+    const path = options.path ?? '/';
+    if (/[\r\n;]/.test(path)) {
+      throw new Error('Invalid cookie path');
+    }
+    if (options.domain && /[\r\n;]/.test(options.domain)) {
+      throw new Error('Invalid cookie domain');
+    }
     let finalVal = value;
     if (options.secret) {
       const sig = createHmac('sha256', options.secret).update(value).digest('base64url');
       finalVal = `${value}.${sig}`;
     }
     let cookieStr = `${name}=${encodeURIComponent(finalVal)}`;
-    cookieStr += `; Path=${options.path ?? '/'}`;
+    cookieStr += `; Path=${path}`;
     if (options.domain) cookieStr += `; Domain=${options.domain}`;
     if (options.maxAge !== undefined) cookieStr += `; Max-Age=${Math.floor(options.maxAge)}`;
     if (options.expires) cookieStr += `; Expires=${options.expires.toUTCString()}`;
@@ -189,16 +200,19 @@ export class Context {
     if (contentType && contentType.includes("application/json")) {
       const lenHeader = this.req.headers.get("content-length");
       if (lenHeader !== null) {
-        const lenNum = Number(lenHeader);
-        if (lenNum > maxBytes) {
-          const err: any = new Error("Payload Too Large");
-          err.status = 413;
-          throw err;
-        }
-        try {
-          return this.body = await this.req.json();
-        } catch {
-          return this.body = null;
+        const trimmed = lenHeader.trim();
+        const lenNum = trimmed.length > 0 ? Number(trimmed) : NaN;
+        if (Number.isInteger(lenNum) && lenNum >= 0) {
+          if (lenNum > maxBytes) {
+            const err: any = new Error("Payload Too Large");
+            err.status = 413;
+            throw err;
+          }
+          try {
+            return this.body = await this.req.json();
+          } catch {
+            return this.body = null;
+          }
         }
       }
       try {
@@ -236,6 +250,16 @@ export class Context {
     return this;
   }
 
+  private _applyCookies(res: Response): Response {
+    if (this._setCookies) {
+      for (let i = 0; i < this._setCookies.length; i++) {
+        res.headers.append('Set-Cookie', this._setCookies[i]!);
+      }
+      this._setCookies = undefined;
+    }
+    return res;
+  }
+
   public json(data: any): Response {
     const status = this._status || 200;
     let res: Response;
@@ -259,12 +283,7 @@ export class Context {
       });
     }
 
-    if (this._setCookies) {
-      for (let i = 0; i < this._setCookies.length; i++) {
-        res.headers.append('Set-Cookie', this._setCookies[i]!);
-      }
-    }
-    return res;
+    return this._applyCookies(res);
   }
 
   public set(key: string, value: any): this {
@@ -303,7 +322,7 @@ export class Context {
       'content-type': 'text/html; charset=utf-8',
       ...(this._headers || {})
     };
-    return new Response(content, { status: status ?? this._status, headers });
+    return this._applyCookies(new Response(content, { status: status ?? this._status, headers }));
   }
 
   public text(content: string, status?: number): Response {
@@ -311,7 +330,7 @@ export class Context {
       'content-type': 'text/plain; charset=utf-8',
       ...(this._headers || {})
     };
-    return new Response(content, { status: status ?? this._status, headers });
+    return this._applyCookies(new Response(content, { status: status ?? this._status, headers }));
   }
 
   public redirect(url: string, status: number = 302): Response {
@@ -319,7 +338,7 @@ export class Context {
       'location': url,
       ...(this._headers || {})
     };
-    return new Response(null, { status, headers });
+    return this._applyCookies(new Response(null, { status, headers }));
   }
 
   public sse(
@@ -375,7 +394,7 @@ export class Context {
       'connection': 'keep-alive',
       ...(this._headers || {})
     };
-    return new Response(stream, { status: this._status || 200, headers });
+    return this._applyCookies(new Response(stream, { status: this._status || 200, headers }));
   }
 
   public get requestId(): string {

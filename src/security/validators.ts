@@ -189,6 +189,7 @@ const buildProjectorExpr = (schema: any, accessor: string): string | null => {
   if (!props || typeof props !== 'object') return null;
   const entries: string[] = [];
   for (const [k, subSchema] of Object.entries<any>(props)) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
     const keyLit = JSON.stringify(k);
     const propAccess = `${accessor}[${keyLit}]`;
     const nestedExpr = buildProjectorExpr(subSchema, propAccess);

@@ -73,15 +73,39 @@ export class BareRouter<Routes extends RouteSchema = {}> {
     return this;
   };
 
+  private _mountRouter(prefix: string, router: BareRouter<any>) {
+    const base = (this.prefix + "/" + prefix).replace(/\/+/g, "/").replace(/\/$/, "");
+    for (const r of router.routes) {
+      let fullPath = (base + "/" + r.path).replace(/\/+/g, "/");
+      if (fullPath.endsWith("/")) fullPath = fullPath.slice(0, -1);
+      this.routes.push({
+        method: r.method,
+        path: fullPath || "",
+        handlers: [...this.groupMiddleware, ...r.handlers]
+      });
+    }
+  }
+
+  public route<P extends string, R2 extends RouteSchema = {}>(
+    prefix: P,
+    router: BareRouter<R2>
+  ): BareRouter<Routes & R2> {
+    this._mountRouter(prefix, router);
+    return this as any;
+  }
+
   public use<R2 extends RouteSchema = {}>(mw: BareRouter<R2>): BareRouter<Routes & R2>;
+  public use<P extends string, R2 extends RouteSchema = {}>(prefix: P, mw: BareRouter<R2>): BareRouter<Routes & R2>;
   public use(mw: any): BareRouter<Routes>;
-  public use(mw: any): any {
-    if (mw instanceof BareRouter || (mw && mw.routes)) {
-      this.routes.push(...mw.routes);
-    } else if (mw && typeof mw.install === 'function') {
-      mw.install(this);
+  public use(prefixOrMw: any, maybeMw?: any): any {
+    if (typeof prefixOrMw === 'string' && (maybeMw instanceof BareRouter || (maybeMw && maybeMw.routes))) {
+      this._mountRouter(prefixOrMw, maybeMw);
+    } else if (prefixOrMw instanceof BareRouter || (prefixOrMw && prefixOrMw.routes)) {
+      this._mountRouter("", prefixOrMw);
+    } else if (prefixOrMw && typeof prefixOrMw.install === 'function') {
+      prefixOrMw.install(this);
     } else {
-      this.groupMiddleware.push(mw);
+      this.groupMiddleware.push(prefixOrMw);
     }
     return this;
   }

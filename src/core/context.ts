@@ -54,7 +54,9 @@ export class Context {
   public _requestId: string | undefined = undefined;
   public _peerIp: string | undefined = undefined;
   public _trustProxy: boolean = true;
-  constructor() { }
+  constructor(trustProxy: boolean = true) {
+    this._trustProxy = trustProxy;
+  }
 
   public get query(): Record<string, string> {
     if (this._query !== undefined) return this._query;

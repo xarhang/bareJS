@@ -65,10 +65,11 @@ export class BareJS<
   private tree = new RadixNode();
   private pool: Context[] = [];
   // private poolIdx = 0;
-  private hotFetch?: (req: Request) => any;
+  private hotFetch?: (req: Request, peerIp?: string) => any;
   private compiled = false;
   private poolMask: number;
   private _useLog: boolean = false;
+  private _trustProxy: boolean = true;
   private errorHandler?: (err: any, ctx: Context) => any;
   private wsRoutes = new Map<string, WebSocketRouteHandler>();
   private startHooks: (() => void | Promise<void>)[] = [];
@@ -265,8 +266,14 @@ export class BareJS<
   declare public head: AddRoute<Derived, Routes, 'HEAD'>;
   declare public all: AddRoute<Derived, Routes, 'ALL'>;
 
+  declare public route: <P extends string, R2 extends RouteSchema = {}>(
+    prefix: P,
+    router: BareRouter<R2>
+  ) => BareJS<Derived, Routes & R2>;
+
   declare public use: {
     <R2 extends RouteSchema = {}>(mw: BareRouter<R2>): BareJS<Derived, Routes & R2>;
+    <P extends string, R2 extends RouteSchema = {}>(prefix: P, mw: BareRouter<R2>): BareJS<Derived, Routes & R2>;
     (mw: any): BareJS<Derived, Routes>;
   };
 
@@ -353,7 +360,7 @@ export class BareJS<
     const finalizeCode = `
       ${rFilter ? 'res = rFilter(res);' : ''}
       if (res instanceof Response) {
-        ${idemRelease ? 'idemRelease(ctx);' : ''}
+        ${idemCommit ? 'idemCommit(ctx, res, res.status);' : ''}
         if (ctx._headers) {
           for (const k in ctx._headers) {
             if (!res.headers.has(k)) res.headers.set(k, ctx._headers[k]);
@@ -508,25 +515,47 @@ export class BareJS<
     const maxPool = pool.length;
     const hNotFound = this.notFoundHandler;
     const customError = this.errorHandler;
-    const hError = (err: any, ctx: Context) => {
+    const applyCtxHeaders = (res: Response, ctx: Context): Response => {
+      if (ctx._headers) {
+        for (const k in ctx._headers) {
+          const val = ctx._headers[k];
+          if (val !== undefined && !res.headers.has(k)) res.headers.set(k, val);
+        }
+      }
+      if (ctx._setCookies) {
+        for (let i = 0; i < ctx._setCookies.length; i++) {
+          res.headers.append('Set-Cookie', ctx._setCookies[i]!);
+        }
+      }
+      return res;
+    };
+
+    const formatCustomError = (res: any, ctx: Context): Response => {
+      if (res instanceof Response) return applyCtxHeaders(res, ctx);
+      const status = ctx._status >= 400 ? ctx._status : 500;
+      if (typeof res === 'string') return applyCtxHeaders(new Response(res, { status }), ctx);
+      return applyCtxHeaders(Response.json(res ?? null, { status }), ctx);
+    };
+
+    const hError = (err: any, ctx: Context): Response | Promise<Response> => {
       if (customError) {
         const res = customError(err, ctx);
-        if (res instanceof Response) return res;
-        const status = ctx._status >= 400 ? ctx._status : 500;
-        if (typeof res === 'string') return new Response(res, { status });
-        return Response.json(res ?? null, { status });
+        if (res && typeof res.then === 'function') {
+          return res.then((resolved: any) => formatCustomError(resolved, ctx));
+        }
+        return formatCustomError(res, ctx);
       }
       if (err?.status >= 400 && err?.status < 500) {
-        return Response.json({
+        return applyCtxHeaders(Response.json({
           status: err.status,
           message: err.message || 'Bad Request'
-        }, { status: err.status });
+        }, { status: err.status }), ctx);
       }
-      return Response.json({
+      return applyCtxHeaders(Response.json({
         status: 500,
         message: process.env.NODE_ENV === 'development' ? (err?.message || "Internal Server Error") : "Internal Server Error",
         stack: process.env.NODE_ENV === 'development' ? err?.stack : undefined
-      }, { status: 500 });
+      }, { status: 500 }), ctx);
     };
 
     const hoistedHandlers: Function[] = [];
@@ -560,15 +589,22 @@ export class BareJS<
       ctx._setCookies = undefined;
       ctx._headers = undefined;
       ctx._requestId = undefined;
+      ctx._peerIp = undefined;
       ctx.params = EMPTY_PARAMS;
       if (poolTop < maxPool) pool[poolTop++] = ctx;
     `;
+
+    const handleErrCode = `const errRes = hError(e, ctx);
+      if (errRes && errRes.then) return errRes.then((r) => { ${isLog ? 'doLog(r.status || 500);' : ''} ${releaseCode} return r; });
+      ${isLog ? 'doLog(errRes.status || 500);' : ''}
+      ${releaseCode}
+      return errRes;`;
 
     const callSuffix = isLog ? '(ctx, doLog)' : '(ctx)';
     const routerCode = rawRouterCode.replace(
       /return (h\d+)\(ctx\);/g,
       `out = $1${callSuffix};
-      if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { const errRes = hError(e, ctx); ${releaseCode} ${isLog ? 'doLog(errRes.status || 500);' : ''} return errRes; });
+      if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { ${handleErrCode} });
       ${releaseCode}
       return out;`
     );
@@ -578,7 +614,7 @@ export class BareJS<
     const optionsFallback = hasGlobalMw
       ? `if (method === 'OPTIONS') {
           out = hOptions${callSuffix};
-          if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { const errRes = hError(e, ctx); ${releaseCode} ${isLog ? 'doLog(errRes.status || 500);' : ''} return errRes; });
+          if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { ${handleErrCode} });
           ${releaseCode}
           return out;
         }`
@@ -613,21 +649,20 @@ export class BareJS<
               if (v instanceof Response) { ${isLog ? 'doLog(v.status);' : ''} ${releaseCode} return v; }
               const errorBody = hNotFound();
               const status = errorBody.status || 404;
+              const nfRes = applyCtxHeaders(Response.json(errorBody, { status }), ctx);
               ${isLog ? 'doLog(status);' : ''}
               ${releaseCode}
-              return Response.json(errorBody, { status });
+              return nfRes;
             }, (e) => {
-              const errRes = hError(e, ctx);
-              ${releaseCode}
-              ${isLog ? 'doLog(errRes.status || 500);' : ''}
-              return errRes;
+              ${handleErrCode}
             });
           }
         }`
       : '';
 
-    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'EMPTY_PARAMS', ...(hasGlobalMw ? ['hOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...hNames];
-    const values = [pool, maxPool, Context, hNotFound, hError, EMPTY_PARAMS, ...(hasGlobalMw ? [hOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...hoistedHandlers];
+    const trustProxyVal = this._trustProxy;
+    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyVal', ...(hasGlobalMw ? ['hOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...hNames];
+    const values = [pool, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyVal, ...(hasGlobalMw ? [hOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...hoistedHandlers];
 
     const logInit = isLog ? `
     const start = performance.now();
@@ -644,7 +679,7 @@ export class BareJS<
 
     const fnBody = `
   let poolTop = maxPool;
-  return function(req) {
+  return function(req, peerIp) {
     const url = req.url;
     let s = url.indexOf('/', 8);
     const q = s === -1 ? -1 : url.indexOf('?', s);
@@ -653,12 +688,13 @@ export class BareJS<
     else s = urlLen;
 
     const method = req.method;
-    const ctx = poolTop > 0 ? pool[--poolTop] : new Context();
+    const ctx = poolTop > 0 ? pool[--poolTop] : new Context(trustProxyVal);
     let out;
     ${logInit}
 
     try {
       ctx.req = req;
+      ctx._peerIp = peerIp;
 
       ${routerCode}
 
@@ -668,15 +704,13 @@ export class BareJS<
 
       const errorBody = hNotFound();
       const status = errorBody.status || 404;
+      const nfRes = applyCtxHeaders(Response.json(errorBody, { status }), ctx);
       ${isLog ? 'doLog(status);' : ''}
       ${releaseCode}
-      return Response.json(errorBody, { status });
+      return nfRes;
 
     } catch (e) {
-      const errRes = hError(e, ctx);
-      ${isLog ? 'doLog(errRes.status || 500);' : ''}
-      ${releaseCode}
-      return errRes;
+      ${handleErrCode}
     }
   }
 `;
@@ -686,16 +720,17 @@ export class BareJS<
     this.fetch = this.hotFetch!;
   }
 
-  public fetch = (req: Request): any => {
+  public fetch = (req: Request, peerIp?: string): any => {
     if (!this.compiled) {
       this.compile();
-      return this.hotFetch!(req);
+      return this.hotFetch!(req, peerIp);
     }
-    return this.hotFetch!(req);
+    return this.hotFetch!(req, peerIp);
   };
   public name: string = "App";
 
   public trustProxy(enabled: boolean = true): this {
+    this._trustProxy = enabled;
     for (let i = 0; i < this.pool.length; i++) {
       this.pool[i]!._trustProxy = enabled;
     }
@@ -783,7 +818,7 @@ export class BareJS<
                 return undefined as any;
               }
             }
-            return baseFetch(req);
+            return baseFetch(req, srv?.requestIP?.(req)?.address);
           },
           websocket: this.wsAdapter
         })
@@ -792,7 +827,9 @@ export class BareJS<
           hostname,
           reusePort,
           maxRequestBodySize,
-          fetch: baseFetch
+          fetch(req: Request, srv: any) {
+            return baseFetch(req, srv?.requestIP?.(req)?.address);
+          }
         });
 
     this.server = server;

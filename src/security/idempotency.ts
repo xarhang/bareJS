@@ -11,7 +11,9 @@ export interface IdempotencyOptions {
 
 interface CachedIdempotentEntry {
   status: number;
-  body: any;
+  body?: any;
+  rawBody?: ArrayBuffer;
+  contentType?: string;
   expiresAt: number;
 }
 
@@ -26,6 +28,13 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
 
   const cache = new Map<string, CachedIdempotentEntry>();
   const inFlight = new Set<string>();
+
+  const evictIfNeeded = () => {
+    if (cache.size >= maxKeys) {
+      const oldest = cache.keys().next().value;
+      if (oldest !== undefined) cache.delete(oldest);
+    }
+  };
 
   const mw: Middleware = (ctx: Context) => {
     const rawKey = ctx.req.headers.get(headerName);
@@ -45,6 +54,15 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     if (existing) {
       if (now < existing.expiresAt) {
         (ctx as any)._idempotencyKey = undefined;
+        if (existing.rawBody !== undefined) {
+          return new Response(existing.rawBody, {
+            status: existing.status,
+            headers: {
+              'content-type': existing.contentType || 'application/json',
+              'X-Idempotent-Replayed': 'true'
+            }
+          });
+        }
         return Response.json(existing.body, {
           status: existing.status,
           headers: { 'X-Idempotent-Replayed': 'true' }
@@ -63,6 +81,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
 
     inFlight.add(key);
     (ctx as any)._idempotencyKey = key;
+    (ctx as any)._idemInFlight = inFlight;
     return undefined;
   };
 
@@ -70,17 +89,28 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     const key = (ctx as any)._idempotencyKey;
     if (!key) return;
     (ctx as any)._idempotencyKey = undefined;
+    (ctx as any)._idemInFlight = undefined;
     inFlight.delete(key);
-    if (status >= 200 && status < 300 && !(resVal instanceof Response)) {
-      if (cache.size >= maxKeys) {
-        const oldest = cache.keys().next().value;
-        if (oldest !== undefined) cache.delete(oldest);
+    if (status >= 200 && status < 300) {
+      if (resVal instanceof Response) {
+        const ct = resVal.headers.get('content-type') || 'application/json';
+        resVal.clone().arrayBuffer().then((buf) => {
+          evictIfNeeded();
+          cache.set(key, {
+            status,
+            rawBody: buf,
+            contentType: ct,
+            expiresAt: Date.now() + ttlMs
+          });
+        }).catch(() => {});
+      } else {
+        evictIfNeeded();
+        cache.set(key, {
+          status,
+          body: resVal,
+          expiresAt: Date.now() + ttlMs
+        });
       }
-      cache.set(key, {
-        status,
-        body: resVal,
-        expiresAt: Date.now() + ttlMs
-      });
     }
   };
 

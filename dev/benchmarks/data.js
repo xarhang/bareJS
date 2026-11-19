@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795052215146,
+  "lastUpdate": 1795056350560,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2923,6 +2923,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3946.0698222197298,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "f21b82ef95fc2bf3cecb4fac4dea98f1e67f48b0",
+          "message": "fix(core): guard applyCtxHeaders against invalid CRLF header values in error responses",
+          "timestamp": "2026-11-19T02:44:55Z",
+          "tree_id": "fff1a00ac0cc53453de3ef3a4b65ede33ca6a114",
+          "url": "https://github.com/xarhang/bareJS/commit/f21b82ef95fc2bf3cecb4fac4dea98f1e67f48b0"
+        },
+        "date": 1795056350141,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 486.7807129194428,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 827.7058736047841,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3062.71853089979,
             "unit": "undefined"
           }
         ]

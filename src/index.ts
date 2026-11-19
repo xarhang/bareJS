@@ -7,7 +7,7 @@
 
 // --- 1. Core Engine ---
 export { BareJS, type WebSocketRouteHandler, type CronOptions } from './core/bare';
-export { BareRouter, type InferSchema } from './core/router';
+export { BareRouter, type InferSchema, type PrefixRoutes } from './core/router';
 
 /**
  * Plugin Interface for BareJS
@@ -66,15 +66,24 @@ export { csrf, type CsrfOptions } from './security/csrf';
 export { timeout, type TimeoutOptions } from './security/timeout';
 export { rateLimit, type RateLimitOptions } from './security/rateLimit';
 export { idempotency, createSingleflight, type IdempotencyOptions } from './security/idempotency';
+export {
+  redisStore,
+  type BareStore,
+  type RateLimitStore,
+  type IdempotencyStore,
+  type CachedIdempotentEntry,
+  type RevocationStore,
+  type RedisStoreOptions,
+} from './security/store';
 export { circuitBreaker, type CircuitBreakerOptions, type CircuitState } from './security/resilience';
 export { securityHeaders, type SecurityHeadersOptions } from './security/headers';
-export { staticFile, type StaticOptions } from './utils/static';
-export { compress, type CompressOptions } from './utils/compress';
+export { staticFile, type StaticOptions, type StaticMetadataCacheOptions } from './utils/static';
+export { compress, type CompressOptions, type CompressionEncoding } from './utils/compress';
 export { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from './utils/openapi';
 
 // --- 6. Authentication (Bun Native) ---
 // Always deploy using process.env [2026-01-06]
-export { bareAuth, createToken, basicAuth, hasRole, revokeToken, isTokenRevoked, type BareAuthOptions } from './security/auth';
+export { bareAuth, createToken, basicAuth, hasRole, revokeToken, isTokenRevoked, type BareAuthOptions, type JwtAlgorithm } from './security/auth';
 // --- 7. Hashing ---
 export { Hash as Password, Hash } from './security/hash';
 

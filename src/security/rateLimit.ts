@@ -1,4 +1,5 @@
 import type { Context, Middleware } from '../core/context';
+import type { RateLimitStore } from './store';
 
 export interface RateLimitOptions {
   windowMs?: number;
@@ -6,6 +7,8 @@ export interface RateLimitOptions {
   message?: string;
   keyGenerator?: (ctx: Context) => string;
   maxEntries?: number;
+  /** Optional external store (e.g. redisStore(client)). Uses in-memory Map fast path when omitted. */
+  store?: RateLimitStore;
 }
 
 interface RateBucket {
@@ -19,6 +22,42 @@ export const rateLimit = (options: RateLimitOptions = {}): Middleware => {
   const message = options.message ?? 'Too many requests, please try again later.';
   const maxEntries = options.maxEntries ?? 10_000;
   const keyGenerator = options.keyGenerator ?? ((ctx: Context) => ctx.ip);
+  const store = options.store;
+
+  const finalizeBucket = (ctx: Context, count: number, resetAt: number, now: number, next: any) => {
+    const remaining = Math.max(0, max - count);
+    const resetSec = String(Math.ceil(resetAt / 1000));
+    ctx.setHeader('X-RateLimit-Limit', String(max));
+    ctx.setHeader('X-RateLimit-Remaining', String(remaining));
+    ctx.setHeader('X-RateLimit-Reset', resetSec);
+
+    if (count > max) {
+      const retryAfter = Math.max(1, Math.ceil((resetAt - now) / 1000));
+      return Response.json(
+        { status: 'error', code: 'RATE_LIMITED', message },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfter),
+            'X-RateLimit-Limit': String(max),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': resetSec
+          }
+        }
+      );
+    }
+
+    return next?.();
+  };
+
+  if (store) {
+    return async (ctx, next) => {
+      const now = Date.now();
+      const key = keyGenerator(ctx);
+      const { count, resetAt } = await store.increment(key, windowMs);
+      return finalizeBucket(ctx, count, resetAt, now, next);
+    };
+  }
 
   const buckets = new Map<string, RateBucket>();
 
@@ -45,27 +84,6 @@ export const rateLimit = (options: RateLimitOptions = {}): Middleware => {
       bucket.count++;
     }
 
-    const remaining = Math.max(0, max - bucket.count);
-    ctx.setHeader('X-RateLimit-Limit', String(max));
-    ctx.setHeader('X-RateLimit-Remaining', String(remaining));
-    ctx.setHeader('X-RateLimit-Reset', String(Math.ceil(bucket.resetAt / 1000)));
-
-    if (bucket.count > max) {
-      const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
-      return Response.json(
-        { status: 'error', code: 'RATE_LIMITED', message },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(retryAfter),
-            'X-RateLimit-Limit': String(max),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': String(Math.ceil(bucket.resetAt / 1000))
-          }
-        }
-      );
-    }
-
-    return next?.();
+    return finalizeBucket(ctx, bucket.count, bucket.resetAt, now, next);
   };
 };

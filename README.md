@@ -195,25 +195,27 @@ app.post('/upload', async (ctx) => {
 
 ```typescript
 import {
-  BareJS, securityHeaders, cors, csrf, timeout, rateLimit,
-  idempotency, createSingleflight,
+  BareJS, BareRouter, securityHeaders, cors, csrf, timeout, rateLimit,
+  idempotency, createSingleflight, redisStore, compress,
   bareAuth, createToken, basicAuth, hasRole, Hash, staticFile
 } from 'barejs';
 
 const app = new BareJS();
 const SECRET = process.env.JWT_SECRET || 'super-secret-key';
+const store = redisStore(Bun.redis, { prefix: 'myapp:' }); // Optional: omit for zero-overhead in-memory Map
 
 app.use(securityHeaders());
 app.use(cors({ origin: ['https://app.example.com'], credentials: true }));
 app.use(csrf({ allowedOrigins: ['https://app.example.com'] }));
 app.use(timeout(10_000)); // Returns 408 if handler exceeds 10s
-app.use(rateLimit({ windowMs: 60_000, max: 100 }));
-app.use(staticFile('public', { maxAge: 3600, etag: true })); // ETag, 304, Range 206/416
+app.use(compress({ threshold: 1024, encodings: ['zstd', 'br', 'gzip'] })); // Negotiates zstd / br / gzip
+app.use(rateLimit({ windowMs: 60_000, max: 100, store }));
+app.use(staticFile('public', { maxAge: 3600, etag: true, cacheMetadata: { maxEntries: 1024, ttlMs: 30_000 } }));
 
 // Payment/Order Double-Charge Protection (Idempotency-Key header)
 // - Returns 409 Conflict if duplicate request is currently in-flight
 // - Replays cached response with X-Idempotent-Replayed: true on retry
-app.post('/payments', idempotency({ ttlMs: 86_400_000 }), async (ctx) => {
+app.post('/payments', idempotency({ ttlMs: 86_400_000, store }), async (ctx) => {
   const body = await ctx.jsonBody();
   return { chargeId: 'ch_101', amount: body.amount, status: 'paid' };
 });
@@ -236,11 +238,12 @@ app.post('/login', async (ctx) => {
   return { token };
 });
 
-// Protect routes with constant-time JWT verification & RBAC (`ctx.user`)
-app.get('/admin', bareAuth({ secret: SECRET }), hasRole('admin'), (ctx) => ({
+// Protect routes with constant-time HS256 JWT or asymmetric RS256/ES256/JWKS (`ctx.user`)
+app.get('/admin', bareAuth({ secret: SECRET, revocationStore: store }), hasRole('admin'), (ctx) => ({
   user: ctx.user,
   requestId: ctx.requestId
 }));
+app.get('/sso', bareAuth({ algorithms: ['RS256', 'ES256'], jwksUri: 'https://auth.example.com/.well-known/jwks.json' }), (ctx) => ctx.user);
 ```
 
 ---
@@ -282,9 +285,14 @@ app.onError((err, ctx) => ctx.status(err.status || 500).json({
 ### 5. 📡 Real-Time (WebSocket, SSE), OpenAPI 3.1, JSON-RPC 2.0 & Client
 
 ```typescript
-import { BareJS, bareClient } from 'barejs';
+import { BareJS, BareRouter, bareClient, Type } from 'barejs';
 
-const app = new BareJS();
+const usersRouter = new BareRouter().get('/users/:id', {
+  params: Type.Object({ id: Type.Integer() }),
+  query: Type.Object({ full: Type.Optional(Type.Boolean()) }),
+}, (ctx) => ({ id: ctx.params.id, full: ctx.query.full }));
+
+const app = new BareJS().route('/api', usersRouter); // Preserves full route type inference!
 
 // Native Bun WebSocket
 app.ws('/ws/chat', {
@@ -305,12 +313,15 @@ app.rpc('/rpc', {
 // Auto OpenAPI 3.1 Spec (/docs/json) + Scalar UI (/docs)
 app.docs('/docs', { title: 'My BareJS API', version: '1.0.0' });
 
+// Ergonomic in-memory test helper
+const res = await app.request('/api/users/42?full=true');
+
 // Type-Safe Client (Zero-Network In-Memory for tests/SSR OR Network URL)
 const inMemoryClient = bareClient(app);
-const localRes = await inMemoryClient.get('/users/:id', { params: { id: 42 }, query: { full: true } });
+const localRes = await inMemoryClient.get('/api/users/:id', { params: { id: 42 }, query: { full: true } });
 
 const httpClient = bareClient('http://localhost:3000');
-const remoteRes = await httpClient.get('/users/:id', { params: { id: 42 }, query: { full: true } });
+const remoteRes = await httpClient.get('/api/users/:id', { params: { id: 42 }, query: { full: true } });
 ```
 
 ---

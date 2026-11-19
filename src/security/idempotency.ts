@@ -1,4 +1,5 @@
 import type { Context, Middleware } from '../core/context';
+import type { CachedIdempotentEntry, IdempotencyStore } from './store';
 
 export interface IdempotencyOptions {
   /** Header name (default: 'idempotency-key') */
@@ -7,15 +8,35 @@ export interface IdempotencyOptions {
   ttlMs?: number;
   /** Maximum cached keys before LRU eviction (default: 10_000) */
   maxKeys?: number;
+  /** Optional external store (e.g. redisStore(client)). Uses in-memory Map fast path when omitted. */
+  store?: IdempotencyStore;
 }
 
-interface CachedIdempotentEntry {
-  status: number;
-  body?: any;
-  rawBody?: ArrayBuffer;
-  contentType?: string;
-  expiresAt: number;
-}
+const buildReplayResponse = (existing: CachedIdempotentEntry): Response => {
+  if (existing.rawBody !== undefined) {
+    return new Response(existing.rawBody, {
+      status: existing.status,
+      headers: {
+        'content-type': existing.contentType || 'application/json',
+        'X-Idempotent-Replayed': 'true'
+      }
+    });
+  }
+  return Response.json(existing.body, {
+    status: existing.status,
+    headers: { 'X-Idempotent-Replayed': 'true' }
+  });
+};
+
+const extractIdemKey = (ctx: Context, headerName: string): string | undefined => {
+  const rawKey = ctx.req.headers.get(headerName);
+  if (!rawKey) return undefined;
+  const rawUrl = ctx.req.url;
+  const s = rawUrl.indexOf('/', 8);
+  const q = s === -1 ? -1 : rawUrl.indexOf('?', s);
+  const path = s === -1 ? '/' : (q === -1 ? rawUrl.slice(s) : rawUrl.slice(s, q));
+  return `${ctx.req.method}:${path}:${rawKey}`;
+};
 
 /**
  * Payment & Order Double-Charge Protection Middleware (Idempotency-Key).
@@ -25,6 +46,66 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
   const headerName = (options.headerName || 'idempotency-key').toLowerCase();
   const ttlMs = options.ttlMs ?? 300_000;
   const maxKeys = options.maxKeys ?? 10_000;
+  const externalStore = options.store;
+
+  if (externalStore) {
+    const storeLockShim = { delete: (k: string) => { void externalStore.release(k); } };
+    const mw: Middleware = async (ctx: Context) => {
+      const key = extractIdemKey(ctx, headerName);
+      if (!key) {
+        (ctx as any)._idempotencyKey = undefined;
+        return undefined;
+      }
+
+      const existing = await externalStore.get(key);
+      if (existing && Date.now() < existing.expiresAt) {
+        (ctx as any)._idempotencyKey = undefined;
+        return buildReplayResponse(existing);
+      }
+
+      const acquired = await externalStore.acquire(key, ttlMs);
+      if (!acquired) {
+        (ctx as any)._idempotencyKey = undefined;
+        return Response.json(
+          { status: 'error', code: 'IDEMPOTENT_IN_FLIGHT', message: 'Duplicate request is currently in flight' },
+          { status: 409 }
+        );
+      }
+
+      (ctx as any)._idempotencyKey = key;
+      (ctx as any)._idemInFlight = storeLockShim;
+      return undefined;
+    };
+
+    (mw as any).__idempotencyCommit = (ctx: Context, resVal: any, status: number) => {
+      const key = (ctx as any)._idempotencyKey;
+      if (!key) return;
+      (ctx as any)._idempotencyKey = undefined;
+      (ctx as any)._idemInFlight = undefined;
+      void externalStore.release(key);
+      if (status >= 200 && status < 300) {
+        if (resVal instanceof Response) {
+          const ct = resVal.headers.get('content-type') || 'application/json';
+          resVal.clone().arrayBuffer().then((buf) =>
+            externalStore.set(key, { status, rawBody: buf, contentType: ct, expiresAt: Date.now() + ttlMs }, ttlMs)
+          ).catch(() => {});
+        } else {
+          void externalStore.set(key, { status, body: resVal, expiresAt: Date.now() + ttlMs }, ttlMs);
+        }
+      }
+    };
+
+    (mw as any).__idempotencyRelease = (ctx: Context) => {
+      const key = (ctx as any)._idempotencyKey;
+      if (key) {
+        (ctx as any)._idempotencyKey = undefined;
+        (ctx as any)._idemInFlight = undefined;
+        void externalStore.release(key);
+      }
+    };
+
+    return mw;
+  }
 
   const cache = new Map<string, CachedIdempotentEntry>();
   const inFlight = new Set<string>();
@@ -37,36 +118,18 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
   };
 
   const mw: Middleware = (ctx: Context) => {
-    const rawKey = ctx.req.headers.get(headerName);
-    if (!rawKey) {
+    const key = extractIdemKey(ctx, headerName);
+    if (!key) {
       (ctx as any)._idempotencyKey = undefined;
       return undefined;
     }
-
-    const rawUrl = ctx.req.url;
-    const s = rawUrl.indexOf('/', 8);
-    const q = s === -1 ? -1 : rawUrl.indexOf('?', s);
-    const path = s === -1 ? '/' : (q === -1 ? rawUrl.slice(s) : rawUrl.slice(s, q));
-    const key = `${ctx.req.method}:${path}:${rawKey}`;
 
     const now = Date.now();
     const existing = cache.get(key);
     if (existing) {
       if (now < existing.expiresAt) {
         (ctx as any)._idempotencyKey = undefined;
-        if (existing.rawBody !== undefined) {
-          return new Response(existing.rawBody, {
-            status: existing.status,
-            headers: {
-              'content-type': existing.contentType || 'application/json',
-              'X-Idempotent-Replayed': 'true'
-            }
-          });
-        }
-        return Response.json(existing.body, {
-          status: existing.status,
-          headers: { 'X-Idempotent-Replayed': 'true' }
-        });
+        return buildReplayResponse(existing);
       }
       cache.delete(key);
     }
@@ -118,6 +181,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     const key = (ctx as any)._idempotencyKey;
     if (key) {
       (ctx as any)._idempotencyKey = undefined;
+      (ctx as any)._idemInFlight = undefined;
       inFlight.delete(key);
     }
   };

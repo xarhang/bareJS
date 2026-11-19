@@ -1,9 +1,26 @@
 import { resolve, sep } from 'node:path';
 import { stat, realpath } from 'node:fs/promises';
 
+export interface StaticMetadataCacheOptions {
+  /** Maximum cached file metadata entries (default: 1000) */
+  maxEntries?: number;
+  /** Cache TTL in milliseconds (default: 30_000) */
+  ttlMs?: number;
+}
+
 export interface StaticOptions {
   maxAge?: number;
   etag?: boolean;
+  /** Optional LRU metadata cache for realpath, stat, and ETag to avoid repeated syscalls */
+  cacheMetadata?: boolean | StaticMetadataCacheOptions;
+}
+
+interface StaticMetaEntry {
+  realFile: string;
+  fileSize: number;
+  mtimeMs: number;
+  etag: string;
+  expiresAt: number;
 }
 
 export const staticFile = (root: string = 'public', options: StaticOptions = {}) => {
@@ -12,6 +29,12 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
   let realRootPromise: Promise<string> | null = null;
   const maxAge = options.maxAge ?? 3600;
   const enableEtag = options.etag !== false;
+
+  const cacheOpt = options.cacheMetadata;
+  const useCache = Boolean(cacheOpt);
+  const cacheMax = typeof cacheOpt === 'object' ? (cacheOpt.maxEntries ?? 1000) : 1000;
+  const cacheTtl = typeof cacheOpt === 'object' ? (cacheOpt.ttlMs ?? 30_000) : 30_000;
+  const metaCache = useCache ? new Map<string, StaticMetaEntry>() : null;
 
   const mw = async (ctx: any, next: any) => {
     const method = ctx.req.method;
@@ -44,22 +67,50 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
 
     let fileSize = 0;
     let mtimeMs = 0;
-    try {
-      const [realRoot, realFile] = await Promise.all([
-        (realRootPromise ??= realpath(rootDir)),
-        realpath(filePath)
-      ]);
-      const realPrefix = realRoot.endsWith(sep) ? realRoot : realRoot + sep;
-      if (realFile !== realRoot && !realFile.startsWith(realPrefix)) {
-        return ctx.status(403).send('Forbidden');
+    let etag = '';
+
+    const cached = metaCache?.get(filePath);
+    if (cached && Date.now() < cached.expiresAt) {
+      // Refresh LRU position
+      metaCache!.delete(filePath);
+      metaCache!.set(filePath, cached);
+      fileSize = cached.fileSize;
+      mtimeMs = cached.mtimeMs;
+      etag = cached.etag;
+    } else {
+      try {
+        const [realRoot, realFile] = await Promise.all([
+          (realRootPromise ??= realpath(rootDir)),
+          realpath(filePath)
+        ]);
+        const realPrefix = realRoot.endsWith(sep) ? realRoot : realRoot + sep;
+        if (realFile !== realRoot && !realFile.startsWith(realPrefix)) {
+          return ctx.status(403).send('Forbidden');
+        }
+        const st = await stat(realFile);
+        if (st.isDirectory()) return next();
+        fileSize = st.size;
+        mtimeMs = Math.floor(st.mtimeMs);
+        etag = enableEtag ? `W/"${fileSize.toString(16)}-${mtimeMs.toString(16)}"` : '';
+
+        if (metaCache) {
+          if (metaCache.size >= cacheMax) {
+            const oldest = metaCache.keys().next().value;
+            if (oldest !== undefined) metaCache.delete(oldest);
+          }
+          metaCache.set(filePath, {
+            realFile,
+            fileSize,
+            mtimeMs,
+            etag,
+            expiresAt: Date.now() + cacheTtl
+          });
+        }
+      } catch {
+        return next();
       }
-      const st = await stat(realFile);
-      if (st.isDirectory()) return next();
-      fileSize = st.size;
-      mtimeMs = Math.floor(st.mtimeMs);
-    } catch {
-      return next();
     }
+
     const file = Bun.file(filePath);
 
     const headers: Record<string, string> = {
@@ -68,7 +119,6 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
     };
 
     if (enableEtag) {
-      const etag = `W/"${fileSize.toString(16)}-${mtimeMs.toString(16)}"`;
       headers['ETag'] = etag;
       const ifNoneMatch = ctx.req.headers?.get?.('if-none-match');
       if (ifNoneMatch && ifNoneMatch === etag) {

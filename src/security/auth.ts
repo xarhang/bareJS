@@ -1,4 +1,5 @@
 import type { Next } from '../core/context';
+import type { RevocationStore } from './store';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
@@ -9,9 +10,7 @@ const encoder = new TextEncoder();
 
 // Base64Url Helpers (RFC 4648) using native C++ Buffer encoding
 const base64Url = (input: Uint8Array | string): string => {
-  return typeof input === 'string'
-    ? Buffer.from(input).toString('base64url')
-    : Buffer.from(input).toString('base64url');
+  return Buffer.from(input).toString('base64url');
 };
 
 const fromBase64Url = (str: string): string => {
@@ -58,8 +57,14 @@ const revokedTokens = new Map<string, number>();
 
 /**
  * Revoke a JWT token or JTI for ttlMs (default: 1 hour).
+ * Optionally delegates to an external RevocationStore (e.g. redisStore).
  */
-export const revokeToken = (tokenOrJti: string, ttlMs: number = 3600_000): void => {
+export function revokeToken(tokenOrJti: string, ttlMs?: number): void;
+export function revokeToken(tokenOrJti: string, ttlMs: number, store: RevocationStore): Promise<void>;
+export function revokeToken(tokenOrJti: string, ttlMs: number = 3600_000, store?: RevocationStore): void | Promise<void> {
+  if (store) {
+    return store.revoke(tokenOrJti, ttlMs);
+  }
   if (revokedTokens.size >= 10_000) {
     const now = Date.now();
     for (const [k, exp] of revokedTokens) {
@@ -71,9 +76,14 @@ export const revokeToken = (tokenOrJti: string, ttlMs: number = 3600_000): void 
     }
   }
   revokedTokens.set(tokenOrJti, Date.now() + ttlMs);
-};
+}
 
-export const isTokenRevoked = (tokenOrJti: string): boolean => {
+export function isTokenRevoked(tokenOrJti: string): boolean;
+export function isTokenRevoked(tokenOrJti: string, store: RevocationStore): Promise<boolean>;
+export function isTokenRevoked(tokenOrJti: string, store?: RevocationStore): boolean | Promise<boolean> {
+  if (store) {
+    return store.isRevoked(tokenOrJti);
+  }
   const exp = revokedTokens.get(tokenOrJti);
   if (exp === undefined) return false;
   if (Date.now() >= exp) {
@@ -81,20 +91,71 @@ export const isTokenRevoked = (tokenOrJti: string): boolean => {
     return false;
   }
   return true;
-};
+}
+
+export type JwtAlgorithm = 'HS256' | 'RS256' | 'ES256';
 
 export interface BareAuthOptions {
-  secret: string;
+  secret?: string;
+  algorithms?: JwtAlgorithm[];
+  publicKey?: string | CryptoKey;
+  jwksUri?: string;
+  jwksCacheTtlMs?: number;
+  revocationStore?: RevocationStore;
   isRevoked?: (payload: any, token: string) => boolean | Promise<boolean>;
 }
 
+const pemKeyCache = new Map<string, CryptoKey>();
+
+const getAsymmetricAlgParams = (alg: 'RS256' | 'ES256') =>
+  alg === 'RS256'
+    ? ({ name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } as const)
+    : ({ name: 'ECDSA', namedCurve: 'P-256' } as const);
+
+const getVerifyParams = (alg: 'RS256' | 'ES256') =>
+  alg === 'RS256'
+    ? ({ name: 'RSASSA-PKCS1-v1_5' } as const)
+    : ({ name: 'ECDSA', hash: 'SHA-256' } as const);
+
+const pemToDer = (pem: string): ArrayBuffer => {
+  const b64 = pem
+    .replace(/-----BEGIN [A-Z0-9 ]+-----/g, '')
+    .replace(/-----END [A-Z0-9 ]+-----/g, '')
+    .replace(/\s+/g, '');
+  const buf = Buffer.from(b64, 'base64');
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+};
+
+const importPublicKey = async (keyOrPem: string | CryptoKey, alg: 'RS256' | 'ES256'): Promise<CryptoKey> => {
+  if (typeof keyOrPem !== 'string') return keyOrPem;
+  const cacheKey = `${alg}:${keyOrPem}`;
+  const cached = pemKeyCache.get(cacheKey);
+  if (cached) return cached;
+  const imported = await crypto.subtle.importKey(
+    'spki',
+    pemToDer(keyOrPem),
+    getAsymmetricAlgParams(alg),
+    false,
+    ['verify']
+  );
+  pemKeyCache.set(cacheKey, imported);
+  return imported;
+};
+
 /**
  * 1. BARE TOKEN AUTH (Standard JWT Middleware)
- * High-performance, constant-time JWT middleware for BareJS
+ * High-performance, constant-time JWT middleware for BareJS.
+ * Supports HS256 (sync fast-path), RS256, ES256, and JWKS with kid caching.
  */
 export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
-  const secret = typeof secretOrOpts === 'string' ? secretOrOpts : secretOrOpts.secret;
-  const customRevoked = typeof secretOrOpts === 'object' ? secretOrOpts.isRevoked : undefined;
+  const opts: BareAuthOptions = typeof secretOrOpts === 'string' ? { secret: secretOrOpts } : secretOrOpts;
+  const secret = opts.secret ?? '';
+  const customRevoked = opts.isRevoked;
+  const revocationStore = opts.revocationStore;
+  const publicKey = opts.publicKey;
+  const jwksUri = opts.jwksUri;
+  const jwksCacheTtlMs = opts.jwksCacheTtlMs ?? 300_000;
+  const allowedAlgs: JwtAlgorithm[] = opts.algorithms ?? (publicKey || jwksUri ? ['RS256', 'ES256'] : ['HS256']);
 
   const finishAuth = (ctx: any, decoded: any, next: any) => {
     ctx.set('user', decoded);
@@ -109,9 +170,145 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
     return;
   };
 
-  const verifySync = (ctx: any, next: any) => {
-    const authHeader = ctx.req.headers.get('Authorization');
+  const checkClaimsAndRevocation = (ctx: any, decoded: any, token: string, next: any) => {
+    const nowSec = Date.now() * 0.001;
+    if (typeof decoded.exp === 'number' && nowSec >= decoded.exp) {
+      return ctx.status(401).send("Token expired");
+    }
+    if (typeof decoded.nbf === 'number' && nowSec < decoded.nbf) {
+      return ctx.status(401).send("Token not active");
+    }
 
+    if (isTokenRevoked(token) || (decoded?.jti && isTokenRevoked(String(decoded.jti)))) {
+      return ctx.status(401).send("Token revoked");
+    }
+
+    if (revocationStore) {
+      const checkStore = async () => {
+        if (await revocationStore.isRevoked(token)) return ctx.status(401).send("Token revoked");
+        if (decoded?.jti && await revocationStore.isRevoked(String(decoded.jti))) {
+          return ctx.status(401).send("Token revoked");
+        }
+        if (customRevoked) {
+          const rev = await customRevoked(decoded, token);
+          if (rev) return ctx.status(401).send("Token revoked");
+        }
+        return finishAuth(ctx, decoded, next);
+      };
+      return checkStore();
+    }
+
+    if (customRevoked) {
+      const rev = customRevoked(decoded, token);
+      if (rev && typeof (rev as Promise<boolean>).then === 'function') {
+        return (rev as Promise<boolean>).then((isRev) =>
+          isRev ? ctx.status(401).send("Token revoked") : finishAuth(ctx, decoded, next)
+        );
+      }
+      if (rev) return ctx.status(401).send("Token revoked");
+    }
+
+    return finishAuth(ctx, decoded, next);
+  };
+
+  // Preserve zero-overhead synchronous HS256 fast path when no asymmetric keys/JWKS are configured
+  const isSymmetricOnly =
+    !publicKey &&
+    !jwksUri &&
+    allowedAlgs.length === 1 &&
+    allowedAlgs[0] === 'HS256';
+
+  if (isSymmetricOnly) {
+    const verifySync = (ctx: any, next: any) => {
+      const authHeader = ctx.req.headers.get('Authorization');
+
+      if (!authHeader?.startsWith('Bearer ')) {
+        return ctx.status(401).send("Bearer token required");
+      }
+
+      const token = authHeader.slice(7);
+      const firstDot = token.indexOf('.');
+      const secondDot = firstDot === -1 ? -1 : token.indexOf('.', firstDot + 1);
+      if (firstDot === -1 || secondDot === -1 || token.indexOf('.', secondDot + 1) !== -1) {
+        return ctx.status(401).send("Malformed JWT token");
+      }
+
+      const headerB64 = token.slice(0, firstDot);
+      const payloadB64 = token.slice(firstDot + 1, secondDot);
+      const sigB64 = token.slice(secondDot + 1);
+      const data = token.slice(0, secondDot);
+
+      try {
+        const expectedSig = createHmac('sha256', secret).update(data).digest();
+        const actualSig = Buffer.from(sigB64, 'base64url');
+
+        if (actualSig.length !== expectedSig.length || !timingSafeEqual(actualSig, expectedSig)) {
+          return ctx.status(401).send("Invalid signature");
+        }
+
+        const headerObj = JSON.parse(fromBase64Url(headerB64));
+        if (!headerObj || headerObj.alg !== 'HS256') {
+          return ctx.status(401).send("Unsupported token algorithm");
+        }
+
+        const decoded = JSON.parse(fromBase64Url(payloadB64));
+        return checkClaimsAndRevocation(ctx, decoded, token, next);
+      } catch {
+        return ctx.status(401).send("Token verification failed");
+      }
+    };
+
+    if (customRevoked || revocationStore) {
+      return async (ctx: any, next: any) => verifySync(ctx, next);
+    }
+    return verifySync;
+  }
+
+  // Asymmetric (RS256 / ES256) and/or JWKS verification path
+  let jwksFetchedAt = 0;
+  let jwksKeys: any[] = [];
+  const jwkKeyCache = new Map<string, CryptoKey>();
+
+  const loadJwks = async (forceRefresh = false): Promise<any[]> => {
+    const now = Date.now();
+    if (!forceRefresh && jwksKeys.length > 0 && now - jwksFetchedAt < jwksCacheTtlMs) {
+      return jwksKeys;
+    }
+    const res = await fetch(jwksUri!);
+    if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
+    const body = (await res.json()) as { keys?: any[] };
+    jwksKeys = Array.isArray(body?.keys) ? body.keys : [];
+    jwksFetchedAt = now;
+    if (forceRefresh) jwkKeyCache.clear();
+    return jwksKeys;
+  };
+
+  const resolveJwksKey = async (kid: string | undefined, alg: 'RS256' | 'ES256'): Promise<CryptoKey | null> => {
+    const cacheId = `${alg}:${kid ?? '__default__'}`;
+    const cached = jwkKeyCache.get(cacheId);
+    if (cached && Date.now() - jwksFetchedAt < jwksCacheTtlMs) return cached;
+
+    let keys = await loadJwks(false);
+    let match = kid ? keys.find((k) => k.kid === kid) : keys[0];
+    if (!match && kid) {
+      keys = await loadJwks(true);
+      match = keys.find((k) => k.kid === kid);
+    }
+    if (!match) return null;
+
+    const imported = await crypto.subtle.importKey(
+      'jwk',
+      match,
+      getAsymmetricAlgParams(alg),
+      false,
+      ['verify']
+    );
+    jwkKeyCache.set(cacheId, imported);
+    return imported;
+  };
+
+  return async (ctx: any, next: any) => {
+    const authHeader = ctx.req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return ctx.status(401).send("Bearer token required");
     }
@@ -129,51 +326,48 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
     const data = token.slice(0, secondDot);
 
     try {
-      const expectedSig = createHmac('sha256', secret).update(data).digest();
-      const actualSig = Buffer.from(sigB64, 'base64url');
-
-      if (actualSig.length !== expectedSig.length || !timingSafeEqual(actualSig, expectedSig)) {
-        return ctx.status(401).send("Invalid signature");
-      }
-
       const headerObj = JSON.parse(fromBase64Url(headerB64));
-      if (!headerObj || headerObj.alg !== 'HS256') {
+      const alg = headerObj?.alg as JwtAlgorithm | undefined;
+      if (!alg || !allowedAlgs.includes(alg)) {
         return ctx.status(401).send("Unsupported token algorithm");
       }
 
-      const decoded = JSON.parse(fromBase64Url(payloadB64));
-      const nowSec = Date.now() * 0.001;
-      if (typeof decoded.exp === 'number' && nowSec >= decoded.exp) {
-        return ctx.status(401).send("Token expired");
-      }
-      if (typeof decoded.nbf === 'number' && nowSec < decoded.nbf) {
-        return ctx.status(401).send("Token not active");
-      }
-
-      if (isTokenRevoked(token) || (decoded?.jti && isTokenRevoked(String(decoded.jti)))) {
-        return ctx.status(401).send("Token revoked");
-      }
-
-      if (customRevoked) {
-        const rev = customRevoked(decoded, token);
-        if (rev && typeof (rev as Promise<boolean>).then === 'function') {
-          return (rev as Promise<boolean>).then((isRev) =>
-            isRev ? ctx.status(401).send("Token revoked") : finishAuth(ctx, decoded, next)
-          );
+      if (alg === 'HS256') {
+        if (!secret) return ctx.status(401).send("Unsupported token algorithm");
+        const expectedSig = createHmac('sha256', secret).update(data).digest();
+        const actualSig = Buffer.from(sigB64, 'base64url');
+        if (actualSig.length !== expectedSig.length || !timingSafeEqual(actualSig, expectedSig)) {
+          return ctx.status(401).send("Invalid signature");
         }
-        if (rev) return ctx.status(401).send("Token revoked");
+      } else {
+        let verifyKey: CryptoKey | null = null;
+        if (jwksUri) {
+          verifyKey = await resolveJwksKey(headerObj?.kid, alg);
+        } else if (publicKey) {
+          verifyKey = await importPublicKey(publicKey, alg);
+        }
+        if (!verifyKey) {
+          return ctx.status(401).send("Invalid signature");
+        }
+        const sigBuf = Buffer.from(sigB64, 'base64url');
+        const sigBytes = sigBuf.buffer.slice(sigBuf.byteOffset, sigBuf.byteOffset + sigBuf.byteLength);
+        const valid = await crypto.subtle.verify(
+          getVerifyParams(alg),
+          verifyKey,
+          sigBytes,
+          encoder.encode(data)
+        );
+        if (!valid) {
+          return ctx.status(401).send("Invalid signature");
+        }
       }
 
-      return finishAuth(ctx, decoded, next);
+      const decoded = JSON.parse(fromBase64Url(payloadB64));
+      return checkClaimsAndRevocation(ctx, decoded, token, next);
     } catch {
       return ctx.status(401).send("Token verification failed");
     }
   };
-
-  if (customRevoked) {
-    return async (ctx: any, next: any) => verifySync(ctx, next);
-  }
-  return verifySync;
 };
 
 const sha256 = (value: string): Buffer => createHash('sha256').update(value).digest();
@@ -214,8 +408,6 @@ export const basicAuth = (credentials: { user: string; pass: string }) => {
     return ctx.status(401).json({ status: 'error', message: 'Invalid credentials' });
   };
 };
-
-
 
 /**
  * 5. ROLE AUTHORIZATION (Bonus Max Function)

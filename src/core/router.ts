@@ -1,11 +1,12 @@
 import {
+  type Context,
   type Middleware,
   type Handler,
   type GroupCallback
 } from '../core/context';
 import { schemaValidator, type RouteSchemas } from '../security/validators';
 
-import type { RouteSchema } from '../client/index';
+import type { RouteEndpoint, RouteSchema } from '../client/index';
 
 type HandlersChain = (Middleware | Handler | RouteSchemas)[];
 
@@ -13,6 +14,59 @@ export type InferSchema<S> =
   S extends { static: infer T } ? T
   : S extends { _output: infer T } ? T
   : any;
+
+type StripLeadingSlash<S extends string> = S extends `/${infer Rest}` ? StripLeadingSlash<Rest> : S;
+type StripTrailingSlash<S extends string> = S extends `${infer Rest}/` ? StripTrailingSlash<Rest> : S;
+type NormalizePrefix<P extends string> = StripTrailingSlash<StripLeadingSlash<P>> extends ''
+  ? ''
+  : `/${StripTrailingSlash<StripLeadingSlash<P>>}`;
+
+type JoinPath<P extends string, Sub extends string> =
+  NormalizePrefix<P> extends ''
+    ? (Sub extends '' ? '/' : (Sub extends `/${string}` ? Sub : `/${Sub}`))
+    : (StripLeadingSlash<Sub> extends ''
+        ? NormalizePrefix<P>
+        : `${NormalizePrefix<P>}/${StripLeadingSlash<Sub>}`);
+
+export type PrefixRoutes<P extends string, R extends RouteSchema> = {
+  [K in keyof R as K extends `${infer M} ${infer Sub}`
+    ? `${M} ${JoinPath<P, Sub>}`
+    : K]: R[K] extends infer E extends RouteEndpoint
+      ? Omit<E, 'path'> & {
+          path: E['path'] extends string
+            ? JoinPath<P, E['path']>
+            : JoinPath<P, K extends `${string} ${infer Sub}` ? Sub : (K & string)>;
+        }
+      : R[K];
+};
+
+type TypedRouterHandler<S extends RouteSchemas, Res> = (
+  ctx: Context & {
+    body: S extends { body: infer B } ? InferSchema<B> : any;
+    query: S extends { query: infer Q } ? InferSchema<Q> : Record<string, string>;
+    params: S extends { params: infer Pa } ? InferSchema<Pa> : Record<string, any>;
+  }
+) => Res | Promise<Res>;
+
+type AddRouterRoute<Routes extends RouteSchema, M extends string> = {
+  <P extends string, S extends RouteSchemas, Res = S extends { response: infer R } ? InferSchema<R> : any>(
+    path: P,
+    schemas: S,
+    handler: TypedRouterHandler<S, Res>
+  ): BareRouter<Routes & Record<`${M} ${P}`, {
+    method: M;
+    path: P;
+    params: S extends { params: infer Pa } ? InferSchema<Pa> : Record<string, any>;
+    query: S extends { query: infer Q } ? InferSchema<Q> : Record<string, any>;
+    headers: S extends { headers: infer H } ? InferSchema<H> : Record<string, string>;
+    body: S extends { body: infer B } ? InferSchema<B> : any;
+    response: S extends { response: infer R } ? InferSchema<R> : Awaited<Res>;
+  }>>;
+  <P extends string, Res = any>(
+    path: P,
+    ...handlers: any[]
+  ): BareRouter<Routes & Record<`${M} ${P}`, { method: M; path: P; response: Awaited<Res> }>>;
+};
 
 export class BareRouter<Routes extends RouteSchema = {}> {
   declare readonly __routes: Routes;
@@ -47,19 +101,19 @@ export class BareRouter<Routes extends RouteSchema = {}> {
     return this;
 }
 
-  public get: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("GET", path, h);
-  public post: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("POST", path, h);
-  public put: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("PUT", path, h);
-  public patch: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("PATCH", path, h);
-  public delete: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("DELETE", path, h);
-  public options: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("OPTIONS", path, h);
-  public head: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => this._add("HEAD", path, h);
-  public all: (path: string, ...h: any[]) => any = (path: string, ...h: HandlersChain) => {
+  public get: AddRouterRoute<Routes, 'GET'> = ((path: string, ...h: HandlersChain) => this._add("GET", path, h)) as any;
+  public post: AddRouterRoute<Routes, 'POST'> = ((path: string, ...h: HandlersChain) => this._add("POST", path, h)) as any;
+  public put: AddRouterRoute<Routes, 'PUT'> = ((path: string, ...h: HandlersChain) => this._add("PUT", path, h)) as any;
+  public patch: AddRouterRoute<Routes, 'PATCH'> = ((path: string, ...h: HandlersChain) => this._add("PATCH", path, h)) as any;
+  public delete: AddRouterRoute<Routes, 'DELETE'> = ((path: string, ...h: HandlersChain) => this._add("DELETE", path, h)) as any;
+  public options: AddRouterRoute<Routes, 'OPTIONS'> = ((path: string, ...h: HandlersChain) => this._add("OPTIONS", path, h)) as any;
+  public head: AddRouterRoute<Routes, 'HEAD'> = ((path: string, ...h: HandlersChain) => this._add("HEAD", path, h)) as any;
+  public all: AddRouterRoute<Routes, 'ALL'> = ((path: string, ...h: HandlersChain) => {
     for (const m of ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]) {
       this._add(m, path, h);
     }
     return this;
-  };
+  }) as any;
 
   public group = (path: string, ...args: any[]) => {
     const callback = args.pop();
@@ -89,13 +143,13 @@ export class BareRouter<Routes extends RouteSchema = {}> {
   public route<P extends string, R2 extends RouteSchema = {}>(
     prefix: P,
     router: BareRouter<R2>
-  ): BareRouter<Routes & R2> {
+  ): BareRouter<Routes & PrefixRoutes<P, R2>> {
     this._mountRouter(prefix, router);
     return this as any;
   }
 
   public use<R2 extends RouteSchema = {}>(mw: BareRouter<R2>): BareRouter<Routes & R2>;
-  public use<P extends string, R2 extends RouteSchema = {}>(prefix: P, mw: BareRouter<R2>): BareRouter<Routes & R2>;
+  public use<P extends string, R2 extends RouteSchema = {}>(prefix: P, mw: BareRouter<R2>): BareRouter<Routes & PrefixRoutes<P, R2>>;
   public use(mw: any): BareRouter<Routes>;
   public use(prefixOrMw: any, maybeMw?: any): any {
     if (typeof prefixOrMw === 'string' && (maybeMw instanceof BareRouter || (maybeMw && maybeMw.routes))) {

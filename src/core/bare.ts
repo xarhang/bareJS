@@ -1,4 +1,4 @@
-import { BareRouter, type InferSchema } from './router';
+import { BareRouter, type InferSchema, type PrefixRoutes } from './router';
 import { RadixNode } from './radix';
 import { Context } from './context';
 import { Type as typebox, Type as t } from '@sinclair/typebox';
@@ -269,11 +269,11 @@ export class BareJS<
   declare public route: <P extends string, R2 extends RouteSchema = {}>(
     prefix: P,
     router: BareRouter<R2>
-  ) => BareJS<Derived, Routes & R2>;
+  ) => BareJS<Derived, Routes & PrefixRoutes<P, R2>>;
 
   declare public use: {
     <R2 extends RouteSchema = {}>(mw: BareRouter<R2>): BareJS<Derived, Routes & R2>;
-    <P extends string, R2 extends RouteSchema = {}>(prefix: P, mw: BareRouter<R2>): BareJS<Derived, Routes & R2>;
+    <P extends string, R2 extends RouteSchema = {}>(prefix: P, mw: BareRouter<R2>): BareJS<Derived, Routes & PrefixRoutes<P, R2>>;
     (mw: any): BareJS<Derived, Routes>;
   };
 
@@ -729,6 +729,21 @@ export class BareJS<
     }
     return this.hotFetch!(req, peerIp);
   };
+
+  /**
+   * Ergonomic in-memory request helper for testing or internal invocations.
+   * Normalizes relative paths to http://localhost and delegates to this.fetch(req).
+   */
+  public async request(path: string, init?: RequestInit): Promise<Response> {
+    let url: string;
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      url = path;
+    } else {
+      const normalized = path.startsWith('/') ? path : `/${path}`;
+      url = `http://localhost${normalized}`;
+    }
+    return this.fetch(new Request(url, init));
+  }
   public name: string = "App";
 
   public trustProxy(enabled: boolean = true): this {

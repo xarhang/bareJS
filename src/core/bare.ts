@@ -69,7 +69,7 @@ export class BareJS<
   private compiled = false;
   private poolMask: number;
   private _useLog: boolean = false;
-  private _trustProxy: boolean = true;
+  private _trustProxy: boolean = false;
   private errorHandler?: (err: any, ctx: Context) => any;
   private wsRoutes = new Map<string, WebSocketRouteHandler>();
   private startHooks: (() => void | Promise<void>)[] = [];
@@ -215,7 +215,14 @@ export class BareJS<
     return this;
   }
 
-  public rpc(path: string, procedures: Record<string, (params: any, ctx: Context) => any>): this {
+  public rpc(
+    path: string,
+    procedures: Record<string, (params: any, ctx: Context) => any>,
+    options: { maxBatchSize?: number } = {}
+  ): this {
+    const maxBatchSize = options.maxBatchSize ?? 100;
+    const isProd = process.env.NODE_ENV === 'production';
+
     const execCall = async (reqObj: any, ctx: Context) => {
       if (!reqObj || reqObj.jsonrpc !== '2.0' || typeof reqObj.method !== 'string') {
         return { jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request' }, id: reqObj?.id ?? null };
@@ -229,9 +236,12 @@ export class BareJS<
         if (reqObj.id === undefined) return null; // Notification
         return { jsonrpc: '2.0', result, id: reqObj.id };
       } catch (err: any) {
+        const msg = !isProd || err?.expose || (err?.status >= 400 && err?.status < 500)
+          ? (err?.message || 'Internal error')
+          : 'Internal error';
         return {
           jsonrpc: '2.0',
-          error: { code: -32603, message: err?.message || 'Internal error' },
+          error: { code: -32603, message: msg },
           id: reqObj.id ?? null
         };
       }
@@ -243,7 +253,7 @@ export class BareJS<
         return ctx.status(400).json({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' }, id: null });
       }
       if (Array.isArray(payload)) {
-        if (payload.length === 0) {
+        if (payload.length === 0 || payload.length > maxBatchSize) {
           return ctx.status(400).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request' }, id: null });
         }
         const results = (await Promise.all(payload.map((item) => execCall(item, ctx)))).filter(Boolean);
@@ -313,6 +323,8 @@ export class BareJS<
         try {
           const timeoutPromise = new Promise<Response>((resolve) => {
             timer = setTimeout(() => {
+              ctx._detached = true;
+              if (typeof res.catch === 'function') res.catch(() => {});
               resolve(Response.json({ status: 'error', code: 'REQUEST_TIMEOUT', message }, { status }));
             }, ms);
           });
@@ -580,20 +592,22 @@ export class BareJS<
       : '';
 
     const releaseCode = `
-      if (ctx.store.size > 0) ctx.store.clear();
-      ${deriveCleanup}
-      ${idemCleanup}
-      ctx.req = undefined;
-      ctx._status = 200;
-      ctx.body = undefined;
-      ctx._query = undefined;
-      ctx._cookies = undefined;
-      ctx._setCookies = undefined;
-      ctx._headers = undefined;
-      ctx._requestId = undefined;
-      ctx._peerIp = undefined;
-      ctx.params = EMPTY_PARAMS;
-      if (poolTop < maxPool) pool[poolTop++] = ctx;
+      if (!ctx._detached) {
+        if (ctx.store.size > 0) ctx.store.clear();
+        ${deriveCleanup}
+        ${idemCleanup}
+        ctx.req = undefined;
+        ctx._status = 200;
+        ctx.body = undefined;
+        ctx._query = undefined;
+        ctx._cookies = undefined;
+        ctx._setCookies = undefined;
+        ctx._headers = undefined;
+        ctx._requestId = undefined;
+        ctx._peerIp = undefined;
+        ctx.params = EMPTY_PARAMS;
+        if (poolTop < maxPool) pool[poolTop++] = ctx;
+      }
     `;
 
     const handleErrCode = `const errRes = hError(e, ctx);

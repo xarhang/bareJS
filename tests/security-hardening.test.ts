@@ -357,5 +357,146 @@ describe('Security Hardening & Bug Fixes', () => {
     });
     expect(data).toEqual({ id: '42', id_sub: 'item-9' });
   });
+
+  it('trustProxy defaults to false and ignores spoofed X-Forwarded-For', async () => {
+    const app = new BareJS();
+    app.get('/ip', (ctx) => ({ ip: ctx.ip }));
+    const res = await app.fetch(
+      new Request('http://localhost/ip', { headers: { 'x-forwarded-for': '8.8.8.8' } }),
+      '203.0.113.10'
+    );
+    expect((await res.json()).ip).toBe('203.0.113.10');
+  });
+
+  it('csrf() blocks state-changing requests missing Origin and Referer unless allowMissingOrigin or same-origin', async () => {
+    const { csrf } = await import('../src/index');
+    const app = new BareJS().use(csrf()).post('/mutate', () => ({ ok: true }));
+
+    const missing = await app.request('/mutate', { method: 'POST' });
+    expect(missing.status).toBe(403);
+
+    const sameOrigin = await app.request('/mutate', {
+      method: 'POST',
+      headers: { 'Sec-Fetch-Site': 'same-origin' }
+    });
+    expect(sameOrigin.status).toBe(200);
+  });
+
+  it('timeout() detaches timed-out Context so pooled requests do not corrupt running handlers', async () => {
+    const { timeout } = await import('../src/index');
+    const app = new BareJS(1);
+    app.use(timeout(20));
+
+    let capturedAfterTimeout: string | undefined;
+    app.get('/slow', async (ctx) => {
+      ctx.set('tag', 'slow-req');
+      await Bun.sleep(60);
+      capturedAfterTimeout = ctx.get('tag');
+      return { ok: true };
+    });
+    app.get('/fast', (ctx) => {
+      ctx.set('tag', 'fast-req');
+      return { tag: ctx.get('tag') };
+    });
+
+    const slowRes = await app.request('/slow');
+    expect(slowRes.status).toBe(408);
+
+    const fastRes = await app.request('/fast');
+    expect(fastRes.status).toBe(200);
+    expect(await fastRes.json()).toEqual({ tag: 'fast-req' });
+
+    await Bun.sleep(60);
+    expect(capturedAfterTimeout).toBe('slow-req');
+  });
+
+  it('short-circuiting middleware (rateLimit 429) retains cors and securityHeaders', async () => {
+    const { cors, securityHeaders, rateLimit } = await import('../src/index');
+    const app = new BareJS();
+    app.use(cors({ origin: 'https://client.example.com' }));
+    app.use(securityHeaders());
+    app.use(rateLimit({ max: 1, windowMs: 10_000 }));
+    app.get('/limited', () => ({ ok: true }));
+
+    const ok = await app.request('/limited');
+    expect(ok.status).toBe(200);
+
+    const blocked = await app.request('/limited');
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('access-control-allow-origin')).toBe('https://client.example.com');
+    expect(blocked.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
+  it('jsonBody() enforces maxBytes even when Content-Length is spoofed smaller', async () => {
+    const app = new BareJS();
+    app.post('/json', async (ctx) => {
+      const body = await ctx.jsonBody(10);
+      return body;
+    });
+
+    const res = await app.request('/json', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'Application/JSON',
+        'Content-Length': '2'
+      },
+      body: JSON.stringify({ secret: 'this-is-way-longer-than-10-bytes' })
+    });
+    expect(res.status).toBe(413);
+  });
+
+  it('rpc() enforces maxBatchSize and hides internal error messages in production', async () => {
+    const prevEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const app = new BareJS().rpc('/rpc', {
+        fail: () => {
+          throw new Error('sensitive db password');
+        }
+      }, { maxBatchSize: 2 });
+
+      const errRes = await app.request('/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'fail', id: 1 })
+      });
+      const errJson: any = await errRes.json();
+      expect(errJson.error.message).toBe('Internal error');
+
+      const batchRes = await app.request('/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          { jsonrpc: '2.0', method: 'fail', id: 1 },
+          { jsonrpc: '2.0', method: 'fail', id: 2 },
+          { jsonrpc: '2.0', method: 'fail', id: 3 }
+        ])
+      });
+      expect(batchRes.status).toBe(400);
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+    }
+  });
+
+  it('compress() preserves Vary: Origin and ignores substring matches like x-br', async () => {
+    const { cors, compress } = await import('../src/index');
+    const app = new BareJS();
+    app.use(cors({ origin: 'https://app.example.com' }));
+    app.use(compress({ minSize: 10 }));
+    app.get('/data', () => 'x'.repeat(200));
+
+    const noMatch = await app.request('/data', {
+      headers: { 'Accept-Encoding': 'x-br' }
+    });
+    expect(noMatch.headers.get('content-encoding')).toBeNull();
+
+    const compressed = await app.request('/data', {
+      headers: { 'Accept-Encoding': 'gzip' }
+    });
+    expect(compressed.headers.get('content-encoding')).toBe('gzip');
+    const vary = compressed.headers.get('vary') || '';
+    expect(vary.toLowerCase()).toContain('origin');
+    expect(vary.toLowerCase()).toContain('accept-encoding');
+  });
 });
 

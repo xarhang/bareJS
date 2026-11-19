@@ -53,8 +53,9 @@ export class Context {
   public _setCookies: string[] | undefined = undefined;
   public _requestId: string | undefined = undefined;
   public _peerIp: string | undefined = undefined;
-  public _trustProxy: boolean = true;
-  constructor(trustProxy: boolean = true) {
+  public _trustProxy: boolean = false;
+  public _detached: boolean = false;
+  constructor(trustProxy: boolean = false) {
     this._trustProxy = trustProxy;
   }
 
@@ -197,22 +198,15 @@ export class Context {
     if (this.body !== undefined) return this.body;
 
     const contentType = this.req.headers.get("content-type");
-    if (contentType && contentType.includes("application/json")) {
+    if (contentType && contentType.toLowerCase().includes("application/json")) {
       const lenHeader = this.req.headers.get("content-length");
       if (lenHeader !== null) {
         const trimmed = lenHeader.trim();
         const lenNum = trimmed.length > 0 ? Number(trimmed) : NaN;
-        if (Number.isInteger(lenNum) && lenNum >= 0) {
-          if (lenNum > maxBytes) {
-            const err: any = new Error("Payload Too Large");
-            err.status = 413;
-            throw err;
-          }
-          try {
-            return this.body = await this.req.json();
-          } catch {
-            return this.body = null;
-          }
+        if (Number.isInteger(lenNum) && lenNum > maxBytes) {
+          const err: any = new Error("Payload Too Large");
+          err.status = 413;
+          throw err;
         }
       }
       try {
@@ -421,19 +415,21 @@ export class Context {
     const maxFiles = options.maxFiles ?? 10;
     const allowed = options.allowedTypes ? new Set(options.allowedTypes) : null;
 
-    const ct = this.req?.headers?.get('content-type') || '';
+    const ct = (this.req?.headers?.get('content-type') || '').toLowerCase();
     if (!ct.includes('multipart/form-data')) {
       throw Object.assign(new Error('Expected multipart/form-data'), { status: 400 });
     }
 
+    const maxTotalBytes = maxFileSize * maxFiles;
     const contentLen = Number(this.req?.headers?.get('content-length') || 0);
-    if (contentLen > maxFileSize * maxFiles + 65536) {
+    if (Number.isFinite(contentLen) && contentLen > maxTotalBytes + 65536) {
       throw Object.assign(new Error('Payload Too Large'), { status: 413 });
     }
 
     const form = await this.req.formData();
     const fields: Record<string, string> = {};
     const files: UploadedFile[] = [];
+    let totalBytes = 0;
 
     for (const [fieldName, value] of form.entries()) {
       if (typeof value === 'string') {
@@ -449,6 +445,10 @@ export class Context {
       }
       if (fileObj.size > maxFileSize) {
         throw Object.assign(new Error(`File exceeds max size of ${maxFileSize} bytes`), { status: 413 });
+      }
+      totalBytes += fileObj.size;
+      if (totalBytes > maxTotalBytes) {
+        throw Object.assign(new Error(`Total upload size exceeds ${maxTotalBytes} bytes`), { status: 413 });
       }
       const mime = (fileObj.type || '').split(';')[0]!.trim().toLowerCase();
       if (allowed && !allowed.has(mime)) {

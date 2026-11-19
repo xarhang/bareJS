@@ -184,6 +184,7 @@ describe("Real-World Production Simulation (Security, Concurrency & Performance)
 
   test("4. Flood Resilience: 1,500 unique Idempotency-Keys & IPs stay bounded and fast", async () => {
     const app = new BareJS()
+      .trustProxy(true)
       .use(rateLimit({ max: 100, windowMs: 10_000 }))
       .use(idempotency({ maxKeys: 256, ttlMs: 10_000 }))
       .post("/events", () => ({ ok: true }));

@@ -10,9 +10,32 @@ export interface CsrfOptions {
   cookieName?: string;
   headerName?: string;
   requireToken?: boolean;
+  /** Allow requests that omit both Origin and Referer headers (default: false) */
+  allowMissingOrigin?: boolean;
 }
 
 const DEFAULT_IGNORE = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+const resolveRequestOrigin = (ctx: Context): string => {
+  try {
+    const parsed = new URL(ctx.req.url);
+    if (ctx._trustProxy) {
+      const fwdHost = ctx.req.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+      const fwdProto = ctx.req.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+      if (fwdHost) {
+        const proto = fwdProto ? `${fwdProto}:` : parsed.protocol;
+        return `${proto}//${fwdHost}`;
+      }
+    }
+    const host = ctx.req.headers.get('host')?.trim();
+    if (host) {
+      return `${parsed.protocol}//${host}`;
+    }
+    return parsed.origin;
+  } catch {
+    return '';
+  }
+};
 
 export const csrf = (options: CsrfOptions = {}): Middleware => {
   const ignore = options.ignoreMethods ? new Set(options.ignoreMethods.map((m) => m.toUpperCase())) : DEFAULT_IGNORE;
@@ -20,6 +43,7 @@ export const csrf = (options: CsrfOptions = {}): Middleware => {
   const cookieName = options.cookieName || 'csrf_token';
   const headerName = (options.headerName || 'x-csrf-token').toLowerCase();
   const requireToken = options.requireToken === true;
+  const allowMissingOrigin = options.allowMissingOrigin === true;
 
   return (ctx: Context, next: Next) => {
     const method = ctx.req.method.toUpperCase();
@@ -53,19 +77,19 @@ export const csrf = (options: CsrfOptions = {}): Middleware => {
     }
 
     if (sourceOrigin) {
-      let reqOrigin: string;
-      try {
-        reqOrigin = new URL(ctx.req.url).origin;
-      } catch {
-        reqOrigin = '';
-      }
-      const isAllowed = sourceOrigin === reqOrigin || (allowed !== null && allowed.has(sourceOrigin));
+      const reqOrigin = resolveRequestOrigin(ctx);
+      const isAllowed = (reqOrigin !== '' && sourceOrigin === reqOrigin) || (allowed !== null && allowed.has(sourceOrigin));
       if (!isAllowed) {
         return Response.json(
           { status: 'error', code: 'CSRF_FORBIDDEN', message: 'Origin mismatch' },
           { status: 403 }
         );
       }
+    } else if (!allowMissingOrigin && secFetchSite !== 'same-origin') {
+      return Response.json(
+        { status: 'error', code: 'CSRF_FORBIDDEN', message: 'Missing Origin or Referer header' },
+        { status: 403 }
+      );
     }
 
     // 3. Optional double-submit token check

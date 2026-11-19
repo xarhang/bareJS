@@ -409,7 +409,7 @@ describe("Deep Torture & Security Stress Matrix (50 Additional Tests)", () => {
   });
 
   test("31. rateLimit uses x-forwarded-for or x-real-ip by default when keyGenerator is omitted", async () => {
-    const app = new BareJS();
+    const app = new BareJS().trustProxy(true);
     app.use(rateLimit({ max: 1, windowMs: 10000 }));
     app.get("/ip-test", () => "ok");
     app.compile();

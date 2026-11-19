@@ -23,16 +23,23 @@ export const compress = (options: CompressOptions = {}): Middleware => {
   const hasZstd = typeof (Bun as any).zstdCompressSync === 'function';
 
   const isAccepted = (lower: string, enc: CompressionEncoding): boolean => {
-    const idx = lower.indexOf(enc);
-    if (idx === -1) return false;
-    const comma = lower.indexOf(',', idx);
-    const segment = comma === -1 ? lower.slice(idx) : lower.slice(idx, comma);
-    const qIdx = segment.indexOf(';q=');
-    if (qIdx !== -1) {
-      const qVal = parseFloat(segment.slice(qIdx + 3));
-      if (Number.isFinite(qVal) && qVal <= 0) return false;
+    const parts = lower.split(',');
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!.trim();
+      if (!part) continue;
+      const semi = part.indexOf(';');
+      const name = (semi === -1 ? part : part.slice(0, semi)).trim();
+      if (name !== enc) continue;
+      if (semi !== -1) {
+        const qMatch = part.slice(semi + 1).match(/q\s*=\s*([0-9.]+)/);
+        if (qMatch) {
+          const qVal = parseFloat(qMatch[1]!);
+          if (Number.isFinite(qVal) && qVal <= 0) return false;
+        }
+      }
+      return true;
     }
-    return true;
+    return false;
   };
 
   const negotiate = (accept: string): CompressionEncoding | null => {
@@ -77,7 +84,12 @@ export const compress = (options: CompressOptions = {}): Middleware => {
 
     const headers = new Headers(res.headers);
     headers.set('Content-Encoding', chosen);
-    headers.set('Vary', 'Accept-Encoding');
+    const existingVary = headers.get('Vary');
+    if (!existingVary) {
+      headers.set('Vary', 'Accept-Encoding');
+    } else if (!existingVary.toLowerCase().split(',').some((v) => v.trim() === 'accept-encoding')) {
+      headers.set('Vary', `${existingVary}, Accept-Encoding`);
+    }
     headers.delete('Content-Length');
 
     return new Response(compressed, { status: res.status, headers });

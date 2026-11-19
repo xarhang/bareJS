@@ -257,7 +257,7 @@ const coerceFields = (obj: Record<string, any>, schema: any): Record<string, any
     if (tType === 'number' || tType === 'integer' || tType === 'ZodNumber') {
       if (val.trim() !== '') {
         const n = Number(val);
-        if (!Number.isNaN(n)) out[k] = n;
+        if (Number.isFinite(n)) out[k] = n;
       }
     } else if (tType === 'boolean' || tType === 'ZodBoolean') {
       if (val === 'true') out[k] = true;

@@ -592,7 +592,7 @@ describe("100% Line & Function Coverage + 200+ Total Tests Suite (50 Tests)", ()
   });
 
   test("55. ctx.ip extracts client IP from x-forwarded-for, x-real-ip, cf-connecting-ip, or defaults to 127.0.0.1", async () => {
-    const app = new BareJS();
+    const app = new BareJS().trustProxy(true);
     app.get("/ip", (ctx: Context) => ({ ip: ctx.ip }));
     app.compile();
 

@@ -12,8 +12,10 @@ export const timeout = (ms = 10000, options: TimeoutOptions = {}): Middleware =>
   const mw: Middleware = async (_ctx: Context, next: Next) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
+      const nextPromise = Promise.resolve(next());
       const timeoutPromise = new Promise<Response>((resolve) => {
         timer = setTimeout(() => {
+          nextPromise.catch(() => {});
           resolve(
             Response.json(
               { status: 'error', code: 'REQUEST_TIMEOUT', message },
@@ -22,7 +24,7 @@ export const timeout = (ms = 10000, options: TimeoutOptions = {}): Middleware =>
           );
         }, ms);
       });
-      return await Promise.race([Promise.resolve(next()), timeoutPromise]);
+      return await Promise.race([nextPromise, timeoutPromise]);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
     }

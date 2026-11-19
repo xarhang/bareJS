@@ -262,6 +262,7 @@ describe("Bug-Hunting & Adversarial Edge-Case Suite", () => {
 
   test("11. rateLimit isolates clients by IP and resets after windowMs", async () => {
     const app = new BareJS()
+      .trustProxy(true)
       .use(rateLimit({ max: 2, windowMs: 60 }))
       .get("/ping", () => "pong");
     app.compile();

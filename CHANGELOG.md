@@ -2,6 +2,33 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.53] - 2026-11-19
+
+### Security
+- **JWKS Hardening & Claims Validation** (`src/security/auth.ts`):
+  - Added `15s` cooldown for unknown-`kid` JWKS force-refresh, concurrent fetch coalescing (`inFlightJwks`), and `5s` fetch timeout to prevent cache-busting outbound DoS.
+  - Filtered out encryption keys (`use === 'enc'`) and mismatched `alg` entries when selecting JWKs.
+  - Added `issuer` (`iss`) and `audience` (`aud`) claim validation and rejected non-object JWT payloads.
+- **Static File Symlink Defense** (`src/utils/static.ts`): Opened verified `realFile` (resolved via `realpath()`) instead of raw `filePath`, including on `cacheMetadata` hits.
+- **Distributed Idempotency Lock Ordering** (`src/security/idempotency.ts`): Awaited `externalStore.set()` completion before releasing the distributed lock in `finally`.
+- **Redis Rate-Limit TTL Recovery** (`src/security/store.ts`): Automatically repaired missing TTLs (`PTTL === -1`) to prevent permanent lockouts.
+- **Body Size & Cookie Hardening** (`src/core/context.ts`):
+  - Ignored non-numeric or negative `Content-Length` headers in `ctx.jsonBody(maxBytes)` so payloads fall back to exact `Buffer.byteLength` enforcement.
+  - Rejected control characters (`\r`, `\n`) and `;` in `ctx.setCookie()` `name`, `path`, and `domain`.
+- **Constant-Time CSRF Token Check** (`src/security/csrf.ts`): Used `timingSafeEqual` for double-submit CSRF token comparison.
+- **Projector Prototype Guard** (`src/security/validators.ts`): Skipped `__proto__`, `constructor`, and `prototype` keys in `buildProjectorExpr()`.
+
+### Fixed
+- **Radix JIT Empty Param Matching** (`src/core/radix.ts`): Guarded `:param` matching with `slash > idxPrefix` so `/users` and `/users/` no longer falsely match `/users/:id` with an empty parameter.
+- **Response `Set-Cookie` Consistency** (`src/core/context.ts`): Applied and consumed `Set-Cookie` headers across `html()`, `text()`, `redirect()`, `sse()`, and `json()` without duplication.
+- **`ctx.getQuery()` Prototype Safety** (`src/core/context.ts`): Used `Object.hasOwn()` so `Object.prototype` keys like `toString` return `undefined`.
+- **Compression `q=0` Negotiation** (`src/utils/compress.ts`): Respected `;q=0` in `Accept-Encoding` headers.
+- **Redis Empty Body Replay** (`src/security/store.ts`): Checked `typeof parsed.rawBodyBase64 === 'string'` so empty cached responses replay accurately.
+- **Docs** (`llms.txt`): Fixed `createSingleflight()` example invocation (`sf(...)`).
+- **Tests**: Added `tests/security-hardening.test.ts` (**294 tests / 5,767 assertions**).
+
+---
+
 ## [0.1.52] - 2026-11-19
 
 ### Added

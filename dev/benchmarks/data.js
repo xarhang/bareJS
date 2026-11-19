@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795025073527,
+  "lastUpdate": 1795052215146,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -2884,6 +2884,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3091.7135431316733,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "92b3d6d966d9479d016339df9188534da5dafcbc",
+          "message": "fix(core): trustProxy overflow & peerIp, error response headers, async onError, BareRouter prefix mounting, and idempotency Response caching",
+          "timestamp": "2026-11-19T01:36:02Z",
+          "tree_id": "01e0c97dc18e9011d2da82ab952ba929c876acd9",
+          "url": "https://github.com/xarhang/bareJS/commit/92b3d6d966d9479d016339df9188534da5dafcbc"
+        },
+        "date": 1795052214790,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 773.8552789580639,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1146.5735238004388,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3946.0698222197298,
             "unit": "undefined"
           }
         ]

@@ -36,8 +36,19 @@ export interface RedisStoreOptions {
 export const redisStore = (client: any, options: RedisStoreOptions = {}): BareStore => {
   const prefix = options.prefix ?? 'barejs:';
 
+  const useSend = typeof client.send === 'function';
+
+  const cmdGet = (key: string) =>
+    useSend ? client.send('GET', [key]) : client.get(key);
+
+  const cmdDel = (key: string) =>
+    useSend ? client.send('DEL', [key]) : client.del(key);
+
+  const cmdIncr = (key: string) =>
+    useSend ? client.send('INCR', [key]) : client.incr(key);
+
   const setWithTtl = async (key: string, value: string, ttlMs: number): Promise<void> => {
-    if (typeof client.send === 'function') {
+    if (useSend) {
       await client.send('SET', [key, value, 'PX', String(ttlMs)]);
       return;
     }
@@ -56,16 +67,21 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
   return {
     async increment(key: string, windowMs: number): Promise<{ count: number; resetAt: number }> {
       const fullKey = `${prefix}rl:${key}`;
-      const count = Number(await client.incr(fullKey));
+      const count = Number(await cmdIncr(fullKey));
       if (count === 1) {
-        if (typeof client.pexpire === 'function') {
+        if (useSend) {
+          await client.send('PEXPIRE', [fullKey, String(windowMs)]);
+        } else if (typeof client.pexpire === 'function') {
           await client.pexpire(fullKey, windowMs);
         } else if (typeof client.expire === 'function') {
           await client.expire(fullKey, Math.max(1, Math.ceil(windowMs / 1000)));
         }
       }
       let pttl = windowMs;
-      if (typeof client.pttl === 'function') {
+      if (useSend) {
+        const res = Number(await client.send('PTTL', [fullKey]));
+        if (Number.isFinite(res) && res > 0) pttl = res;
+      } else if (typeof client.pttl === 'function') {
         const res = Number(await client.pttl(fullKey));
         if (Number.isFinite(res) && res > 0) pttl = res;
       } else if (typeof client.ttl === 'function') {
@@ -76,7 +92,7 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
     },
 
     async get(key: string): Promise<CachedIdempotentEntry | undefined> {
-      const raw = await client.get(`${prefix}idem:${key}`);
+      const raw = await cmdGet(`${prefix}idem:${key}`);
       if (!raw) return undefined;
       try {
         const parsed = JSON.parse(typeof raw === 'string' ? raw : String(raw));
@@ -111,7 +127,7 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
 
     async acquire(key: string, ttlMs: number = 30_000): Promise<boolean> {
       const lockKey = `${prefix}idem:lock:${key}`;
-      if (typeof client.send === 'function') {
+      if (useSend) {
         const res = await client.send('SET', [lockKey, '1', 'PX', String(ttlMs), 'NX']);
         return res === 'OK' || res === true;
       }
@@ -120,7 +136,7 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
     },
 
     async release(key: string): Promise<void> {
-      await client.del(`${prefix}idem:lock:${key}`);
+      await cmdDel(`${prefix}idem:lock:${key}`);
     },
 
     async revoke(tokenOrJti: string, ttlMs: number): Promise<void> {
@@ -128,7 +144,7 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
     },
 
     async isRevoked(tokenOrJti: string): Promise<boolean> {
-      const val = await client.get(`${prefix}rev:${tokenOrJti}`);
+      const val = await cmdGet(`${prefix}rev:${tokenOrJti}`);
       return val !== null && val !== undefined;
     }
   };

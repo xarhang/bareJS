@@ -622,24 +622,17 @@ export class BareJS<
         }`
       : '';
 
-    const staticMws = this.groupMiddleware.filter((m: any) => m.__isStatic);
-    const hasStaticMw = staticMws.length > 0;
+    const hasStaticMw = this.groupMiddleware.some((m: any) => m.__isStatic);
     const runStatic = hasStaticMw
       ? async (ctx: Context) => {
-          const noop = () => {};
-          for (let i = 0; i < staticMws.length; i++) {
-            const r = await staticMws[i](ctx, noop);
-            if (r instanceof Response) {
-              if (ctx._headers) {
-                for (const k in ctx._headers) {
-                  const val = ctx._headers[k];
-                  if (val !== undefined && !r.headers.has(k)) r.headers.set(k, val);
-                }
-              }
-              return r;
-            }
-          }
-          return undefined;
+          const mws = this.groupMiddleware;
+          const dispatch = async (idx: number): Promise<Response | undefined> => {
+            if (idx >= mws.length) return undefined;
+            const r = await mws[idx](ctx, () => dispatch(idx + 1));
+            if (r instanceof Response) return applyCtxHeaders(r, ctx);
+            return undefined;
+          };
+          return dispatch(0);
         }
       : undefined;
 

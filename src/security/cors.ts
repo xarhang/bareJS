@@ -94,7 +94,31 @@ export const cors = (options: CorsOptions = {}) => {
     }
     if (exposeHeaders) ctx.setHeader('Access-Control-Expose-Headers', exposeHeaders);
 
-    return next?.();
+    const res = next?.();
+    if (res && typeof (res as any).then === 'function') {
+      return (res as Promise<any>).then((r) => {
+        if (r instanceof Response) {
+          r.headers.set('Vary', 'Origin');
+          r.headers.set('Access-Control-Allow-Methods', methods);
+          if (matched) {
+            r.headers.set('Access-Control-Allow-Origin', matched);
+            if (credentials) r.headers.set('Access-Control-Allow-Credentials', 'true');
+          }
+          if (exposeHeaders) r.headers.set('Access-Control-Expose-Headers', exposeHeaders);
+        }
+        return r;
+      });
+    }
+    if (res instanceof Response) {
+      res.headers.set('Vary', 'Origin');
+      res.headers.set('Access-Control-Allow-Methods', methods);
+      if (matched) {
+        res.headers.set('Access-Control-Allow-Origin', matched);
+        if (credentials) res.headers.set('Access-Control-Allow-Credentials', 'true');
+      }
+      if (exposeHeaders) res.headers.set('Access-Control-Expose-Headers', exposeHeaders);
+    }
+    return res;
   };
   return mw;
 };

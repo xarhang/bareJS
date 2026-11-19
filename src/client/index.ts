@@ -91,9 +91,10 @@ export interface BareClient<Routes extends RouteSchema = RouteSchema> {
 const buildUrl = (baseUrl: string, path: string, options?: ClientRequestOptions): string => {
   let finalPath = path;
   if (options?.params) {
-    for (const [k, v] of Object.entries(options.params)) {
-      finalPath = finalPath.replaceAll(`:${k}`, encodeURIComponent(String(v)));
-    }
+    const params = options.params;
+    finalPath = finalPath.replace(/:([a-zA-Z0-9_]+)(?=\/|$)/g, (match, key) =>
+      Object.hasOwn(params, key) ? encodeURIComponent(String(params[key])) : match
+    );
   }
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
   const normalizedPath = finalPath.startsWith('/') ? finalPath : `/${finalPath}`;

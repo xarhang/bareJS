@@ -307,4 +307,55 @@ describe('Security Hardening & Bug Fixes', () => {
     expect(r3.status).toBe(200);
     expect(await r3.json()).toEqual({ id: '42' });
   });
+
+  it('dynamic cors attaches headers when handler/middleware returns raw Response directly', async () => {
+    const { cors } = await import('../src/index');
+    const app = new BareJS();
+    app.use(cors({ origin: ['https://app.example.com'], credentials: true }));
+    app.get('/raw', () => Response.json({ ok: true }));
+    app.get('/raw-async', async () => new Response('async-ok'));
+
+    const res = await app.request('/raw', { headers: { Origin: 'https://app.example.com' } });
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
+    expect(res.headers.get('access-control-allow-credentials')).toBe('true');
+
+    const res2 = await app.request('/raw-async', { headers: { Origin: 'https://app.example.com' } });
+    expect(res2.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
+  });
+
+  it('staticFallback executes global middleware such as securityHeaders and cors', async () => {
+    const { cors, securityHeaders, staticFile } = await import('../src/index');
+    const dir = mkdtempSync(join(tmpdir(), 'bare-static-mw-'));
+    try {
+      writeFileSync(join(dir, 'hello.txt'), 'hello static');
+      const app = new BareJS();
+      app.use(cors({ origin: 'https://static.example.com' }));
+      app.use(securityHeaders());
+      app.use(staticFile(dir));
+
+      const res = await app.request('/hello.txt');
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe('hello static');
+      expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(res.headers.get('access-control-allow-origin')).toBe('https://static.example.com');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('bareClient replaces overlapping param names like :id and :id_sub accurately', async () => {
+    const { bareClient } = await import('../src/index');
+    const app = new BareJS();
+    app.get('/users/:id/items/:id_sub', (ctx) => ({
+      id: ctx.params.id,
+      id_sub: ctx.params.id_sub
+    }));
+
+    const client = bareClient(app);
+    const data = await client.get('/users/:id/items/:id_sub', {
+      params: { id: '42', id_sub: 'item-9' }
+    });
+    expect(data).toEqual({ id: '42', id_sub: 'item-9' });
+  });
 });
+

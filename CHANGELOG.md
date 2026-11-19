@@ -2,6 +2,16 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.54] - 2026-11-19
+
+### Fixed
+- **Dynamic `cors()` Raw Response Headers** (`src/security/cors.ts`): Attached CORS headers (`Vary`, `Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials`, `Access-Control-Expose-Headers`) to raw `Response` objects returned directly by downstream handlers or middleware in dynamic origin mode.
+- **Static Fallback Middleware Chain** (`src/core/bare.ts`): Dispatched `staticFallback` through the full `groupMiddleware` pipeline so `cors()`, `securityHeaders()`, and `rateLimit()` apply to served static files.
+- **Typed Client Path Param Replacement** (`src/client/index.ts`): Replaced substring `replaceAll` with boundary-aware single-pass regex replacement so overlapping param names (e.g. `:id` and `:id_sub`) never collide.
+- **Tests**: Expanded `tests/security-hardening.test.ts` (**297 tests / 5,775 assertions**).
+
+---
+
 ## [0.1.53] - 2026-11-19
 
 ### Security

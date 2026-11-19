@@ -47,7 +47,7 @@ export const csrf = (options: CsrfOptions = {}): Middleware => {
 
   return (ctx: Context, next: Next) => {
     const method = ctx.req.method.toUpperCase();
-    if (ignore.has(method)) return next();
+    if (ignore.has(method)) return next?.();
 
     const secFetchSite = ctx.req.headers.get('sec-fetch-site');
     const origin = ctx.req.headers.get('origin');

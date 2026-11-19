@@ -29,7 +29,7 @@ const buildReplayResponse = (existing: CachedIdempotentEntry): Response => {
 };
 
 const extractIdemKey = (ctx: Context, headerName: string): string | undefined => {
-  const rawKey = ctx.req.headers.get(headerName);
+  const rawKey = ctx.req.headers.get(headerName)?.trim();
   if (!rawKey) return undefined;
   const rawUrl = ctx.req.url;
   const s = rawUrl.indexOf('/', 8);
@@ -82,11 +82,12 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
       if (!key) return;
       (ctx as any)._idempotencyKey = undefined;
       (ctx as any)._idemInFlight = undefined;
-      const clonedRes = status >= 200 && status < 300 && resVal instanceof Response ? resVal.clone() : null;
+      const isStream = resVal instanceof Response && (resVal.headers.get('content-type') || '').includes('text/event-stream');
+      const clonedRes = !isStream && status >= 200 && status < 300 && resVal instanceof Response ? resVal.clone() : null;
       const ct = clonedRes ? (clonedRes.headers.get('content-type') || 'application/json') : undefined;
       void (async () => {
         try {
-          if (status >= 200 && status < 300) {
+          if (!isStream && status >= 200 && status < 300) {
             if (clonedRes) {
               const buf = await clonedRes.arrayBuffer();
               await externalStore.set(key, { status, rawBody: buf, contentType: ct, expiresAt: Date.now() + ttlMs }, ttlMs);

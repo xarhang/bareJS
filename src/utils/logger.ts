@@ -37,7 +37,7 @@ export const logger = (options: LoggerOptions = {}): Middleware => {
 
   return (ctx: Context, next) => {
     const path = getPath(ctx.req.url);
-    if (skip?.(ctx, path)) return next();
+    if (skip?.(ctx, path)) return next?.();
 
     const reqId = attachId ? ctx.requestId : undefined;
     if (reqId) {
@@ -61,6 +61,6 @@ export const logger = (options: LoggerOptions = {}): Middleware => {
       console.log(`[${entry.timestamp}] ${entry.method} ${entry.path}${idPart}`);
     }
 
-    return next();
+    return next?.();
   };
 };

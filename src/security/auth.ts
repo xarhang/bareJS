@@ -443,7 +443,7 @@ export const basicAuth = (credentials: { user: string; pass: string }) => {
     const passMatch = timingSafeEqual(sha256(pass), expectedPassHash);
 
     if (userMatch && passMatch) {
-      return next();
+      return next?.();
     }
 
     return ctx.status(401).json({ status: 'error', message: 'Invalid credentials' });
@@ -460,6 +460,6 @@ export const hasRole = (role: string) => {
     if (!user || user.role !== role) {
       return ctx.status(403).json({ status: 'error', message: `Required role: ${role}` });
     }
-    return next();
+    return next?.();
   };
 };

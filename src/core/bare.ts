@@ -5,6 +5,7 @@ import { Type as typebox, Type as t } from '@sinclair/typebox';
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { bootstrapConfig } from "./loader";
+import { BARE_CONFIG } from "./config";
 import { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from "../utils/openapi";
 import type { RouteSchemas } from "../security/validators";
 import type { RouteSchema } from "../client/index";
@@ -311,6 +312,28 @@ export class BareJS<
   // inherited use() from BareRouter handles router merging now
 
   private compileHandler(pipeline: any[], isLog: boolean): Function {
+    if (pipeline.length === 0) {
+      return () => undefined;
+    }
+
+    const applyCtxHeadersToRes = (res: Response, ctx: Context): Response => {
+      if (ctx._headers) {
+        for (const k in ctx._headers) {
+          const val = ctx._headers[k];
+          if (val !== undefined && !res.headers.has(k)) {
+            try { res.headers.set(k, val); } catch { /* ignore invalid header */ }
+          }
+        }
+      }
+      if (ctx._setCookies) {
+        for (let i = 0; i < ctx._setCookies.length; i++) {
+          try { res.headers.append('Set-Cookie', ctx._setCookies[i]!); } catch { /* ignore */ }
+        }
+        ctx._setCookies = undefined;
+      }
+      return res;
+    };
+
     const timeoutMw = pipeline.find((fn) => fn?.__timeout);
     if (timeoutMw) {
       const { ms, status, message } = timeoutMw.__timeout;
@@ -325,7 +348,7 @@ export class BareJS<
             timer = setTimeout(() => {
               ctx._detached = true;
               if (typeof res.catch === 'function') res.catch(() => {});
-              resolve(Response.json({ status: 'error', code: 'REQUEST_TIMEOUT', message }, { status }));
+              resolve(applyCtxHeadersToRes(Response.json({ status: 'error', code: 'REQUEST_TIMEOUT', message }, { status }), ctx));
             }, ms);
           });
           return await Promise.race([res, timeoutPromise]);
@@ -422,11 +445,13 @@ export class BareJS<
     const argSig = isLog ? 'ctx, doLog' : 'ctx';
 
     const extraNames = [
+      'applyShortCircuit',
       ...(rFilter ? ['rFilter'] : []),
       ...(idemCommit ? ['idemCommit'] : []),
       ...(idemRelease ? ['idemRelease'] : [])
     ];
     const extraVals = [
+      applyCtxHeadersToRes,
       ...(rFilter ? [rFilter] : []),
       ...(idemCommit ? [idemCommit] : []),
       ...(idemRelease ? [idemRelease] : [])
@@ -485,7 +510,7 @@ export class BareJS<
         code += `let r${i} = fn${i}(ctx, noop);\n`;
         code += `if (r${i}) {\n`;
         code += `  if (r${i}.then) r${i} = await r${i};\n`;
-        code += `  if (r${i} instanceof Response) { ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
+        code += `  if (r${i} instanceof Response) { applyShortCircuit(r${i}, ctx); ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
         code += `}\n`;
       }
       code += `
@@ -496,7 +521,7 @@ export class BareJS<
     } else {
       for (let i = 0; i < len - 1; i++) {
         code += `const r${i} = fn${i}(ctx, noop);\n`;
-        code += `if (r${i} && r${i} instanceof Response) { ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
+        code += `if (r${i} && r${i} instanceof Response) { applyShortCircuit(r${i}, ctx); ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
       }
       code += `
         let res = fn${len - 1}(ctx);
@@ -772,8 +797,6 @@ export class BareJS<
       this.trustProxy(options.trustProxy);
     }
     const maxRequestBodySize = options.maxRequestBodySize ?? 10 * 1024 * 1024;
-
-    const { BARE_CONFIG } = require("./config");
 
     const finalPort = port || BARE_CONFIG.port || 3000;
     const isProd = process.env.NODE_ENV === 'production';

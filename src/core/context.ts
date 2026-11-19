@@ -186,7 +186,7 @@ export class Context {
     return value;
   }
 
-  public deleteCookie(name: string, options: Pick<CookieOptions, 'path' | 'domain'> = {}): this {
+  public deleteCookie(name: string, options: Pick<CookieOptions, 'path' | 'domain' | 'secure' | 'sameSite'> = {}): this {
     return this.setCookie(name, '', {
       ...options,
       maxAge: 0,
@@ -341,16 +341,18 @@ export class Context {
       | ((send: (data: any, event?: string, id?: string) => void, close: () => void) => Promise<void> | void)
   ): Response {
     const encoder = new TextEncoder();
+    const formatDataLines = (raw: string): string =>
+      raw.split(/\r?\n/).map((line) => `data: ${line}`).join('\n') + '\n\n';
     const formatChunk = (chunk: string | { event?: string; data: any; id?: string; retry?: number }): Uint8Array => {
       if (typeof chunk === 'string') {
-        return encoder.encode(`data: ${chunk}\n\n`);
+        return encoder.encode(formatDataLines(chunk));
       }
       let out = '';
-      if (chunk.id !== undefined) out += `id: ${chunk.id}\n`;
-      if (chunk.event !== undefined) out += `event: ${chunk.event}\n`;
-      if (chunk.retry !== undefined) out += `retry: ${chunk.retry}\n`;
+      if (chunk.id !== undefined) out += `id: ${String(chunk.id).replace(/[\r\n]/g, '')}\n`;
+      if (chunk.event !== undefined) out += `event: ${String(chunk.event).replace(/[\r\n]/g, '')}\n`;
+      if (chunk.retry !== undefined && Number.isFinite(chunk.retry)) out += `retry: ${Math.max(0, Math.floor(chunk.retry))}\n`;
       const payload = typeof chunk.data === 'string' ? chunk.data : JSON.stringify(chunk.data);
-      out += `data: ${payload}\n\n`;
+      out += formatDataLines(payload);
       return encoder.encode(out);
     };
 
@@ -401,10 +403,13 @@ export class Context {
   public get ip(): string {
     if (this._trustProxy) {
       const xff = this.req?.headers?.get('x-forwarded-for');
-      if (xff) return xff.split(',')[0]!.trim();
+      if (xff) {
+        const first = xff.split(',')[0]?.trim();
+        if (first) return first;
+      }
       const forwarded =
-        this.req?.headers?.get('x-real-ip') ||
-        this.req?.headers?.get('cf-connecting-ip');
+        this.req?.headers?.get('x-real-ip')?.trim() ||
+        this.req?.headers?.get('cf-connecting-ip')?.trim();
       if (forwarded) return forwarded;
     }
     return this._peerIp || '127.0.0.1';
@@ -413,7 +418,9 @@ export class Context {
   public async upload(options: UploadOptions = {}): Promise<UploadResult> {
     const maxFileSize = options.maxFileSize ?? 5 * 1024 * 1024;
     const maxFiles = options.maxFiles ?? 10;
-    const allowed = options.allowedTypes ? new Set(options.allowedTypes) : null;
+    const allowed = options.allowedTypes
+      ? new Set(options.allowedTypes.map((t) => t.trim().toLowerCase()))
+      : null;
 
     const ct = (this.req?.headers?.get('content-type') || '').toLowerCase();
     if (!ct.includes('multipart/form-data')) {

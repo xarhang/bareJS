@@ -47,7 +47,10 @@ export const typebox = (schema: any): Middleware => {
 
       if (isCtx) (ctx as any).body = body;
       return next ? next() : undefined;
-    } catch {
+    } catch (e: any) {
+      if (e?.status === 413) {
+        return errorJSON({ status: 'error', code: 'PAYLOAD_TOO_LARGE', message: 'Payload Too Large' }, 413);
+      }
       return errorJSON({ status: 'error', message: 'Malformed JSON payload' });
     }
   };
@@ -63,6 +66,14 @@ export const native = (schema: any): Middleware => {
   const keys = Object.keys(props);
   const kLen = keys.length;
   const reqSet = Array.isArray(schema.required) ? new Set<string>(schema.required) : null;
+
+  const matchesNativeType = (val: any, expected: string | undefined): boolean => {
+    if (expected === 'array') return Array.isArray(val);
+    if (expected === 'integer') return typeof val === 'number' && Number.isInteger(val);
+    if (expected === 'object') return val !== null && typeof val === 'object' && !Array.isArray(val);
+    if (expected === 'null') return val === null;
+    return typeof val === expected;
+  };
 
   const mw: Middleware = async (ctx: any, next?: any) => {
     try {
@@ -87,7 +98,7 @@ export const native = (schema: any): Middleware => {
           }
           continue;
         }
-        if (typeof body[k] !== props[k]?.type) {
+        if (!matchesNativeType(body[k], props[k]?.type)) {
           return errorJSON({
             status: 'error',
             code: 'TYPE_MISMATCH',
@@ -100,7 +111,10 @@ export const native = (schema: any): Middleware => {
       if (isCtx) (ctx as any).body = body;
 
       return next ? next() : undefined;
-    } catch {
+    } catch (e: any) {
+      if (e?.status === 413) {
+        return errorJSON({ status: 'error', code: 'PAYLOAD_TOO_LARGE', message: 'Payload Too Large' }, 413);
+      }
       return errorJSON({ status: 'error', message: 'Invalid JSON payload' });
     }
   };
@@ -130,7 +144,10 @@ export const zod = (schema: z.ZodSchema): Middleware => {
       if (isCtx) (ctx as any).body = result.data;
 
       return next ? next() : undefined;
-    } catch {
+    } catch (e: any) {
+      if (e?.status === 413) {
+        return errorJSON({ status: 'error', code: 'PAYLOAD_TOO_LARGE', message: 'Payload Too Large' }, 413);
+      }
       return errorJSON({ status: 'error', message: 'Invalid JSON payload' });
     }
   };
@@ -184,29 +201,35 @@ const compileSingleSchema = (schema: any): ((val: any) => { ok: boolean; data?: 
   };
 };
 
-const buildProjectorExpr = (schema: any, accessor: string): string | null => {
+const buildProjectorStatements = (schema: any, srcVar: string, dstVar: string, depth = 0): string | null => {
   const props = schema?.properties;
   if (!props || typeof props !== 'object') return null;
-  const entries: string[] = [];
+  let stmts = '';
+  let idx = 0;
   for (const [k, subSchema] of Object.entries<any>(props)) {
     if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
     const keyLit = JSON.stringify(k);
-    const propAccess = `${accessor}[${keyLit}]`;
-    const nestedExpr = buildProjectorExpr(subSchema, propAccess);
-    if (nestedExpr) {
-      entries.push(`${keyLit}: (${propAccess} && typeof ${propAccess} === 'object' && !Array.isArray(${propAccess})) ? ${nestedExpr} : ${propAccess}`);
+    const valVar = `v_${depth}_${idx++}`;
+    const nestedDst = `d_${depth}_${idx}`;
+    const nestedStmts = buildProjectorStatements(subSchema, valVar, nestedDst, depth + 1);
+    stmts += `const ${valVar} = ${srcVar}[${keyLit}];\n`;
+    if (nestedStmts) {
+      stmts += `if (${valVar} !== undefined) {\n`;
+      stmts += `  if (${valVar} && typeof ${valVar} === 'object' && !Array.isArray(${valVar})) {\n`;
+      stmts += `    const ${nestedDst} = {};\n${nestedStmts}    ${dstVar}[${keyLit}] = ${nestedDst};\n`;
+      stmts += `  } else {\n    ${dstVar}[${keyLit}] = ${valVar};\n  }\n}\n`;
     } else {
-      entries.push(`${keyLit}: ${propAccess}`);
+      stmts += `if (${valVar} !== undefined) ${dstVar}[${keyLit}] = ${valVar};\n`;
     }
   }
-  return `{ ${entries.join(', ')} }`;
+  return stmts;
 };
 
 const compileProjector = (schema: any): ((val: any) => any) | null => {
   if (!schema || '_def' in schema) return null; // Zod safeParse strips unknown keys natively
   if (schema.type === 'array' && schema.items) {
-    const itemExpr = buildProjectorExpr(schema.items, 'item');
-    if (!itemExpr) return null;
+    const itemStmts = buildProjectorStatements(schema.items, 'item', 'outItem');
+    if (!itemStmts) return null;
     return new Function(
       `return function(arr) {
         if (!Array.isArray(arr)) return arr;
@@ -214,18 +237,26 @@ const compileProjector = (schema: any): ((val: any) => any) | null => {
         const out = new Array(len);
         for (let i = 0; i < len; i++) {
           const item = arr[i];
-          out[i] = (item && typeof item === 'object' && !Array.isArray(item)) ? ${itemExpr} : item;
+          if (item && typeof item === 'object' && !Array.isArray(item)) {
+            const outItem = {};
+            ${itemStmts}
+            out[i] = outItem;
+          } else {
+            out[i] = item;
+          }
         }
         return out;
       }`
     )();
   }
-  const objExpr = buildProjectorExpr(schema, 'o');
-  if (!objExpr) return null;
+  const objStmts = buildProjectorStatements(schema, 'o', 'out');
+  if (!objStmts) return null;
   return new Function(
     `return function(o) {
       if (!o || typeof o !== 'object' || Array.isArray(o)) return o;
-      return ${objExpr};
+      const out = {};
+      ${objStmts}
+      return out;
     }`
   )();
 };
@@ -245,6 +276,14 @@ export const createResponseFilter = (schema: any): ((val: any) => any) => {
   };
 };
 
+const unwrapPropType = (propSchema: any): string | undefined => {
+  let cur = propSchema;
+  while (cur?._def && (cur._def.typeName === 'ZodOptional' || cur._def.typeName === 'ZodDefault' || cur._def.typeName === 'ZodNullable')) {
+    cur = cur._def.innerType;
+  }
+  return cur?.type || cur?._def?.typeName;
+};
+
 const coerceFields = (obj: Record<string, any>, schema: any): Record<string, any> => {
   const props = schema?.properties || (schema?._def?.shape ? (typeof schema._def.shape === 'function' ? schema._def.shape() : schema._def.shape) : null);
   if (!props) return obj;
@@ -253,7 +292,7 @@ const coerceFields = (obj: Record<string, any>, schema: any): Record<string, any
     if (!Object.hasOwn(out, k)) continue;
     const val = out[k];
     if (typeof val !== 'string') continue;
-    const tType = propSchema?.type || propSchema?._def?.typeName;
+    const tType = unwrapPropType(propSchema);
     if (tType === 'number' || tType === 'integer' || tType === 'ZodNumber') {
       if (val.trim() !== '') {
         const n = Number(val);

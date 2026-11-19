@@ -15,6 +15,7 @@ export const Hash = {
   },
 
   needsRehash: (hash: string): boolean => {
+    if (!hash || typeof hash !== 'string') return true;
     const { algorithm, memoryCost, timeCost } = BARE_CONFIG.hash;
     if (algorithm === 'bcrypt') {
       if (!/^\$2[aby]\$/.test(hash)) return true;

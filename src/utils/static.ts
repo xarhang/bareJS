@@ -38,7 +38,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
 
   const mw = async (ctx: any, next: any) => {
     const method = ctx.req.method;
-    if (method !== 'GET' && method !== 'HEAD') return next();
+    if (method !== 'GET' && method !== 'HEAD') return next?.();
 
     const rawUrl: string = ctx.req.url;
     const pathStart = rawUrl.indexOf('/', 8);
@@ -90,7 +90,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
           return ctx.status(403).send('Forbidden');
         }
         const st = await stat(resolvedFile);
-        if (st.isDirectory()) return next();
+        if (st.isDirectory()) return next?.();
         realFile = resolvedFile;
         fileSize = st.size;
         mtimeMs = Math.floor(st.mtimeMs);
@@ -110,7 +110,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
           });
         }
       } catch {
-        return next();
+        return next?.();
       }
     }
 

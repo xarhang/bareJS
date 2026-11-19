@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795073141756,
+  "lastUpdate": 1795079444155,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3352,6 +3352,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 6281.370847723146,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "ff9986010b31d336d2babc59b8818dba4ecd386f",
+          "message": "fix(security,qa): full codebase audit fixes for short-circuit headers, timeout, SSE, validators, idempotency, and edge cases\n\n- src/core/bare.ts: apply ctx._headers and ctx._setCookies on short-circuiting middleware and 408 timeout responses; guard empty pipelines in compileHandler; replace require('./config') with ESM import\n- src/core/context.ts: fallback on empty X-Forwarded-For segment in ip getter; sanitize CR/LF in SSE id/event and format multi-line SSE data; normalize allowedTypes in upload(); allow secure/sameSite in deleteCookie()\n- src/security/auth.ts, csrf.ts, utils/logger.ts, utils/static.ts: use next?.() to prevent TypeError on OPTIONS preflight or terminal middleware invocation\n- src/security/validators.ts: propagate 413 Payload Too Large in standalone typebox/zod/native; fix native array/integer/object checks; avoid emitting undefined keys in compileProjector; unwrap ZodOptional/ZodDefault/ZodNullable in coerceFields\n- src/security/idempotency.ts: trim whitespace-only Idempotency-Key and skip caching SSE streams\n- src/security/hash.ts: guard null/non-string inputs in Hash.needsRehash\n- tests/qa-audit.test.ts: add 12 regression tests covering all audit findings",
+          "timestamp": "2026-11-19T09:04:17Z",
+          "tree_id": "1e90f4abad9e4f19d715782aaa18c91944586851",
+          "url": "https://github.com/xarhang/bareJS/commit/ff9986010b31d336d2babc59b8818dba4ecd386f"
+        },
+        "date": 1795079443749,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1214.6116435140434,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1942.3173945141689,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5373.485659591617,
             "unit": "undefined"
           }
         ]

@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795056988164,
+  "lastUpdate": 1795057077963,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3001,6 +3001,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5001.325426439233,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "f96d20a5492dee540ec5cf7125f53c4854e7d14a",
+          "message": "fix(store): route all redisStore commands through client.send() for Bun.redis",
+          "timestamp": "2026-11-19T02:57:05Z",
+          "tree_id": "88f15afe8fce9a8a05406784c3069046dbc747e2",
+          "url": "https://github.com/xarhang/bareJS/commit/f96d20a5492dee540ec5cf7125f53c4854e7d14a"
+        },
+        "date": 1795057077409,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 715.9273717390793,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1150.792498644185,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 4572.027505488996,
             "unit": "undefined"
           }
         ]

@@ -115,7 +115,7 @@ export class Context {
 
   public get cookies(): Record<string, string> {
     if (this._cookies !== undefined) return this._cookies;
-    const result: Record<string, string> = {};
+    const result: Record<string, string> = Object.create(null);
     const header = this.req?.headers?.get('cookie');
     if (header) {
       let start = 0;
@@ -167,7 +167,9 @@ export class Context {
     if (options.maxAge !== undefined && Number.isFinite(options.maxAge)) {
       cookieStr += `; Max-Age=${Math.floor(options.maxAge)}`;
     }
-    if (options.expires) cookieStr += `; Expires=${options.expires.toUTCString()}`;
+    if (options.expires && !Number.isNaN(options.expires.getTime())) {
+      cookieStr += `; Expires=${options.expires.toUTCString()}`;
+    }
     if (options.httpOnly !== false) cookieStr += '; HttpOnly';
     if (options.secure) cookieStr += '; Secure';
     cookieStr += `; SameSite=${sameSite}`;
@@ -178,10 +180,12 @@ export class Context {
   }
 
   public getSignedCookie(name: string, secret: string): string | null {
-    const raw = this.cookies[name];
-    if (!raw) return null;
+    const cookies = this.cookies;
+    if (!Object.hasOwn(cookies, name)) return null;
+    const raw = cookies[name];
+    if (typeof raw !== 'string' || !raw) return null;
     const dotIdx = raw.lastIndexOf('.');
-    if (dotIdx <= 0) return null;
+    if (dotIdx < 0) return null;
     const value = raw.slice(0, dotIdx);
     const sigB64 = raw.slice(dotIdx + 1);
     const expected = createHmac('sha256', secret).update(value).digest();
@@ -223,17 +227,19 @@ export class Context {
           throw err;
         }
         const parsed = JSON.parse(text);
-        if (text.indexOf('"__proto__"') !== -1) {
-          const stripProto = (val: any): void => {
-            if (!val || typeof val !== 'object') return;
-            if (Array.isArray(val)) {
-              for (let i = 0; i < val.length; i++) stripProto(val[i]);
-              return;
+        if (text.indexOf('__proto__') !== -1 || text.indexOf('\\u') !== -1) {
+          const stack: any[] = [parsed];
+          while (stack.length > 0) {
+            const cur = stack.pop();
+            if (!cur || typeof cur !== 'object') continue;
+            if (Array.isArray(cur)) {
+              for (let i = 0; i < cur.length; i++) stack.push(cur[i]);
+            } else {
+              if (Object.hasOwn(cur, '__proto__')) delete cur['__proto__'];
+              const keys = Object.keys(cur);
+              for (let i = 0; i < keys.length; i++) stack.push(cur[keys[i]!]);
             }
-            if (Object.hasOwn(val, '__proto__')) delete val['__proto__'];
-            for (const k of Object.keys(val)) stripProto(val[k]);
-          };
-          stripProto(parsed);
+          }
         }
         return this.body = parsed;
       } catch (e: any) {
@@ -284,14 +290,9 @@ export class Context {
         ? Response.json(data)
         : Response.json(data, { status });
     } else {
-      let headers = this._headers;
-      if (headers["content-type"] === undefined) {
-        if (Object.isFrozen(headers)) {
-          headers = { ...headers };
-          this._headers = headers;
-        }
-        headers["content-type"] = "application/json";
-      }
+      const headers = this._headers["content-type"] === undefined
+        ? { ...this._headers, "content-type": "application/json" }
+        : this._headers;
       res = Response.json(data, {
         status,
         headers: headers as any
@@ -334,16 +335,16 @@ export class Context {
 
   public html(content: string, status?: number): Response {
     const headers: Record<string, string> = {
-      'content-type': 'text/html; charset=utf-8',
-      ...(this._headers || {})
+      ...(this._headers || {}),
+      'content-type': 'text/html; charset=utf-8'
     };
     return this._applyCookies(new Response(content, { status: status ?? this._status, headers }));
   }
 
   public text(content: string, status?: number): Response {
     const headers: Record<string, string> = {
-      'content-type': 'text/plain; charset=utf-8',
-      ...(this._headers || {})
+      ...(this._headers || {}),
+      'content-type': 'text/plain; charset=utf-8'
     };
     return this._applyCookies(new Response(content, { status: status ?? this._status, headers }));
   }
@@ -353,8 +354,8 @@ export class Context {
       throw new Error('Invalid redirect URL');
     }
     const headers: Record<string, string> = {
-      'location': url,
-      ...(this._headers || {})
+      ...(this._headers || {}),
+      'location': url
     };
     return this._applyCookies(new Response(null, { status, headers }));
   }
@@ -375,7 +376,9 @@ export class Context {
       if (chunk.id !== undefined) out += `id: ${String(chunk.id).replace(/[\r\n]/g, '')}\n`;
       if (chunk.event !== undefined) out += `event: ${String(chunk.event).replace(/[\r\n]/g, '')}\n`;
       if (chunk.retry !== undefined && Number.isFinite(chunk.retry)) out += `retry: ${Math.max(0, Math.floor(chunk.retry))}\n`;
-      const payload = typeof chunk.data === 'string' ? chunk.data : JSON.stringify(chunk.data);
+      const payload = chunk.data === undefined
+        ? ''
+        : (typeof chunk.data === 'string' ? chunk.data : JSON.stringify(chunk.data));
       out += formatDataLines(payload);
       return encoder.encode(out);
     };

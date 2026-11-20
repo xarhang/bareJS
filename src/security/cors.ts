@@ -9,7 +9,7 @@ export interface CorsOptions {
 }
 
 export const cors = (options: CorsOptions = {}) => {
-  const originOpt = options.origin || '*';
+  const originOpt = options.origin ?? '*';
   const methods = options.methods || 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
   const allowHeaders = Array.isArray(options.allowedHeaders)
     ? options.allowedHeaders.join(', ')
@@ -21,13 +21,24 @@ export const cors = (options: CorsOptions = {}) => {
 
   // Fast-path for static string origin
   if (typeof originOpt === 'string') {
+    if (originOpt === '') {
+      const mw: Middleware = (ctx, next) => {
+        if (ctx.req.method === 'OPTIONS') {
+          return new Response(null, { status: 204, headers: { 'Vary': 'Origin' } });
+        }
+        ctx.setHeader('Vary', 'Origin');
+        return next?.();
+      };
+      return mw;
+    }
+    const allowCreds = credentials && originOpt !== '*';
     const preflightHeaders: Record<string, string> = {
       'Access-Control-Allow-Origin': originOpt,
       'Access-Control-Allow-Methods': methods,
       'Access-Control-Allow-Headers': allowHeaders
     };
     if (originOpt !== '*') preflightHeaders['Vary'] = 'Origin';
-    if (credentials) preflightHeaders['Access-Control-Allow-Credentials'] = 'true';
+    if (allowCreds) preflightHeaders['Access-Control-Allow-Credentials'] = 'true';
     const preflightInit = { status: 204, headers: preflightHeaders };
 
     const mw: Middleware = (ctx, next) => {
@@ -37,7 +48,7 @@ export const cors = (options: CorsOptions = {}) => {
       ctx.setHeader('Access-Control-Allow-Origin', originOpt);
       ctx.setHeader('Access-Control-Allow-Methods', methods);
       if (originOpt !== '*') ctx.setHeader('Vary', 'Origin');
-      if (credentials) ctx.setHeader('Access-Control-Allow-Credentials', 'true');
+      if (allowCreds) ctx.setHeader('Access-Control-Allow-Credentials', 'true');
       if (exposeHeaders) ctx.setHeader('Access-Control-Expose-Headers', exposeHeaders);
 
       const res = next?.();
@@ -47,7 +58,7 @@ export const cors = (options: CorsOptions = {}) => {
             r.headers.set('Access-Control-Allow-Origin', originOpt);
             r.headers.set('Access-Control-Allow-Methods', methods);
             if (originOpt !== '*') r.headers.set('Vary', 'Origin');
-            if (credentials) r.headers.set('Access-Control-Allow-Credentials', 'true');
+            if (allowCreds) r.headers.set('Access-Control-Allow-Credentials', 'true');
             if (exposeHeaders) r.headers.set('Access-Control-Expose-Headers', exposeHeaders);
           }
           return r;
@@ -57,7 +68,7 @@ export const cors = (options: CorsOptions = {}) => {
         res.headers.set('Access-Control-Allow-Origin', originOpt);
         res.headers.set('Access-Control-Allow-Methods', methods);
         if (originOpt !== '*') res.headers.set('Vary', 'Origin');
-        if (credentials) res.headers.set('Access-Control-Allow-Credentials', 'true');
+        if (allowCreds) res.headers.set('Access-Control-Allow-Credentials', 'true');
         if (exposeHeaders) res.headers.set('Access-Control-Expose-Headers', exposeHeaders);
       }
       return res;

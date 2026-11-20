@@ -32,6 +32,11 @@ const zodToJsonSchema = (schema: any): Record<string, any> => {
   if (typeName === 'ZodBoolean') return { type: 'boolean' };
   if (typeName === 'ZodArray') return { type: 'array', items: zodToJsonSchema(def.type) };
   if (typeName === 'ZodOptional' || typeName === 'ZodDefault' || typeName === 'ZodNullable') return zodToJsonSchema(def.innerType);
+  if (typeName === 'ZodEffects') return zodToJsonSchema(def.schema);
+  if (typeName === 'ZodLiteral') return { const: def.value };
+  if (typeName === 'ZodDate') return { type: 'string', format: 'date-time' };
+  if (typeName === 'ZodRecord') return { type: 'object', additionalProperties: zodToJsonSchema(def.valueType) };
+  if (typeName === 'ZodUnion' && Array.isArray(def.options)) return { anyOf: def.options.map(zodToJsonSchema) };
   if (typeName === 'ZodEnum') return { type: 'string', enum: def.values };
   return { type: 'object' };
 };
@@ -99,23 +104,25 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
       }
     }
 
+    const pathParams: any[] = [];
     const paramMatches = route.path.matchAll(/:([a-zA-Z0-9_]+)/g);
     for (const m of paramMatches) {
       const pName = m[1]!;
       const pProp = paramSchemaObj?.properties?.[pName] || { type: 'string' };
-      params.unshift({
+      pathParams.push({
         name: pName,
         in: 'path',
         required: true,
         schema: pProp
       });
     }
+    const allParams = [...pathParams, ...params];
 
     paths[openApiPath][method] = {
       summary: detail?.summary || `${route.method} ${openApiPath}`,
       ...(detail?.description ? { description: detail.description } : {}),
       ...(detail?.tags ? { tags: detail.tags } : {}),
-      ...(params.length ? { parameters: params } : {}),
+      ...(allParams.length ? { parameters: allParams } : {}),
       ...(requestBody ? { requestBody } : {}),
       responses: {
         '200': {
@@ -145,9 +152,16 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
   };
 };
 
+const escapeHtmlAttr = (s: string): string =>
+  s.replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
 export const renderDocsHTML = (specUrl: string, title: string = 'BareJS API Docs'): string => {
   const safeTitle = title.replace(/[<>&"]/g, '');
-  const safeSpecUrl = JSON.stringify(specUrl);
+  const safeSpecUrl = escapeHtmlAttr(specUrl);
   return `<!doctype html>
 <html>
   <head>
@@ -156,7 +170,7 @@ export const renderDocsHTML = (specUrl: string, title: string = 'BareJS API Docs
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>
   <body>
-    <script id="api-reference" data-url=${safeSpecUrl}></script>
+    <script id="api-reference" data-url="${safeSpecUrl}"></script>
     <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   </body>
 </html>`;

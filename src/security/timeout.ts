@@ -9,12 +9,13 @@ export const timeout = (ms = 10000, options: TimeoutOptions = {}): Middleware =>
   const status = options.status ?? 408;
   const message = options.message ?? 'Request Timeout';
 
-  const mw: Middleware = async (_ctx: Context, next: Next) => {
+  const mw: Middleware = async (ctx: Context, next: Next) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const nextPromise = Promise.resolve(next());
       const timeoutPromise = new Promise<Response>((resolve) => {
         timer = setTimeout(() => {
+          ctx._detached = true;
           nextPromise.catch(() => {});
           resolve(
             Response.json(

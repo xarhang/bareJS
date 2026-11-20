@@ -6,7 +6,7 @@
  */
 
 // --- 1. Core Engine ---
-export { BareJS, type WebSocketRouteHandler, type CronOptions } from './core/bare';
+export { BareJS, type WebSocketRouteHandler, type CronOptions, type NotFoundResponse } from './core/bare';
 export { BareRouter, type InferSchema, type PrefixRoutes } from './core/router';
 
 /**
@@ -61,7 +61,7 @@ export {
 // --- 5. Middlewares & Utilities ---
 export { logger, type LoggerOptions, type LogEntry } from './utils/logger';
 export { healthcheck, type HealthcheckOptions, type HealthCheckFn } from './utils/health';
-export { cors } from './security/cors';
+export { cors, type CorsOptions } from './security/cors';
 export { csrf, type CsrfOptions } from './security/csrf';
 export { timeout, type TimeoutOptions } from './security/timeout';
 export { rateLimit, type RateLimitOptions } from './security/rateLimit';

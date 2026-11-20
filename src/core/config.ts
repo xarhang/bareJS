@@ -23,10 +23,11 @@ export let BARE_CONFIG = DEFAULT_CONFIG;
 
 
 export const initConfig = (userConfig: Partial<BareConfig> = {}) => {
+  const cfg = userConfig && typeof userConfig === 'object' ? userConfig : {};
   BARE_CONFIG = {
     ...DEFAULT_CONFIG,
-    ...userConfig,
-    hash: { ...DEFAULT_CONFIG.hash, ...userConfig.hash }
+    ...cfg,
+    hash: { ...DEFAULT_CONFIG.hash, ...(cfg.hash && typeof cfg.hash === 'object' ? cfg.hash : {}) }
   };
   return BARE_CONFIG;
 };

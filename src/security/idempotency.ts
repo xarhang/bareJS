@@ -72,6 +72,13 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
         );
       }
 
+      const recheck = await externalStore.get(key);
+      if (recheck && Date.now() < recheck.expiresAt) {
+        (ctx as any)._idempotencyKey = undefined;
+        await externalStore.release(key);
+        return buildReplayResponse(recheck);
+      }
+
       (ctx as any)._idempotencyKey = key;
       (ctx as any)._idemInFlight = storeLockShim;
       return undefined;
@@ -85,7 +92,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
       const isStream = resVal instanceof Response && (resVal.headers.get('content-type') || '').includes('text/event-stream');
       const clonedRes = !isStream && status >= 200 && status < 300 && resVal instanceof Response ? resVal.clone() : null;
       const ct = clonedRes ? (clonedRes.headers.get('content-type') || 'application/json') : undefined;
-      void (async () => {
+      return (async () => {
         try {
           if (!isStream && status >= 200 && status < 300) {
             if (clonedRes) {
@@ -165,7 +172,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     if (!isStream && status >= 200 && status < 300) {
       if (resVal instanceof Response) {
         const ct = resVal.headers.get('content-type') || 'application/json';
-        resVal.clone().arrayBuffer().then((buf) => {
+        return resVal.clone().arrayBuffer().then((buf) => {
           evictIfNeeded();
           cache.set(key, {
             status,
@@ -176,7 +183,6 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
         }).catch(() => {}).finally(() => {
           inFlight.delete(key);
         });
-        return;
       }
       evictIfNeeded();
       cache.set(key, {

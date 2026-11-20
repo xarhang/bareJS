@@ -74,6 +74,9 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
     }
   };
 
+  const lockTokens = new Map<string, string>();
+  const RELEASE_LUA = 'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end';
+
   return {
     async increment(key: string, windowMs: number): Promise<{ count: number; resetAt: number }> {
       const fullKey = `${prefix}rl:${key}`;
@@ -135,16 +138,47 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
 
     async acquire(key: string, ttlMs: number = 30_000): Promise<boolean> {
       const lockKey = `${prefix}idem:lock:${key}`;
+      const token = crypto.randomUUID();
       if (useSend) {
-        const res = await client.send('SET', [lockKey, '1', 'PX', String(ttlMs), 'NX']);
-        return res === 'OK' || res === true;
+        const res = await client.send('SET', [lockKey, token, 'PX', String(ttlMs), 'NX']);
+        if (res === 'OK' || res === true) {
+          lockTokens.set(key, token);
+          return true;
+        }
+        return false;
       }
-      const res = await client.set(lockKey, '1', 'PX', ttlMs, 'NX');
-      return res === 'OK' || res === true || res === 1;
+      const res = await client.set(lockKey, token, 'PX', ttlMs, 'NX');
+      if (res === 'OK' || res === true || res === 1) {
+        lockTokens.set(key, token);
+        return true;
+      }
+      return false;
     },
 
     async release(key: string): Promise<void> {
-      await cmdDel(`${prefix}idem:lock:${key}`);
+      const lockKey = `${prefix}idem:lock:${key}`;
+      const token = lockTokens.get(key);
+      lockTokens.delete(key);
+      if (!token) return;
+      if (useSend) {
+        try {
+          await client.send('EVAL', [RELEASE_LUA, '1', lockKey, token]);
+          return;
+        } catch {
+          // Fallback if mock/client does not support EVAL
+        }
+      } else if (typeof client.eval === 'function') {
+        try {
+          await client.eval(RELEASE_LUA, 1, lockKey, token);
+          return;
+        } catch {
+          // Fallback if mock/client does not support eval
+        }
+      }
+      const current = await cmdGet(lockKey);
+      if (current === token) {
+        await cmdDel(lockKey);
+      }
     },
 
     async revoke(tokenOrJti: string, ttlMs: number): Promise<void> {

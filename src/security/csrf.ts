@@ -19,17 +19,18 @@ const DEFAULT_IGNORE = new Set(['GET', 'HEAD', 'OPTIONS']);
 const resolveRequestOrigin = (ctx: Context): string => {
   try {
     const parsed = new URL(ctx.req.url);
+    const host = ctx.req.headers.get('host')?.trim();
     if (ctx._trustProxy) {
       const fwdHost = ctx.req.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
       const fwdProto = ctx.req.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
-      if (fwdHost) {
+      const effectiveHost = fwdHost || host;
+      if (effectiveHost) {
         const proto = fwdProto ? `${fwdProto.replace(/:$/, '')}:` : parsed.protocol;
-        return `${proto}//${fwdHost}`;
+        return new URL(`${proto}//${effectiveHost}`).origin;
       }
     }
-    const host = ctx.req.headers.get('host')?.trim();
     if (host) {
-      return `${parsed.protocol}//${host}`;
+      return new URL(`${parsed.protocol}//${host}`).origin;
     }
     return parsed.origin;
   } catch {

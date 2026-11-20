@@ -18,7 +18,7 @@ export class RadixNode {
         break;
       } else if (part.startsWith(':')) {
         if (!node.paramNode) node.paramNode = new RadixNode();
-        node.paramName = part.slice(1);
+        if (!node.paramName) node.paramName = part.slice(1);
         node = node.paramNode;
       } else {
         if (!node.children[part]) {
@@ -42,7 +42,7 @@ export class RadixNode {
 
     while (i < len) {
       let j = url.indexOf('/', i);
-      if (j === -1) j = len;
+      if (j === -1 || j > len) j = len;
       const segmentLen = j - i;
       let found = false;
 
@@ -76,7 +76,7 @@ export class RadixNode {
           ctx.params[node.paramName!] = url.slice(i, j);
           node = node.paramNode;
         } else if (node.wildcardNode) {
-          ctx.params['*'] = url.slice(i);
+          ctx.params['*'] = url.slice(i, len);
           return node.wildcardNode.handlers[method] || null;
         } else return null;
       }

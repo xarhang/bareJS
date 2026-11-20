@@ -124,28 +124,47 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
 
     if (enableEtag) {
       headers['ETag'] = etag;
-      const ifNoneMatch = ctx.req.headers?.get?.('if-none-match');
-      if (ifNoneMatch && ifNoneMatch === etag) {
-        return new Response(null, { status: 304, headers });
+      const ifNoneMatch = ctx.req.headers?.get?.('if-none-match')?.trim();
+      if (ifNoneMatch) {
+        const matched = ifNoneMatch === '*' || ifNoneMatch.split(',').some((t: string) => t.trim() === etag);
+        if (matched) {
+          return new Response(null, { status: 304, headers });
+        }
       }
     }
 
     const rangeHeader = ctx.req.headers?.get?.('range');
     if (rangeHeader && rangeHeader.startsWith('bytes=') && fileSize > 0) {
-      const [startStr, endStr] = rangeHeader.slice(6).split('-');
-      if (!startStr && !endStr) {
+      const rangeSpec = rangeHeader.slice(6);
+      const parts = rangeSpec.split('-');
+      if (parts.length !== 2) {
+        return new Response(null, {
+          status: 416,
+          headers: { ...headers, 'Content-Range': `bytes */${fileSize}` }
+        });
+      }
+      const [startStr, endStr] = parts as [string, string];
+      const validDigits = /^\d+$/;
+      if ((!startStr && !endStr) || (startStr && !validDigits.test(startStr)) || (endStr && !validDigits.test(endStr))) {
         return new Response(null, {
           status: 416,
           headers: { ...headers, 'Content-Range': `bytes */${fileSize}` }
         });
       }
       let start = startStr ? Number(startStr) : 0;
-      let end = endStr ? Number(endStr) : fileSize - 1;
+      let end = endStr ? Math.min(Number(endStr), fileSize - 1) : fileSize - 1;
       if (!startStr && endStr) {
-        start = Math.max(0, fileSize - Number(endStr));
+        const suffixLen = Number(endStr);
+        if (suffixLen === 0) {
+          return new Response(null, {
+            status: 416,
+            headers: { ...headers, 'Content-Range': `bytes */${fileSize}` }
+          });
+        }
+        start = Math.max(0, fileSize - suffixLen);
         end = fileSize - 1;
       }
-      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end >= fileSize || start > end) {
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= fileSize || start > end) {
         return new Response(null, {
           status: 416,
           headers: { ...headers, 'Content-Range': `bytes */${fileSize}` }

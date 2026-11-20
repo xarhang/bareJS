@@ -106,7 +106,7 @@ const buildUrl = (baseUrl: string, path: string, options?: ClientRequestOptions)
       if (v !== undefined) qs.set(k, String(v));
     }
     const str = qs.toString();
-    if (str) url += `?${str}`;
+    if (str) url += (url.includes('?') ? '&' : '?') + str;
   }
   return url;
 };
@@ -122,17 +122,36 @@ export const bareClient = <AppOrRoutes = any>(
 
   const request = async (method: string, path: string, options?: ClientRequestOptions) => {
     const url = buildUrl(baseUrl, path, options);
-    const headers: Record<string, string> = {
-      ...defaultHeaders,
-      ...(options?.headers ?? {})
-    };
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(defaultHeaders)) {
+      headers.set(k, v);
+    }
+    if (options?.headers) {
+      for (const [k, v] of Object.entries(options.headers)) {
+        headers.set(k, v);
+      }
+    }
 
     const init: RequestInit = { method, headers };
     if (options?.body !== undefined && method !== 'GET' && method !== 'HEAD') {
-      if (!headers['Content-Type'] && !headers['content-type']) {
-        headers['Content-Type'] = 'application/json';
+      const b = options.body;
+      const isRawBody =
+        typeof b === 'string' ||
+        b instanceof FormData ||
+        b instanceof URLSearchParams ||
+        b instanceof Blob ||
+        b instanceof ArrayBuffer ||
+        ArrayBuffer.isView(b) ||
+        (typeof ReadableStream !== 'undefined' && b instanceof ReadableStream);
+
+      if (isRawBody) {
+        init.body = b as RequestInit['body'];
+      } else {
+        if (!headers.has('content-type')) {
+          headers.set('Content-Type', 'application/json');
+        }
+        init.body = JSON.stringify(b);
       }
-      init.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
     }
 
     const res = await fetchImpl(url, init);

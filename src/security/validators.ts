@@ -187,6 +187,39 @@ export interface RouteSchemas {
   maxBodySize?: number;
 }
 
+const compileNativeCheck = (schema: any): ((val: any) => { ok: boolean; data?: any; error?: any }) => {
+  const props = schema?.properties || {};
+  const keys = Object.keys(props);
+  const reqSet = Array.isArray(schema?.required) ? new Set<string>(schema.required) : null;
+  const matches = (val: any, expected: string | undefined): boolean => {
+    if (expected === undefined) return true;
+    if (expected === 'array') return Array.isArray(val);
+    if (expected === 'integer') return typeof val === 'number' && Number.isInteger(val);
+    if (expected === 'object') return val !== null && typeof val === 'object' && !Array.isArray(val);
+    if (expected === 'null') return val === null;
+    return typeof val === expected;
+  };
+  return (val: any) => {
+    if (!val || typeof val !== 'object' || Array.isArray(val)) {
+      return { ok: false, error: { message: 'Invalid JSON object payload' } };
+    }
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i]!;
+      const hasKey = Object.hasOwn(val, k) && val[k] !== undefined;
+      if (!hasKey) {
+        if (!reqSet || reqSet.has(k)) {
+          return { ok: false, error: { message: `Field '${k}' must be of type ${props[k]?.type}`, path: k } };
+        }
+        continue;
+      }
+      if (!matches(val[k], props[k]?.type)) {
+        return { ok: false, error: { message: `Field '${k}' must be of type ${props[k]?.type}`, path: k } };
+      }
+    }
+    return { ok: true, data: val };
+  };
+};
+
 const compileSingleSchema = (schema: any): ((val: any) => { ok: boolean; data?: any; error?: any }) => {
   if (schema && '_def' in schema) {
     return (val: any) => {
@@ -194,12 +227,16 @@ const compileSingleSchema = (schema: any): ((val: any) => { ok: boolean; data?: 
       return r.success ? { ok: true, data: r.data } : { ok: false, error: r.error.flatten() };
     };
   }
-  const check = Compiler.TypeCompiler.Compile(schema);
-  return (val: any) => {
-    if (check.Check(val)) return { ok: true, data: val };
-    const first = check.Errors(val).First();
-    return { ok: false, error: { message: first?.message || 'Invalid input', path: first?.path } };
-  };
+  try {
+    const check = Compiler.TypeCompiler.Compile(schema);
+    return (val: any) => {
+      if (check.Check(val)) return { ok: true, data: val };
+      const first = check.Errors(val).First();
+      return { ok: false, error: { message: first?.message || 'Invalid input', path: first?.path } };
+    };
+  } catch {
+    return compileNativeCheck(schema);
+  }
 };
 
 const buildProjectorStatements = (schema: any, srcVar: string, dstVar: string, depth = 0): string | null => {
@@ -212,9 +249,32 @@ const buildProjectorStatements = (schema: any, srcVar: string, dstVar: string, d
     const keyLit = JSON.stringify(k);
     const valVar = `v_${depth}_${idx++}`;
     const nestedDst = `d_${depth}_${idx}`;
-    const nestedStmts = buildProjectorStatements(subSchema, valVar, nestedDst, depth + 1);
     stmts += `const ${valVar} = ${srcVar}[${keyLit}];\n`;
-    if (nestedStmts) {
+
+    if (subSchema?.type === 'array' && subSchema?.items) {
+      const itemVar = `ai_${depth}_${idx}`;
+      const itemDst = `ao_${depth}_${idx}`;
+      const arrIdx = `j_${depth}_${idx}`;
+      const arrOut = `ar_${depth}_${idx}`;
+      const itemStmts = buildProjectorStatements(subSchema.items, itemVar, itemDst, depth + 1);
+      if (itemStmts !== null) {
+        stmts += `if (${valVar} !== undefined) {\n`;
+        stmts += `  if (Array.isArray(${valVar})) {\n`;
+        stmts += `    const ${arrOut} = new Array(${valVar}.length);\n`;
+        stmts += `    for (let ${arrIdx} = 0; ${arrIdx} < ${valVar}.length; ${arrIdx}++) {\n`;
+        stmts += `      const ${itemVar} = ${valVar}[${arrIdx}];\n`;
+        stmts += `      if (${itemVar} && typeof ${itemVar} === 'object' && !Array.isArray(${itemVar})) {\n`;
+        stmts += `        const ${itemDst} = {};\n${itemStmts}        ${arrOut}[${arrIdx}] = ${itemDst};\n`;
+        stmts += `      } else {\n        ${arrOut}[${arrIdx}] = ${itemVar};\n      }\n`;
+        stmts += `    }\n`;
+        stmts += `    ${dstVar}[${keyLit}] = ${arrOut};\n`;
+        stmts += `  } else {\n    ${dstVar}[${keyLit}] = ${valVar};\n  }\n}\n`;
+        continue;
+      }
+    }
+
+    const nestedStmts = buildProjectorStatements(subSchema, valVar, nestedDst, depth + 1);
+    if (nestedStmts !== null) {
       stmts += `if (${valVar} !== undefined) {\n`;
       stmts += `  if (${valVar} && typeof ${valVar} === 'object' && !Array.isArray(${valVar})) {\n`;
       stmts += `    const ${nestedDst} = {};\n${nestedStmts}    ${dstVar}[${keyLit}] = ${nestedDst};\n`;
@@ -230,7 +290,7 @@ const compileProjector = (schema: any): ((val: any) => any) | null => {
   if (!schema || '_def' in schema) return null; // Zod safeParse strips unknown keys natively
   if (schema.type === 'array' && schema.items) {
     const itemStmts = buildProjectorStatements(schema.items, 'item', 'outItem');
-    if (!itemStmts) return null;
+    if (itemStmts === null) return null;
     return new Function(
       `return function(arr) {
         if (!Array.isArray(arr)) return arr;
@@ -251,7 +311,7 @@ const compileProjector = (schema: any): ((val: any) => any) | null => {
     )();
   }
   const objStmts = buildProjectorStatements(schema, 'o', 'out');
-  if (!objStmts) return null;
+  if (objStmts === null) return null;
   return new Function(
     `return function(o) {
       if (!o || typeof o !== 'object' || Array.isArray(o)) return o;
@@ -372,7 +432,17 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
       }
       return errorJSON({ status: 'error', message: 'Malformed JSON payload' });
     }
-    const r = bodyCheck(body);
+    let r: { ok: boolean; data?: any; error?: any };
+    try {
+      r = bodyCheck(body);
+    } catch {
+      if (schemas.body && '_def' in schemas.body) {
+        const zr = await schemas.body.safeParseAsync(body);
+        r = zr.success ? { ok: true, data: zr.data } : { ok: false, error: zr.error.flatten() };
+      } else {
+        r = { ok: false, error: { message: 'Validation failed' } };
+      }
+    }
     if (!r.ok) return errorJSON({ status: 'error', code: 'VALIDATION_FAILED', error: r.error });
     ctx.body = bodyProjector ? bodyProjector(r.data) : r.data;
 

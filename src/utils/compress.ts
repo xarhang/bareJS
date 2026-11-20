@@ -22,34 +22,39 @@ export const compress = (options: CompressOptions = {}): Middleware => {
   const encodings: CompressionEncoding[] = options.encodings ?? ['zstd', 'br', 'gzip'];
   const hasZstd = typeof (Bun as any).zstdCompressSync === 'function';
 
-  const isAccepted = (lower: string, enc: CompressionEncoding): boolean => {
+  const negotiate = (accept: string): CompressionEncoding | null => {
+    const lower = accept.toLowerCase();
     const parts = lower.split(',');
+    const qMap = new Map<string, number>();
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i]!.trim();
       if (!part) continue;
       const semi = part.indexOf(';');
       const name = (semi === -1 ? part : part.slice(0, semi)).trim();
-      if (name !== enc) continue;
+      let qVal = 1;
       if (semi !== -1) {
         const qMatch = part.slice(semi + 1).match(/q\s*=\s*([0-9.]+)/);
         if (qMatch) {
-          const qVal = parseFloat(qMatch[1]!);
-          if (Number.isFinite(qVal) && qVal <= 0) return false;
+          const parsed = parseFloat(qMatch[1]!);
+          if (Number.isFinite(parsed)) qVal = parsed;
         }
       }
-      return true;
+      qMap.set(name, qVal);
     }
-    return false;
-  };
 
-  const negotiate = (accept: string): CompressionEncoding | null => {
-    const lower = accept.toLowerCase();
+    const wildcardQ = qMap.get('*');
+    let bestEnc: CompressionEncoding | null = null;
+    let bestQ = 0;
     for (let i = 0; i < encodings.length; i++) {
       const enc = encodings[i]!;
       if (enc === 'zstd' && !hasZstd) continue;
-      if (isAccepted(lower, enc)) return enc;
+      const q = qMap.has(enc) ? qMap.get(enc)! : (wildcardQ ?? 0);
+      if (q > bestQ) {
+        bestQ = q;
+        bestEnc = enc;
+      }
     }
-    return null;
+    return bestEnc;
   };
 
   const applyCompress = async (ctx: Context, res: any) => {
@@ -59,7 +64,7 @@ export const compress = (options: CompressOptions = {}): Middleware => {
     const chosen = negotiate(accept);
     if (!chosen) return res;
     if (!(res instanceof Response)) return res;
-    if (res.status === 204 || res.status === 304) return res;
+    if (res.status === 204 || res.status === 206 || res.status === 304) return res;
     if (res.headers.has('content-encoding')) return res;
 
     const ct = res.headers.get('content-type') || '';

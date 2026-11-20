@@ -20,17 +20,19 @@ export interface CircuitBreakerOptions {
 export const circuitBreaker = (options: CircuitBreakerOptions = {}): Middleware => {
   const failureThreshold = options.failureThreshold ?? 5;
   const resetTimeoutMs = options.resetTimeoutMs ?? 30_000;
-  const isFailure = options.isFailure ?? ((res: any, err?: any) => Boolean(err) || (res instanceof Response && res.status >= 500));
+  const isFailure = options.isFailure ?? ((res: any, err?: any) => Boolean(err) || (res instanceof Response && (res.status >= 500 || res.status === 408)));
 
   let state: CircuitState = 'CLOSED';
   let failures = 0;
   let openedAt = 0;
   let halfOpenInFlight = false;
+  let epoch = 0;
 
   const setState = (nextState: CircuitState) => {
     if (state !== nextState) {
       const prev = state;
       state = nextState;
+      epoch++;
       try {
         options.onStateChange?.(prev, nextState);
       } catch {
@@ -64,8 +66,10 @@ export const circuitBreaker = (options: CircuitBreakerOptions = {}): Middleware 
       isHalfOpenProbe = true;
     }
 
+    const entryEpoch = epoch;
     try {
       const res = await exec();
+      if (entryEpoch !== epoch) return res;
       if (isFailure(res)) {
         failures++;
         if (isHalfOpenProbe || failures >= failureThreshold) {
@@ -78,10 +82,12 @@ export const circuitBreaker = (options: CircuitBreakerOptions = {}): Middleware 
       }
       return res;
     } catch (err) {
-      failures++;
-      if (isHalfOpenProbe || failures >= failureThreshold) {
-        openedAt = Date.now();
-        setState('OPEN');
+      if (entryEpoch === epoch && isFailure(undefined, err)) {
+        failures++;
+        if (isHalfOpenProbe || failures >= failureThreshold) {
+          openedAt = Date.now();
+          setState('OPEN');
+        }
       }
       throw err;
     } finally {

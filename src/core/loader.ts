@@ -11,7 +11,8 @@ export async function bootstrapConfig() {
   try {
     const userModule = await import(configPath);
     return initConfig(userModule.default);
-  } catch {
+  } catch (err: any) {
+    console.warn(`[BareJS] Failed to load bare.config.ts:`, err?.message || err);
     return initConfig();
   }
 }

@@ -294,6 +294,17 @@ export class BareJS<
   };
 
   private _hasDerive = false;
+  private static readonly DERIVE_RESERVED = new Set([
+    '__proto__', 'constructor', 'prototype',
+    'req', 'params', 'store', 'body', 'user',
+    'query', 'cookies', 'requestId', 'ip',
+    'status', 'json', 'html', 'text', 'redirect', 'sse', 'upload', 'reset',
+    'set', 'get', 'setHeader', 'setCookie', 'getSignedCookie', 'deleteCookie',
+    'jsonBody', 'send', 'getQuery',
+    '_status', '_headers', '_query', '_cookies', '_setCookies',
+    '_requestId', '_peerIp', '_trustProxy', '_detached',
+    '_derivedKeys', '_idempotencyKey', '_idemInFlight'
+  ]);
   public derive<T extends Record<string, any>>(fn: (ctx: Context & Derived) => Promise<T> | T): BareJS<Derived & T, Routes> {
     this._hasDerive = true;
     this.use(async (ctx: any, next: any) => {
@@ -303,7 +314,9 @@ export class BareJS<
         if (!ctx._derivedKeys) ctx._derivedKeys = [];
         for (let i = 0; i < keys.length; i++) {
           const k = keys[i]!;
-          if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') {
+          if (k === 'user') {
+            ctx.set('user', (derived as any)[k]);
+          } else if (!BareJS.DERIVE_RESERVED.has(k)) {
             ctx[k] = (derived as any)[k];
             ctx._derivedKeys.push(k);
           }
@@ -339,6 +352,37 @@ export class BareJS<
       return res;
     };
 
+    const cbIdx = pipeline.findIndex((fn) => fn?.__circuitBreaker);
+    if (cbIdx !== -1) {
+      const cbMw = pipeline[cbIdx]!;
+      const runWithBreaker = cbMw.__circuitBreaker;
+      const prePipeline = pipeline.slice(0, cbIdx);
+      const postPipeline = pipeline.slice(cbIdx + 1);
+      const postCompiled = this.compileHandler(postPipeline, isLog);
+      const noopPre = () => {};
+      return async (ctx: Context, doLog?: any) => {
+        for (let i = 0; i < prePipeline.length; i++) {
+          let preRes = prePipeline[i](ctx, noopPre);
+          if (preRes && typeof preRes.then === 'function') preRes = await preRes;
+          if (preRes instanceof Response) {
+            applyCtxHeadersToRes(preRes, ctx);
+            if (isLog && doLog) doLog(preRes.status);
+            return preRes;
+          }
+        }
+        let innerRan = false;
+        const out = await runWithBreaker(() => {
+          innerRan = true;
+          return postCompiled(ctx, doLog);
+        });
+        if (!innerRan && out instanceof Response) {
+          applyCtxHeadersToRes(out, ctx);
+          if (isLog && doLog) doLog(out.status);
+        }
+        return out;
+      };
+    }
+
     const timeoutMw = pipeline.find((fn) => fn?.__timeout);
     if (timeoutMw) {
       const { ms, status, message } = timeoutMw.__timeout;
@@ -358,6 +402,7 @@ export class BareJS<
                 (ctx as any)._idemInFlight = undefined;
               }
               if (typeof res.catch === 'function') res.catch(() => {});
+              if (isLog && doLog) doLog(status);
               resolve(applyCtxHeadersToRes(Response.json({ status: 'error', code: 'REQUEST_TIMEOUT', message }, { status }), ctx));
             }, ms);
           });
@@ -366,14 +411,6 @@ export class BareJS<
           if (timer !== undefined) clearTimeout(timer);
         }
       };
-    }
-
-    const cbMw = pipeline.find((fn) => fn?.__circuitBreaker);
-    if (cbMw) {
-      const runWithBreaker = cbMw.__circuitBreaker;
-      const innerPipeline = pipeline.filter((fn) => !fn?.__circuitBreaker);
-      const innerCompiled = this.compileHandler(innerPipeline, isLog);
-      return (ctx: Context, doLog?: any) => runWithBreaker(() => innerCompiled(ctx, doLog));
     }
 
     const compMw = pipeline.find((fn) => fn?.__compress);
@@ -398,30 +435,28 @@ export class BareJS<
     const json200 = { status: 200, headers: { "content-type": "application/json" } };
     const text200 = { status: 200, headers: { "content-type": "text/plain" } };
 
-    const logResCode = isLog ? 'doLog(res.status);' : '';
-    const logStatusCode = isLog ? 'doLog(finalStatus);' : '';
+    const logResCode = isLog ? 'if (!ctx._detached) doLog(res.status);' : '';
+    const logStatusCode = isLog ? 'if (!ctx._detached) doLog(finalStatus);' : '';
 
-    // Inline Finalizer
-    const finalizeCode = `
-      ${rFilter ? 'res = rFilter(res);' : ''}
-      if (res instanceof Response) {
-        ${idemCommit ? 'idemCommit(ctx, res, res.status);' : ''}
-        if (ctx._headers) {
-          for (const k in ctx._headers) {
-            if (!res.headers.has(k)) res.headers.set(k, ctx._headers[k]);
+    const buildResFinalize = `
+      if (ctx._headers) {
+        for (const k in ctx._headers) {
+          if (!res.headers.has(k)) {
+            try { res.headers.set(k, ctx._headers[k]); } catch {}
           }
         }
-        if (ctx._setCookies) {
-          for (let i = 0; i < ctx._setCookies.length; i++) res.headers.append('Set-Cookie', ctx._setCookies[i]);
-        }
-        ${logResCode}
-        return res;
       }
-      
-      const finalStatus = ctx._status || 200;
-      ${idemCommit ? 'idemCommit(ctx, res, finalStatus);' : ''}
-      ${logStatusCode}
+      if (ctx._setCookies) {
+        for (let i = 0; i < ctx._setCookies.length; i++) {
+          try { res.headers.append('Set-Cookie', ctx._setCookies[i]); } catch {}
+        }
+      }
+      ${logResCode}
+      return res;
+    `;
 
+    const buildNonResFinalize = `
+      ${logStatusCode}
       let outRes;
       if (typeof res === 'string') {
         if (finalStatus === 200 && !ctx._headers) {
@@ -447,21 +482,39 @@ export class BareJS<
       }
 
       if (ctx._setCookies) {
-        for (let i = 0; i < ctx._setCookies.length; i++) outRes.headers.append('Set-Cookie', ctx._setCookies[i]);
+        for (let i = 0; i < ctx._setCookies.length; i++) {
+          try { outRes.headers.append('Set-Cookie', ctx._setCookies[i]); } catch {}
+        }
       }
       return outRes;
     `;
 
+    // Inline Finalizer
+    const finalizeCode = `
+      ${rFilter ? 'res = rFilter(res);' : ''}
+      if (res instanceof Response) {
+        ${idemCommit ? 'const ic = idemCommit(ctx, res, res.status); if (ic && ic.then) return ic.then(() => { ' + buildResFinalize + ' });' : ''}
+        ${buildResFinalize}
+      }
+      
+      const finalStatus = ctx._status || 200;
+      ${idemCommit ? 'const ic = idemCommit(ctx, res, finalStatus); if (ic && ic.then) return ic.then(() => { ' + buildNonResFinalize + ' });' : ''}
+      ${buildNonResFinalize}
+    `;
+
     const argSig = isLog ? 'ctx, doLog' : 'ctx';
+    const noop = () => { };
 
     const extraNames = [
       'applyShortCircuit',
+      'noop',
       ...(rFilter ? ['rFilter'] : []),
       ...(idemCommit ? ['idemCommit'] : []),
       ...(idemRelease ? ['idemRelease'] : [])
     ];
     const extraVals = [
       applyCtxHeadersToRes,
+      noop,
       ...(rFilter ? [rFilter] : []),
       ...(idemCommit ? [idemCommit] : []),
       ...(idemRelease ? [idemRelease] : [])
@@ -494,14 +547,14 @@ export class BareJS<
       if (fn0.constructor.name === 'AsyncFunction') {
         return wrapIdem(
           new Function('fn0', 'json200', 'text200', ...extraNames, `let lastHdrs = null, lastInit200 = null; return async function(${argSig}) {
-            const res = await fn0(ctx);
+            const res = await fn0(ctx, noop);
             ${finalizeCode}
           }`)(fn0, json200, text200, ...extraVals)
         );
       }
       return wrapIdem(
         new Function('fn0', 'json200', 'text200', ...extraNames, `let lastHdrs = null, lastInit200 = null; return function(${argSig}) {
-          const res = fn0(ctx);
+          const res = fn0(ctx, noop);
           if (res && res.then) return res.then(v => { const res = v; ${finalizeCode} });
           ${finalizeCode}
         }`)(fn0, json200, text200, ...extraVals)
@@ -514,8 +567,6 @@ export class BareJS<
 
     // Middleware Hoisting: Pass functions as arguments to avoid array lookup
     const fnNames = pipeline.map((_, i) => `fn${i}`);
-
-    const noop = () => { };
     let continueAsyncDef = '';
 
     if (isAsync) {
@@ -527,7 +578,7 @@ export class BareJS<
         code += `}\n`;
       }
       code += `
-        let res = fn${len - 1}(ctx);
+        let res = fn${len - 1}(ctx, noop);
         if (res && res.then) res = await res;
         ${finalizeCode}
       `;
@@ -544,7 +595,7 @@ export class BareJS<
               if (r instanceof Response) { applyShortCircuit(r, ctx); ${isLog ? 'doLog(r.status);' : ''} return r; }
             }
           }
-          let res = fns[fns.length - 1](ctx);
+          let res = fns[fns.length - 1](ctx, noop);
           if (res && typeof res.then === 'function') res = await res;
           ${finalizeCode}
         };
@@ -557,7 +608,7 @@ export class BareJS<
         code += `}\n`;
       }
       code += `
-        let res = fn${len - 1}(ctx);
+        let res = fn${len - 1}(ctx, noop);
         if (res && res.then) return res.then(v => { let res = v; ${finalizeCode} });
         ${finalizeCode}
       `;
@@ -568,7 +619,7 @@ export class BareJS<
       : `let lastHdrs = null, lastInit200 = null; ${continueAsyncDef} return function(${argSig})`;
 
     return wrapIdem(
-      new Function(...fnNames, 'noop', 'json200', 'text200', ...extraNames, `${fnHeader} { ${code} }`)(...pipeline, noop, json200, text200, ...extraVals)
+      new Function(...fnNames, 'json200', 'text200', ...extraNames, `${fnHeader} { ${code} }`)(...pipeline, json200, text200, ...extraVals)
     );
   }
 
@@ -683,13 +734,34 @@ export class BareJS<
     );
 
     const hasGlobalMw = this.groupMiddleware.length > 0;
-    const hOptions = hasGlobalMw ? this.compileHandler(this.groupMiddleware, isLog) : undefined;
+    const runGlobalOptions = hasGlobalMw
+      ? async (ctx: Context) => {
+          const mws = this.groupMiddleware;
+          const dispatch = async (idx: number): Promise<Response | undefined> => {
+            if (idx >= mws.length) return undefined;
+            const r = await mws[idx](ctx, () => dispatch(idx + 1));
+            if (r instanceof Response) return applyCtxHeaders(r, ctx);
+            return undefined;
+          };
+          return dispatch(0);
+        }
+      : undefined;
     const optionsFallback = hasGlobalMw
       ? `if (method === 'OPTIONS') {
-          out = hOptions${callSuffix};
-          if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { ${handleErrCode} });
-          ${releaseCode}
-          return out;
+          out = runGlobalOptions(ctx);
+          if (out && out.then) {
+            return out.then((v) => {
+              if (v instanceof Response) { ${isLog ? 'doLog(v.status);' : ''} ${releaseCode} return v; }
+              const errorBody = hNotFound();
+              const status = errorBody.status || 404;
+              const nfRes = applyCtxHeaders(Response.json(errorBody, { status }), ctx);
+              ${isLog ? 'doLog(status);' : ''}
+              ${releaseCode}
+              return nfRes;
+            }, (e) => {
+              ${handleErrCode}
+            });
+          }
         }`
       : '';
 
@@ -727,8 +799,8 @@ export class BareJS<
       : '';
 
     const trustProxyVal = this._trustProxy;
-    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyVal', ...(hasGlobalMw ? ['hOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...hNames];
-    const values = [pool, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyVal, ...(hasGlobalMw ? [hOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...hoistedHandlers];
+    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyVal', ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...hNames];
+    const values = [pool, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyVal, ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...hoistedHandlers];
 
     const logInit = isLog ? `
     const start = performance.now();
@@ -824,10 +896,10 @@ export class BareJS<
     reusePort: boolean = true,
     options: { maxRequestBodySize?: number; trustProxy?: boolean } = {}
   ) {
-    if (!this.compiled) this.compile();
     if (options.trustProxy !== undefined) {
       this.trustProxy(options.trustProxy);
     }
+    if (!this.compiled) this.compile();
     const maxRequestBodySize = options.maxRequestBodySize ?? 10 * 1024 * 1024;
 
     const finalPort = port || BARE_CONFIG.port || 3000;

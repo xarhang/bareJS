@@ -245,6 +245,9 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
 
   if (isSymmetricOnly) {
     const verifySync = (ctx: any, next: any) => {
+      if (!secret) {
+        return ctx.status(401).send("Unsupported token algorithm");
+      }
       const authHeader = ctx.req.headers.get('Authorization');
 
       if (!authHeader?.startsWith('Bearer ')) {
@@ -277,7 +280,11 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
           return ctx.status(401).send("Unsupported token algorithm");
         }
 
-        decoded = JSON.parse(fromBase64Url(payloadB64));
+        const payloadStr = fromBase64Url(payloadB64);
+        decoded = JSON.parse(payloadStr);
+        if (decoded && typeof decoded === 'object' && (payloadStr.indexOf('__proto__') !== -1 || payloadStr.indexOf('\\u') !== -1)) {
+          delete decoded.__proto__;
+        }
       } catch {
         return ctx.status(401).send("Token verification failed");
       }
@@ -315,7 +322,7 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
       const body = (await res.json()) as { keys?: any[] };
       jwksKeys = Array.isArray(body?.keys) ? body.keys : [];
       jwksFetchedAt = Date.now();
-      if (forceRefresh) jwkKeyCache.clear();
+      jwkKeyCache.clear();
       return jwksKeys;
     })().finally(() => {
       inFlightJwks = null;

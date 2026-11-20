@@ -295,7 +295,13 @@ const validateJsonSchemaNode = (
         }
       }
     }
-    if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
+    if (Array.isArray(schema.items)) {
+      const n = Math.min(val.length, schema.items.length);
+      for (let i = 0; i < n; i++) {
+        const r = validateJsonSchemaNode(val[i], schema.items[i], path ? `${path}[${i}]` : `[${i}]`, false);
+        if (!r.ok) return r;
+      }
+    } else if (schema.items && typeof schema.items === 'object') {
       for (let i = 0; i < val.length; i++) {
         const r = validateJsonSchemaNode(val[i], schema.items, path ? `${path}[${i}]` : `[${i}]`, false);
         if (!r.ok) return r;
@@ -357,6 +363,7 @@ const validateJsonSchemaNode = (
       }
     }
 
+    const matchedPatternKeys = new Set<string>();
     if (schema.patternProperties && typeof schema.patternProperties === 'object') {
       const valKeys = Object.keys(val);
       for (const [pat, sub] of Object.entries<any>(schema.patternProperties)) {
@@ -365,6 +372,7 @@ const validateJsonSchemaNode = (
         for (let i = 0; i < valKeys.length; i++) {
           const vk = valKeys[i]!;
           if (!re.test(vk)) continue;
+          matchedPatternKeys.add(vk);
           const r = validateJsonSchemaNode(val[vk], sub, path ? `${path}.${vk}` : vk, false);
           if (!r.ok) return r;
         }
@@ -385,7 +393,7 @@ const validateJsonSchemaNode = (
       const valKeys = Object.keys(val);
       for (let i = 0; i < valKeys.length; i++) {
         const vk = valKeys[i]!;
-        if (!props || !Object.hasOwn(props, vk)) {
+        if ((!props || !Object.hasOwn(props, vk)) && !matchedPatternKeys.has(vk)) {
           return {
             ok: false,
             error: {
@@ -400,7 +408,7 @@ const validateJsonSchemaNode = (
       const valKeys = Object.keys(val);
       for (let i = 0; i < valKeys.length; i++) {
         const vk = valKeys[i]!;
-        if (!props || !Object.hasOwn(props, vk)) {
+        if ((!props || !Object.hasOwn(props, vk)) && !matchedPatternKeys.has(vk)) {
           const r = validateJsonSchemaNode(val[vk], schema.additionalProperties, path ? `${path}.${vk}` : vk, false);
           if (!r.ok) return r;
         }
@@ -601,42 +609,38 @@ const projectWithSchema = (val: any, schema: any): any => {
     }
   }
 
-  if (schema.properties && typeof schema.properties === 'object') {
+  const hasProps = Boolean(schema.properties && typeof schema.properties === 'object');
+  const hasPatProps = Boolean(schema.patternProperties && typeof schema.patternProperties === 'object');
+  const hasAddProps = Boolean(schema.additionalProperties && typeof schema.additionalProperties === 'object');
+  if (hasProps || hasPatProps || hasAddProps) {
     const out: Record<string, any> = {};
-    for (const [k, sub] of Object.entries<any>(schema.properties)) {
-      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-      if (Object.hasOwn(val, k) && val[k] !== undefined) {
-        out[k] = projectWithSchema(val[k], sub);
-      }
-    }
-    return out;
-  }
-
-  if (schema.patternProperties && typeof schema.patternProperties === 'object') {
-    const patterns = Object.entries<any>(schema.patternProperties).map(([pat, sub]) => ({
-      re: new RegExp(pat),
-      sub
-    }));
-    const out: Record<string, any> = {};
-    for (const k of Object.keys(val)) {
-      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-      if (val[k] === undefined) continue;
-      for (let i = 0; i < patterns.length; i++) {
-        if (patterns[i]!.re.test(k)) {
-          out[k] = projectWithSchema(val[k], patterns[i]!.sub);
-          break;
+    const props = hasProps ? schema.properties : null;
+    if (props) {
+      for (const [k, sub] of Object.entries<any>(props)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+        if (Object.hasOwn(val, k) && val[k] !== undefined) {
+          out[k] = projectWithSchema(val[k], sub);
         }
       }
     }
-    return out;
-  }
-
-  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
-    const out: Record<string, any> = {};
-    for (const k of Object.keys(val)) {
-      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-      if (val[k] !== undefined) {
-        out[k] = projectWithSchema(val[k], schema.additionalProperties);
+    if (hasPatProps || hasAddProps) {
+      const patterns = hasPatProps
+        ? Object.entries<any>(schema.patternProperties).map(([pat, sub]) => ({ re: new RegExp(pat), sub }))
+        : [];
+      for (const k of Object.keys(val)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+        if (val[k] === undefined || (props && Object.hasOwn(props, k))) continue;
+        let matched = false;
+        for (let i = 0; i < patterns.length; i++) {
+          if (patterns[i]!.re.test(k)) {
+            out[k] = projectWithSchema(val[k], patterns[i]!.sub);
+            matched = true;
+            break;
+          }
+        }
+        if (!matched && hasAddProps) {
+          out[k] = projectWithSchema(val[k], schema.additionalProperties);
+        }
       }
     }
     return out;
@@ -761,12 +765,24 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
     let qs: any = schemas.query;
     while (qs?._def?.schema) qs = qs._def.schema;
     const qProps = qs?.properties || (qs?._def?.shape ? (typeof qs._def.shape === 'function' ? qs._def.shape() : qs._def.shape) : null);
+    const unwrapZod = (node: any): any => {
+      let cur = node;
+      while (cur?._def) {
+        const tn = cur._def.typeName;
+        if (tn === 'ZodOptional' || tn === 'ZodDefault' || tn === 'ZodNullable') cur = cur._def.innerType;
+        else if (tn === 'ZodEffects') cur = cur._def.schema;
+        else break;
+      }
+      return cur;
+    };
     if (qProps) {
-      for (const [k, ps] of Object.entries<any>(qProps)) {
+      for (const [k, rawPs] of Object.entries<any>(qProps)) {
+        const ps = unwrapZod(rawPs);
         const isArr = ps?.type === 'array' || ps?._def?.typeName === 'ZodArray';
         if (!isArr) continue;
         queryArrayKeys.push(k);
-        const it = ps.items?.type ?? ps._def?.type?._def?.typeName;
+        const inner = unwrapZod(ps.items ?? ps._def?.type);
+        const it = inner?.type ?? inner?._def?.typeName;
         if (it === 'number' || it === 'integer' || it === 'ZodNumber') queryArrayNumeric.add(k);
       }
     }

@@ -1548,3 +1548,34 @@ describe("Round 9 regressions", () => {
     expect(await post({ a: 1, b: 2 })).toBe(200);
   });
 });
+
+describe("Round 10 regressions", () => {
+  test("63. patternProperties works alongside additionalProperties:false and createResponseFilter combines properties+patternProperties+additionalProperties", async () => {
+    const { createResponseFilter } = await import("../src/index");
+    const app = new BareJS();
+    app.post("/p", native({ type: "object", properties: { id: { type: "number" } }, patternProperties: { "^x_": { type: "number" } }, additionalProperties: false }), () => "ok");
+    const post = (b: any) => app.request("/p", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.status);
+    expect(await post({ id: 1, x_1: 42 })).toBe(200);
+    expect(await post({ id: 1, other: 42 })).toBe(400);
+
+    const filter = createResponseFilter({
+      type: "object",
+      properties: { id: { type: "number" } },
+      patternProperties: { "^x_": { type: "string" } },
+      additionalProperties: { type: "boolean" }
+    });
+    expect(filter({ id: 1, x_foo: "bar", flag: true })).toEqual({ id: 1, x_foo: "bar", flag: true });
+  });
+
+  test("64. native() validates tuple items array and wrapped Zod array query schemas collect repeated query keys", async () => {
+    const { z } = await import("zod");
+    const app = new BareJS();
+    app.post("/t", native({ type: "array", items: [{ type: "number" }, { type: "string" }] }), () => "ok");
+    app.get("/qz", { query: z.object({ tags: z.array(z.string()).optional(), nums: z.array(z.number()).default([]) }) } as any, (ctx: any) => ({ q: ctx.query }));
+    expect((await app.request("/t", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify([1, "a"]) })).status).toBe(200);
+    expect((await app.request("/t", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(["bad", 123]) })).status).toBe(400);
+    const r = await app.request("/qz?tags=a&tags=b&nums=1&nums=2");
+    expect(r.status).toBe(200);
+    expect((await r.json()).q).toEqual({ tags: ["a", "b"], nums: [1, 2] });
+  });
+});

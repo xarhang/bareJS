@@ -5,6 +5,11 @@ All notable changes to **BareJS** are documented in this file.
 ## [0.1.57] - 2026-11-20
 
 ### Performance
+- **Lazy Bounded LIFO Context Pool & Shared Recompilation State** (`src/core/bare.ts`, `src/core/router.ts`):
+  - Replaced power-of-two ring-buffer pre-allocation with `normalizePoolSize(poolSize, 1024, 65_536)` and a lazy bounded LIFO stack (`0..65536`, where `new BareJS(0)` disables retention).
+  - Cleared acquired pool slots (`pool[slot] = undefined`) while requests are in-flight so the backing array never retains references to active or timed-out/detached `Context` instances.
+  - Moved the LIFO stack pointer into a shared mutable `_poolState = { top: 0 }` object captured across all JIT handler generations and added automatic recompilation invalidation (`_onRouteMutate`) when routes or middleware are registered after initial requests.
+  - Added internal diagnostic helper `_getPoolStats()` (`/** @internal */`) without exposing internal pool state on the public production API.
 - **Zero-Allocation Sync-Peek JSON Body & Validator Fast Path** (`src/core/context.ts`, `src/security/validators.ts`):
   - Added `ctx.jsonBodySyncOrAsync()` using `Bun.peek(req.text())` for in-memory/buffered requests while preserving streaming `readBodyWithLimit()` for `Transfer-Encoding: chunked` and pull-based `ReadableStream` bodies.
   - Updated `schemaValidator` (`body`) to execute synchronously without Promise allocation when the JSON body is already buffered and validated via TypeBox or Native JSON Schema (**2.17x faster** on POST JSON + Schema Validation: `8.44 µs -> 3.89 µs`, beating Elysia's `5.11 µs`).
@@ -46,7 +51,7 @@ All notable changes to **BareJS** are documented in this file.
   - Merged `Vary` headers without overwriting existing values, synthesized scoped `OPTIONS` preflight handlers using the most specific mounted `cors()`, and applied global CORS headers to `404` responses.
   - Made `compress()` SSE `Content-Type: text/event-stream` detection case-insensitive.
   - Fixed `app.listen(0)` ephemeral port selection (`??`), synchronous `bootstrapConfig()` loading via `createRequire`, `ctx.sse()` sync callback lifecycle, and `bareClient` `FormData` `Content-Type` boundary handling.
-- **Tests**: Expanded `tests/production-signoff.test.ts` to 64 end-to-end production & security sign-off tests (**401 tests / 6,129 assertions**).
+- **Tests**: Expanded `tests/production-signoff.test.ts` to 68 end-to-end production, pool boundary, & security sign-off tests (**413 tests / 6,205 assertions**).
 
 ---
 

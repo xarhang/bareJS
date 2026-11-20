@@ -833,36 +833,53 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
     return syncMw;
   }
 
-  const mw: Middleware = async (ctx: Context, next?: Next) => {
+  const isZodBody = Boolean(schemas.body && '_def' in schemas.body);
+  const finishBodyValidation = (ctx: Context, body: any, next?: Next): any => {
+    let r: { ok: boolean; data?: any; error?: any };
+    try {
+      r = bodyCheck(body);
+    } catch {
+      if (isZodBody) {
+        return schemas.body.safeParseAsync(body).then((zr: any) => {
+          if (!zr.success) return errorJSON({ status: 'error', code: 'VALIDATION_FAILED', error: zr.error.flatten() });
+          ctx.body = bodyProjector ? bodyProjector(zr.data) : zr.data;
+          return next ? next() : undefined;
+        });
+      }
+      r = { ok: false, error: { message: 'Validation failed' } };
+    }
+    if (!r.ok) return errorJSON({ status: 'error', code: 'VALIDATION_FAILED', error: r.error });
+    ctx.body = bodyProjector ? bodyProjector(r.data) : r.data;
+    return next ? next() : undefined;
+  };
+
+  const mw: Middleware = (ctx: Context, next?: Next) => {
     if (hasSyncParts) {
       const errRes = validateSyncParts(ctx);
       if (errRes) return errRes;
     }
 
-    let body: any;
+    let bodyOrPromise: any;
     try {
-      body = await ctx.jsonBody(maxBodySize);
+      bodyOrPromise = (ctx as any).jsonBodySyncOrAsync(maxBodySize);
     } catch (e: any) {
       if (e?.status === 413) {
         return errorJSON({ status: 'error', code: 'PAYLOAD_TOO_LARGE', message: 'Payload Too Large' }, 413);
       }
       return errorJSON({ status: 'error', message: 'Malformed JSON payload' });
     }
-    let r: { ok: boolean; data?: any; error?: any };
-    try {
-      r = bodyCheck(body);
-    } catch {
-      if (schemas.body && '_def' in schemas.body) {
-        const zr = await schemas.body.safeParseAsync(body);
-        r = zr.success ? { ok: true, data: zr.data } : { ok: false, error: zr.error.flatten() };
-      } else {
-        r = { ok: false, error: { message: 'Validation failed' } };
-      }
+    if (bodyOrPromise && typeof bodyOrPromise.then === 'function') {
+      return bodyOrPromise.then(
+        (body: any) => finishBodyValidation(ctx, body, next),
+        (e: any) => {
+          if (e?.status === 413) {
+            return errorJSON({ status: 'error', code: 'PAYLOAD_TOO_LARGE', message: 'Payload Too Large' }, 413);
+          }
+          return errorJSON({ status: 'error', message: 'Malformed JSON payload' });
+        }
+      );
     }
-    if (!r.ok) return errorJSON({ status: 'error', code: 'VALIDATION_FAILED', error: r.error });
-    ctx.body = bodyProjector ? bodyProjector(r.data) : r.data;
-
-    return next ? next() : undefined;
+    return finishBodyValidation(ctx, bodyOrPromise, next);
   };
   (mw as any).__schema = schemas.body;
   (mw as any).__routeSchemas = schemas;

@@ -799,8 +799,14 @@ export class BareJS<
       return errRes;`;
 
     const callSuffix = isLog ? '(ctx, doLog)' : '(ctx)';
+    const useCompactEmit = this.routes.length > 16;
     const routerCode = tree.jitCompile(register, 0, 'url', 's', [], (hName: string) =>
-      `out = ${hName}${callSuffix};
+      useCompactEmit
+        ? `out = ${hName}${callSuffix};
+       if (out && out.then) return out.then((v) => { _rel(ctx); return v; }, (e) => _onErr(e, ctx${isLog ? ', doLog' : ''}));
+       _rel(ctx);
+       return out;`
+        : `out = ${hName}${callSuffix};
        if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { ${handleErrCode} });
        ${releaseCode}
        return out;`
@@ -920,8 +926,13 @@ export class BareJS<
       );
     };` : '';
 
+    const compactHelpers = useCompactEmit
+      ? `
+  const _rel = (ctx) => { ${releaseCode} };
+  const _onErr = (e, ctx${isLog ? ', doLog' : ''}) => { ${handleErrCode} };`
+      : '';
     const fnBody = `
-  let poolTop = maxPool;
+  let poolTop = maxPool;${compactHelpers}
   return function(req, peerIp) {
     const url = req.url;
     let s = url.indexOf('/', 8);

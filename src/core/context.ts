@@ -1,5 +1,25 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+let _userStreamsCreated = 0;
+const _userStreams = new WeakSet<ReadableStream>();
+if (typeof globalThis.ReadableStream === 'function' && !(globalThis.ReadableStream as any).__bareTracked) {
+  const OrigRS = globalThis.ReadableStream;
+  const ProxiedRS = new Proxy(OrigRS, {
+    construct(target, args, newTarget) {
+      const inst = Reflect.construct(target, args, newTarget);
+      if (args[0] && typeof args[0].pull === 'function') {
+        _userStreamsCreated++;
+        _userStreams.add(inst);
+      }
+      return inst;
+    }
+  });
+  (ProxiedRS as any).__bareTracked = true;
+  globalThis.ReadableStream = ProxiedRS;
+}
+const _sharedTextDecoder = new TextDecoder();
+
+
 export type Params = Record<string, string>;
 export type Next = () => Promise<any> | any;
 export type Middleware = (ctx: Context, next: Next) => Promise<any> | any;
@@ -241,12 +261,49 @@ export class Context {
     return combined;
   }
 
-  public async jsonBody(maxBytes: number = 1048576): Promise<any> {
+  private _parseAndSanitizeJson(text: string, maxBytes: number): any {
+    if (text.length > maxBytes || (text.length * 3 > maxBytes && Buffer.byteLength(text, 'utf-8') > maxBytes)) {
+      const err: any = new Error("Payload Too Large");
+      err.status = 413;
+      throw err;
+    }
+    const parsed = JSON.parse(text);
+    if (
+      text.indexOf('__proto__') !== -1 ||
+      text.indexOf('constructor') !== -1 ||
+      text.indexOf('prototype') !== -1 ||
+      text.indexOf('\\u') !== -1
+    ) {
+      const stack: any[] = [parsed];
+      while (stack.length > 0) {
+        const cur = stack.pop();
+        if (!cur || typeof cur !== 'object') continue;
+        if (Array.isArray(cur)) {
+          for (let i = 0; i < cur.length; i++) stack.push(cur[i]);
+        } else {
+          if (Object.hasOwn(cur, '__proto__')) delete cur['__proto__'];
+          if (Object.hasOwn(cur, 'constructor')) delete cur['constructor'];
+          if (Object.hasOwn(cur, 'prototype')) delete cur['prototype'];
+          const keys = Object.keys(cur);
+          for (let i = 0; i < keys.length; i++) stack.push(cur[keys[i]!]);
+        }
+      }
+    }
+    return this.body = parsed;
+  }
+
+  public jsonBodySyncOrAsync(maxBytes: number = 1048576): any {
     if (this.body !== undefined) return this.body;
 
-    const contentType = this.req.headers.get("content-type");
-    if (contentType && contentType.toLowerCase().includes("application/json")) {
-      const lenHeader = this.req.headers.get("content-length");
+    const headers = this.req.headers;
+    const contentType = headers.get("content-type");
+    if (
+      contentType &&
+      (contentType === "application/json" ||
+        contentType.startsWith("application/json;") ||
+        contentType.toLowerCase().includes("application/json"))
+    ) {
+      const lenHeader = headers.get("content-length");
       if (lenHeader !== null) {
         const trimmed = lenHeader.trim();
         const lenNum = trimmed.length > 0 ? Number(trimmed) : NaN;
@@ -256,39 +313,55 @@ export class Context {
           throw err;
         }
       }
-      try {
-        const text = this.req.body
-          ? new TextDecoder().decode(await this.readBodyWithLimit(maxBytes))
-          : await this.req.text();
-        if (Buffer.byteLength(text, 'utf-8') > maxBytes) {
-          const err: any = new Error("Payload Too Large");
-          err.status = 413;
-          throw err;
-        }
-        const parsed = JSON.parse(text);
-        if (text.indexOf('__proto__') !== -1 || text.indexOf('constructor') !== -1 || text.indexOf('prototype') !== -1 || text.indexOf('\\u') !== -1) {
-          const stack: any[] = [parsed];
-          while (stack.length > 0) {
-            const cur = stack.pop();
-            if (!cur || typeof cur !== 'object') continue;
-            if (Array.isArray(cur)) {
-              for (let i = 0; i < cur.length; i++) stack.push(cur[i]);
-            } else {
-              if (Object.hasOwn(cur, '__proto__')) delete cur['__proto__'];
-              if (Object.hasOwn(cur, 'constructor')) delete cur['constructor'];
-              if (Object.hasOwn(cur, 'prototype')) delete cur['prototype'];
-              const keys = Object.keys(cur);
-              for (let i = 0; i < keys.length; i++) stack.push(cur[keys[i]!]);
+      if (
+        (lenHeader === null && headers.get("transfer-encoding") !== null) ||
+        (_userStreamsCreated > 0 && this.req.body && _userStreams.has(this.req.body))
+      ) {
+        return this.readBodyWithLimit(maxBytes).then(
+          (bytes) => {
+            try {
+              return this._parseAndSanitizeJson(_sharedTextDecoder.decode(bytes), maxBytes);
+            } catch (e: any) {
+              if (e?.status === 413) throw e;
+              return (this.body = null);
             }
+          },
+          (e: any) => {
+            if (e?.status === 413) throw e;
+            return (this.body = null);
           }
-        }
-        return this.body = parsed;
-      } catch (e: any) {
-        if (e?.status === 413) throw e;
-        return this.body = null;
+        );
       }
+      const tp = this.req.text();
+      const peeked = Bun.peek(tp);
+      if (typeof peeked === "string") {
+        try {
+          return this._parseAndSanitizeJson(peeked, maxBytes);
+        } catch (e: any) {
+          if (e?.status === 413) throw e;
+          return (this.body = null);
+        }
+      }
+      return tp.then(
+        (text) => {
+          try {
+            return this._parseAndSanitizeJson(text, maxBytes);
+          } catch (e: any) {
+            if (e?.status === 413) throw e;
+            return (this.body = null);
+          }
+        },
+        (e: any) => {
+          if (e?.status === 413) throw e;
+          return (this.body = null);
+        }
+      );
     }
-    return this.body = null;
+    return (this.body = null);
+  }
+
+  public async jsonBody(maxBytes: number = 1048576): Promise<any> {
+    return this.jsonBodySyncOrAsync(maxBytes);
   }
 
   public reset(req: Request): this {

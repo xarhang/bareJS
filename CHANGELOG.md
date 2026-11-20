@@ -4,6 +4,13 @@ All notable changes to **BareJS** are documented in this file.
 
 ## [0.1.56] - 2026-11-19
 
+### Performance
+- **Zero-Allocation Sync-Peek JSON Body & Validator Fast Path** (`src/core/context.ts`, `src/security/validators.ts`):
+  - Added `ctx.jsonBodySyncOrAsync()` using `Bun.peek(req.text())` for in-memory/buffered requests while preserving streaming `readBodyWithLimit()` for `Transfer-Encoding: chunked` and pull-based `ReadableStream` bodies.
+  - Updated `schemaValidator` (`body`) to execute synchronously without Promise allocation when the JSON body is already buffered and validated via TypeBox or Native JSON Schema (**2.17x faster** on POST JSON + Schema Validation: `8.44 µs -> 3.89 µs`, beating Elysia's `5.11 µs`).
+- **Radix JIT Subtree Coalescing & Compact Release Helpers** (`src/core/radix.ts`, `src/core/bare.ts`):
+  - Coalesced structurally identical static child subtrees in `RadixNode.jitCompile()` (when `staticKeys.length > 8`) and hoisted shared `_rel`/`_onErr` helpers (when `routes.length > 16`), shrinking 100-route compiled codegen by **96.3%** (`319 KB -> 11.8 KB`) and accelerating 100-route dynamic dispatch by **1.86x** (`3.50 µs -> 1.88 µs`, beating Elysia's `2.52 µs`).
+
 ### Security
 - **Caller-Scoped Idempotency & Header Replay** (`src/security/idempotency.ts`, `src/security/store.ts`):
   - Scoped idempotency cache & lock keys by caller identity (SHA-256 of `Authorization` and `Cookie` headers by default, or custom `keyScope(ctx)`) so one user can never replay another user's cached response.

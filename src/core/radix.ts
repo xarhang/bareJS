@@ -190,24 +190,81 @@ export class RadixNode {
             list.push(key);
           }
 
-          code += `${innerIndent}switch(len${level}) {\n`;
-          for (const [kLen, keysForLen] of byLen) {
-            code += `${innerIndent}  case ${kLen}:\n`;
-            for (const key of keysForLen) {
-              if (kLen === 1) {
-                code += `${innerIndent}    if (${pathPrefix}.charCodeAt(${idxPrefix}) === ${key.charCodeAt(0)}) {\n`;
-              } else {
-                code += `${innerIndent}    if (${pathPrefix}.startsWith(${JSON.stringify(key)}, ${idxPrefix})) {\n`;
-              }
-
+          if (this.staticKeys.length > 8) {
+            const byBody = new Map<string, string[]>();
+            for (const key of this.staticKeys) {
               const child = this.children[key]!;
-              code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramVars, emitCall);
-
-              code += `${innerIndent}    }\n`;
+              let hIdx = 0;
+              const tmpl = child.jitCompile(() => `__H${hIdx++}__`, level + 1, pathPrefix, `slash${level} + 1`, paramVars, emitCall);
+              let list = byBody.get(tmpl);
+              if (!list) {
+                list = [];
+                byBody.set(tmpl, list);
+              }
+              list.push(key);
             }
-            code += `${innerIndent}    break;\n`;
+            code += `${innerIndent}const seg${level} = ${pathPrefix}.slice(${idxPrefix}, slash${level});\n`;
+            code += `${innerIndent}switch(seg${level}) {\n`;
+            for (const [tmpl, groupKeys] of byBody) {
+              if (groupKeys.length === 1) {
+                const key = groupKeys[0]!;
+                const child = this.children[key]!;
+                code += `${innerIndent}  case ${JSON.stringify(key)}:\n`;
+                code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramVars, emitCall);
+                code += `${innerIndent}    break;\n`;
+              } else {
+                const fnLists: string[][] = [];
+                for (const key of groupKeys) {
+                  const child = this.children[key]!;
+                  const fns: string[] = [];
+                  child.jitCompile((h) => { const n = register(h); fns.push(n); return n; }, level + 1, pathPrefix, `slash${level} + 1`, paramVars, emitCall);
+                  fnLists.push(fns);
+                }
+                const slotCount = fnLists[0]!.length;
+                const slotVars = Array.from({ length: slotCount }, (_, idx) => `_rh${level}_${idx}`);
+                for (let gi = 0; gi < groupKeys.length; gi++) {
+                  code += `${innerIndent}  case ${JSON.stringify(groupKeys[gi]!)}:\n`;
+                }
+                code += `${innerIndent}  {\n`;
+                if (slotCount > 0) {
+                  code += `${innerIndent}    let ${slotVars.join(', ')};\n`;
+                  code += `${innerIndent}    switch(seg${level}) {\n`;
+                  for (let gi = 0; gi < groupKeys.length; gi++) {
+                    const assigns = slotVars.map((sv, si) => `${sv} = ${fnLists[gi]![si]}`).join('; ');
+                    code += `${innerIndent}      case ${JSON.stringify(groupKeys[gi]!)}: ${assigns}; break;\n`;
+                  }
+                  code += `${innerIndent}    }\n`;
+                }
+                let bodyCode = tmpl;
+                for (let si = 0; si < slotCount; si++) {
+                  bodyCode = bodyCode.replaceAll(`__H${si}__`, slotVars[si]!);
+                }
+                code += bodyCode;
+                code += `${innerIndent}    break;\n`;
+                code += `${innerIndent}  }\n`;
+              }
+            }
+            code += `${innerIndent}}\n`;
+          } else {
+            code += `${innerIndent}switch(len${level}) {\n`;
+            for (const [kLen, keysForLen] of byLen) {
+              code += `${innerIndent}  case ${kLen}:\n`;
+              for (const key of keysForLen) {
+                if (kLen === 1) {
+                  code += `${innerIndent}    if (${pathPrefix}.charCodeAt(${idxPrefix}) === ${key.charCodeAt(0)}) {\n`;
+                } else {
+                  code += `${innerIndent}    if (${pathPrefix}.startsWith(${JSON.stringify(key)}, ${idxPrefix})) {\n`;
+                }
+
+                const child = this.children[key]!;
+                code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramVars, emitCall);
+
+                code += `${innerIndent}    }\n`;
+              }
+              code += `${innerIndent}    break;\n`;
+            }
+            code += `${innerIndent}}\n`;
           }
-          code += `${innerIndent}}\n`;
         }
       }
 

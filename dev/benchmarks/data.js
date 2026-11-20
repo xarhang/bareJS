@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795160903087,
+  "lastUpdate": 1795164588646,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3547,6 +3547,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5395.809050660719,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "ddcc7ab27155d1738c1d9be735c52f0a791bcd62",
+          "message": "refactor(core): use shared poolState across recompiles and remove public poolTop",
+          "timestamp": "2026-11-20T08:48:54Z",
+          "tree_id": "bc30e4b40e741ac999825aaa2dde9f31be8f1f7c",
+          "url": "https://github.com/xarhang/bareJS/commit/ddcc7ab27155d1738c1d9be735c52f0a791bcd62"
+        },
+        "date": 1795164588125,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1269.1913435281267,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1962.656756062034,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 6406.6714716847155,
             "unit": "undefined"
           }
         ]

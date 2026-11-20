@@ -340,8 +340,16 @@ export class BareJS<
       if (ctx._headers) {
         for (const k in ctx._headers) {
           const val = ctx._headers[k];
-          if (val !== undefined && !res.headers.has(k)) {
+          if (val === undefined) continue;
+          if (!res.headers.has(k)) {
             try { res.headers.set(k, val); } catch { /* ignore invalid header */ }
+          } else if (k.toLowerCase() === 'vary') {
+            const existing = res.headers.get('vary') || '';
+            const parts = existing.toLowerCase().split(',').map((v) => v.trim());
+            const toAdd = val.split(',').map((v) => v.trim()).filter((v) => v && !parts.includes(v.toLowerCase()));
+            if (toAdd.length > 0) {
+              try { res.headers.set('vary', existing ? `${existing}, ${toAdd.join(', ')}` : toAdd.join(', ')); } catch {}
+            }
           }
         }
       }
@@ -459,8 +467,17 @@ export class BareJS<
     const buildResFinalize = `
       if (ctx._headers) {
         for (const k in ctx._headers) {
+          const val = ctx._headers[k];
+          if (val === undefined) continue;
           if (!res.headers.has(k)) {
-            try { res.headers.set(k, ctx._headers[k]); } catch {}
+            try { res.headers.set(k, val); } catch {}
+          } else if (k.toLowerCase() === 'vary') {
+            const existing = res.headers.get('vary') || '';
+            const parts = existing.toLowerCase().split(',').map((v) => v.trim());
+            const toAdd = val.split(',').map((v) => v.trim()).filter((v) => v && !parts.includes(v.toLowerCase()));
+            if (toAdd.length > 0) {
+              try { res.headers.set('vary', existing ? \`\${existing}, \${toAdd.join(', ')}\` : toAdd.join(', ')); } catch {}
+            }
           }
         }
       }
@@ -720,7 +737,8 @@ export class BareJS<
     const EMPTY_PARAMS = Object.freeze({});
     const hNames = hoistedHandlers.map((_, i) => `h${i}`);
 
-    const hasIdem = this.routes.some((r: any) => r.handlers.some((h: any) => h?.__idempotencyCommit));
+    const hasIdem = this.routes.some((r: any) => r.handlers.some((h: any) => h?.__idempotencyCommit)) ||
+      this.groupMiddleware.some((m: any) => m?.__idempotencyCommit);
     const hasDerive = this._hasDerive || this.routes.some((r: any) => r.handlers.some((h: any) => h?.__isDerive));
     const deriveCleanup = hasDerive
       ? `if (ctx._derivedKeys) { for (let i = 0; i < ctx._derivedKeys.length; i++) delete ctx[ctx._derivedKeys[i]]; ctx._derivedKeys = undefined; }`
@@ -770,11 +788,16 @@ export class BareJS<
           const dispatch = async (idx: number): Promise<Response | undefined> => {
             if (idx >= mws.length) return undefined;
             let nextCalled = false;
+            let downstreamRes: Response | undefined;
             const r = await mws[idx](ctx, () => {
               nextCalled = true;
-              return dispatch(idx + 1);
+              return dispatch(idx + 1).then((res) => {
+                downstreamRes = res;
+                return res;
+              });
             });
             if (r instanceof Response) return applyCtxHeaders(r, ctx);
+            if (downstreamRes instanceof Response) return downstreamRes;
             if (!nextCalled) return dispatch(idx + 1);
             return undefined;
           };
@@ -807,11 +830,16 @@ export class BareJS<
           const dispatch = async (idx: number): Promise<Response | undefined> => {
             if (idx >= mws.length) return undefined;
             let nextCalled = false;
+            let downstreamRes: Response | undefined;
             const r = await mws[idx](ctx, () => {
               nextCalled = true;
-              return dispatch(idx + 1);
+              return dispatch(idx + 1).then((res) => {
+                downstreamRes = res;
+                return res;
+              });
             });
             if (r instanceof Response) return applyCtxHeaders(r, ctx);
+            if (downstreamRes instanceof Response) return downstreamRes;
             if (!nextCalled) return dispatch(idx + 1);
             return undefined;
           };

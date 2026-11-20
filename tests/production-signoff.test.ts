@@ -749,4 +749,206 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     );
     expect(filter2d({ matrix: [[{ id: 1, secret: "leaked" }]] })).toEqual({ matrix: [[{ id: 1 }]] });
   });
+
+  test("33. RadixRouter uses null-prototype children/handlers so constructor and toString segments are safe", async () => {
+    const app = new BareJS();
+    app.get("/api/constructor", () => ({ ok: "ctor" }));
+    app.get("/toString/test", () => ({ ok: "toStr" }));
+
+    const r1 = await app.request("/api/constructor");
+    expect(r1.status).toBe(200);
+    expect(await r1.json()).toEqual({ ok: "ctor" });
+
+    const r2 = await app.request("/toString/test");
+    expect(r2.status).toBe(200);
+    expect(await r2.json()).toEqual({ ok: "toStr" });
+
+    // Unknown route named toString must return 404, not Object.prototype.toString
+    const r3 = await app.request("/toString");
+    expect(r3.status).toBe(404);
+  });
+
+  test("34. runGlobalOptions and runStatic preserve downstream Response when middleware awaits next() without return", async () => {
+    const { staticFile } = await import("../src/index");
+    const app = new BareJS();
+    app.use(async (_ctx, next) => {
+      await next();
+    });
+    app.use(cors({ origin: "*" }));
+    app.get("/hello", () => ({ ok: true }));
+
+    const optRes = await app.request("/hello", { method: "OPTIONS" });
+    expect(optRes.status).toBe(204);
+    expect(optRes.headers.get("access-control-allow-origin")).toBe("*");
+
+    const tmpDir = "/tmp/barejs-r4-static-" + Date.now();
+    await Bun.write(`${tmpDir}/hello.txt`, "hello-static");
+    const staticApp = new BareJS();
+    staticApp.use(async (_ctx, next) => {
+      await next();
+    });
+    staticApp.use(staticFile(tmpDir));
+
+    const stRes = await staticApp.request("/hello.txt");
+    expect(stRes.status).toBe(200);
+    expect(await stRes.text()).toBe("hello-static");
+  });
+
+  test("35. idempotency releases lock on staticFile even with 0 routes, and cors merges Vary header", async () => {
+    const { staticFile, circuitBreaker, idempotency } = await import("../src/index");
+    const tmpDir = "/tmp/barejs-r4-idem-static-" + Date.now();
+    await Bun.write(`${tmpDir}/item.txt`, "v1");
+
+    const sApp = new BareJS();
+    sApp.use(idempotency());
+    sApp.use(staticFile(tmpDir));
+
+    const s1 = await sApp.request("/item.txt", { headers: { "Idempotency-Key": "static-k1" } });
+    expect(s1.status).toBe(200);
+    // Second request with same key must NOT get 409 IDEMPOTENT_IN_FLIGHT
+    const s2 = await sApp.request("/item.txt", { headers: { "Idempotency-Key": "static-k1" } });
+    expect(s2.status).toBe(200);
+
+    const vApp = new BareJS();
+    vApp.use(cors({ origin: "https://app.example.com" }));
+    vApp.use(circuitBreaker({ failureThreshold: 3, resetTimeoutMs: 1000 }));
+    vApp.get("/vary", () => new Response("ok", { headers: { Vary: "Cookie" } }));
+
+    const vRes = await vApp.request("/vary", { headers: { Origin: "https://app.example.com" } });
+    expect(vRes.status).toBe(200);
+    const varyHeader = vRes.headers.get("vary") || "";
+    expect(varyHeader.toLowerCase()).toContain("cookie");
+    expect(varyHeader.toLowerCase()).toContain("origin");
+  });
+
+  test("36. bareAuth strips nested __proto__ own keys from JWT payload", async () => {
+    const secret = "r4-nested-proto-secret-key-32-chars!";
+    const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+    const rawPayload = '{"sub":"u1","nested":{"__proto__":{"isAdmin":true},"ok":1}}';
+    const payloadB64 = Buffer.from(rawPayload).toString("base64url");
+    const { createHmac } = await import("node:crypto");
+    const sig = createHmac("sha256", secret).update(`${header}.${payloadB64}`).digest("base64url");
+    const forgedJwt = `${header}.${payloadB64}.${sig}`;
+
+    const app = new BareJS();
+    app.use(bareAuth({ secret }));
+    app.get("/me", (ctx) => ({
+      hasNestedProtoOwn: Object.hasOwn((ctx as any).user.nested, "__proto__"),
+      ok: (ctx as any).user.nested.ok
+    }));
+
+    const res = await app.request("/me", { headers: { Authorization: `Bearer ${forgedJwt}` } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ hasNestedProtoOwn: false, ok: 1 });
+  });
+
+  test("37. native() and schemaValidator() enforce additionalProperties: false", async () => {
+    const { native } = await import("../src/index");
+    const app = new BareJS();
+    app.post(
+      "/native-strict",
+      native({
+        type: "object",
+        properties: { name: { type: "string" } },
+        required: ["name"],
+        additionalProperties: false
+      }),
+      (ctx) => ({ name: ctx.body.name })
+    );
+    app.post(
+      "/schema-strict",
+      schemaValidator({
+        body: {
+          type: "object",
+          properties: { name: { type: "string" } },
+          required: ["name"],
+          additionalProperties: false
+        }
+      }),
+      (ctx) => ({ name: ctx.body.name })
+    );
+
+    const nBad = await app.request("/native-strict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "alice", role: "admin" })
+    });
+    expect(nBad.status).toBe(400);
+
+    const sBad = await app.request("/schema-strict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "alice", role: "admin" })
+    });
+    expect(sBad.status).toBe(400);
+
+    const nOk = await app.request("/native-strict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "alice" })
+    });
+    expect(nOk.status).toBe(200);
+  });
+
+  test("38. redisStore idempotency isolates per-request lock tokens on TTL expiry", async () => {
+    const { redisStore, idempotency } = await import("../src/index");
+    const kv = new Map<string, { val: string; exp: number }>();
+    const mockRedis: any = {
+      async get(k: string) {
+        const entry = kv.get(k);
+        if (!entry) return null;
+        if (Date.now() > entry.exp) { kv.delete(k); return null; }
+        return entry.val;
+      },
+      async set(k: string, v: string, ...args: any[]) {
+        let px = 60_000;
+        let nx = false;
+        for (let i = 0; i < args.length; i++) {
+          if (args[i] === "PX") px = Number(args[++i]);
+          if (args[i] === "NX") nx = true;
+        }
+        const cur = await this.get(k);
+        if (nx && cur !== null) return null;
+        kv.set(k, { val: v, exp: Date.now() + px });
+        return "OK";
+      },
+      async del(k: string) {
+        kv.delete(k);
+        return 1;
+      },
+      async eval(_lua: string, _numKeys: number, k: string, expectedToken: string) {
+        const cur = await this.get(k);
+        if (cur === expectedToken) {
+          kv.delete(k);
+          return 1;
+        }
+        return 0;
+      }
+    };
+
+    const app = new BareJS();
+    app.use(idempotency({ ttlMs: 40, store: redisStore(mockRedis) }));
+    let reqCount = 0;
+    app.post("/pay", async () => {
+      const id = ++reqCount;
+      if (id === 1) {
+        await Bun.sleep(70); // R1 exceeds 40ms lock TTL and fails (no 2xx cache write)
+        return Response.json({ id, err: true }, { status: 500 });
+      }
+      await Bun.sleep(60); // R2 still in flight when R1 finishes
+      return { id };
+    });
+
+    const p1 = app.request("/pay", { method: "POST", headers: { "Idempotency-Key": "k-race" } });
+    await Bun.sleep(50); // Wait for R1's 40ms lock to expire
+    const p2 = app.request("/pay", { method: "POST", headers: { "Idempotency-Key": "k-race" } });
+    await Bun.sleep(30); // R1 has now finished and released; R2 is still running!
+    const p3 = app.request("/pay", { method: "POST", headers: { "Idempotency-Key": "k-race" } });
+
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+    expect(r1.status).toBe(500);
+    expect(r2.status).toBe(200);
+    // R3 arrived while R2 was still in flight -> must get 409 (R1 must not delete R2's lock!)
+    expect(r3.status).toBe(409);
+  });
 });

@@ -14,7 +14,8 @@ export interface IdempotencyStore {
   get(key: string): Promise<CachedIdempotentEntry | undefined> | CachedIdempotentEntry | undefined;
   set(key: string, entry: CachedIdempotentEntry, ttlMs: number): Promise<void> | void;
   acquire(key: string, ttlMs?: number): Promise<boolean> | boolean;
-  release(key: string): Promise<void> | void;
+  acquireToken?(key: string, ttlMs?: number): Promise<string | null> | string | null;
+  release(key: string, tokenOverride?: string): Promise<void> | void;
 }
 
 export interface RevocationStore {
@@ -136,34 +137,34 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
       await setWithTtl(`${prefix}idem:${key}`, JSON.stringify(serializable), ttlMs);
     },
 
-    async acquire(key: string, ttlMs: number = 30_000): Promise<boolean> {
+    async acquireToken(key: string, ttlMs: number = 30_000): Promise<string | null> {
       const lockKey = `${prefix}idem:lock:${key}`;
       const token = crypto.randomUUID();
       if (useSend) {
         const res = await client.send('SET', [lockKey, token, 'PX', String(ttlMs), 'NX']);
-        if (res === 'OK' || res === true) {
-          let q = lockTokens.get(key);
-          if (!q) { q = []; lockTokens.set(key, q); }
-          q.push(token);
-          return true;
-        }
-        return false;
+        return (res === 'OK' || res === true) ? token : null;
       }
       const res = await client.set(lockKey, token, 'PX', ttlMs, 'NX');
-      if (res === 'OK' || res === true || res === 1) {
-        let q = lockTokens.get(key);
-        if (!q) { q = []; lockTokens.set(key, q); }
-        q.push(token);
-        return true;
-      }
-      return false;
+      return (res === 'OK' || res === true || res === 1) ? token : null;
     },
 
-    async release(key: string): Promise<void> {
+    async acquire(key: string, ttlMs: number = 30_000): Promise<boolean> {
+      const token = await this.acquireToken!(key, ttlMs);
+      if (!token) return false;
+      let q = lockTokens.get(key);
+      if (!q) { q = []; lockTokens.set(key, q); }
+      q.push(token);
+      return true;
+    },
+
+    async release(key: string, tokenOverride?: string): Promise<void> {
       const lockKey = `${prefix}idem:lock:${key}`;
-      const q = lockTokens.get(key);
-      const token = q?.pop();
-      if (q && q.length === 0) lockTokens.delete(key);
+      let token = tokenOverride;
+      if (token === undefined) {
+        const q = lockTokens.get(key);
+        token = q?.pop();
+        if (q && q.length === 0) lockTokens.delete(key);
+      }
       if (!token) return;
       if (useSend) {
         try {

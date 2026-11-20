@@ -1,12 +1,12 @@
 import { Context } from "./context";
 
 export class RadixNode {
-  public children: Record<string, RadixNode> = {};
+  public children: Record<string, RadixNode> = Object.create(null);
   public staticKeys: string[] = [];
   public paramNode: RadixNode | null = null;
   public paramName: string | null = null;
   public wildcardNode: RadixNode | null = null;
-  public handlers: Record<string, Function> = {};
+  public handlers: Record<string, Function> = Object.create(null);
 
   public insert(path: string, method: string, handler: Function) {
     let node: RadixNode = this;

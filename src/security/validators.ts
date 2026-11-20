@@ -66,6 +66,7 @@ export const native = (schema: any): Middleware => {
   const keys = Object.keys(props);
   const kLen = keys.length;
   const reqSet = Array.isArray(schema?.required) ? new Set<string>(schema.required) : null;
+  const noExtra = schema?.additionalProperties === false;
 
   const matchesNativeType = (val: any, expected: string | undefined): boolean => {
     if (expected === undefined) return true;
@@ -106,6 +107,21 @@ export const native = (schema: any): Middleware => {
             message: `Field '${k}' must be of type ${props[k]?.type}`,
             field: k
           });
+        }
+      }
+
+      if (noExtra) {
+        const bodyKeys = Object.keys(body);
+        for (let i = 0; i < bodyKeys.length; i++) {
+          const bk = bodyKeys[i]!;
+          if (!Object.hasOwn(props, bk)) {
+            return errorJSON({
+              status: 'error',
+              code: 'ADDITIONAL_PROPERTIES',
+              message: `Unknown field '${bk}' is not allowed`,
+              field: bk
+            });
+          }
         }
       }
 
@@ -198,6 +214,7 @@ const compileNativeCheck = (schema: any): ((val: any) => { ok: boolean; data?: a
   const props = schema?.properties || {};
   const keys = Object.keys(props);
   const reqSet = Array.isArray(schema?.required) ? new Set<string>(schema.required) : null;
+  const noExtra = schema?.additionalProperties === false;
   const matches = (val: any, expected: string | undefined): boolean => {
     if (expected === undefined) return true;
     if (expected === 'array') return Array.isArray(val);
@@ -221,6 +238,15 @@ const compileNativeCheck = (schema: any): ((val: any) => { ok: boolean; data?: a
       }
       if (!matches(val[k], props[k]?.type)) {
         return { ok: false, error: { message: `Field '${k}' must be of type ${props[k]?.type}`, path: k } };
+      }
+    }
+    if (noExtra) {
+      const valKeys = Object.keys(val);
+      for (let i = 0; i < valKeys.length; i++) {
+        const vk = valKeys[i]!;
+        if (!Object.hasOwn(props, vk)) {
+          return { ok: false, error: { message: `Unknown field '${vk}' is not allowed`, path: vk } };
+        }
       }
     }
     return { ok: true, data: val };

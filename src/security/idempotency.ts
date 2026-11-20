@@ -49,6 +49,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
   const externalStore = options.store;
 
   if (externalStore) {
+    const hasAcquireToken = typeof externalStore.acquireToken === 'function';
     const storeLockShim = { delete: (k: string) => { void externalStore.release(k); } };
     const mw: Middleware = async (ctx: Context) => {
       const key = extractIdemKey(ctx, headerName);
@@ -63,7 +64,18 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
         return buildReplayResponse(existing);
       }
 
-      const acquired = await externalStore.acquire(key, ttlMs);
+      let acquired = false;
+      let lockToken: string | undefined;
+      if (hasAcquireToken) {
+        const tok = await externalStore.acquireToken!(key, ttlMs);
+        if (tok) {
+          acquired = true;
+          lockToken = tok;
+        }
+      } else {
+        acquired = await externalStore.acquire(key, ttlMs);
+      }
+
       if (!acquired) {
         (ctx as any)._idempotencyKey = undefined;
         return Response.json(
@@ -75,12 +87,21 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
       const recheck = await externalStore.get(key);
       if (recheck && Date.now() < recheck.expiresAt) {
         (ctx as any)._idempotencyKey = undefined;
-        await externalStore.release(key);
+        await externalStore.release(key, lockToken);
         return buildReplayResponse(recheck);
       }
 
       (ctx as any)._idempotencyKey = key;
-      (ctx as any)._idemInFlight = storeLockShim;
+      (ctx as any)._idemExtToken = lockToken;
+      (ctx as any)._idemInFlight = hasAcquireToken
+        ? {
+            delete: (k: string) => {
+              const tok = (ctx as any)._idemExtToken;
+              (ctx as any)._idemExtToken = undefined;
+              void externalStore.release(k, tok);
+            }
+          }
+        : storeLockShim;
       return undefined;
     };
 
@@ -111,9 +132,11 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
         } catch {
           // Best-effort cache write
         } finally {
+          const extToken = (ctx as any)._idemExtToken;
           (ctx as any)._idempotencyKey = undefined;
+          (ctx as any)._idemExtToken = undefined;
           (ctx as any)._idemInFlight = undefined;
-          await externalStore.release(key);
+          await externalStore.release(key, extToken);
         }
       })();
     };
@@ -121,9 +144,11 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     (mw as any).__idempotencyRelease = (ctx: Context) => {
       const key = (ctx as any)._idempotencyKey;
       if (key) {
+        const extToken = (ctx as any)._idemExtToken;
         (ctx as any)._idempotencyKey = undefined;
+        (ctx as any)._idemExtToken = undefined;
         (ctx as any)._idemInFlight = undefined;
-        void externalStore.release(key);
+        void externalStore.release(key, extToken);
       }
     };
 

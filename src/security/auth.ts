@@ -39,6 +39,28 @@ const importKey = async (secret: string): Promise<CryptoKey> => {
   return key;
 };
 
+const stripProtoKeys = (root: unknown): void => {
+  if (!root || typeof root !== 'object') return;
+  const stack: unknown[] = [root];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== 'object') continue;
+    if (Array.isArray(cur)) {
+      for (let i = 0; i < cur.length; i++) {
+        if (cur[i] && typeof cur[i] === 'object') stack.push(cur[i]);
+      }
+    } else {
+      if (Object.hasOwn(cur, '__proto__')) {
+        delete (cur as Record<string, unknown>).__proto__;
+      }
+      const vals = Object.values(cur);
+      for (let i = 0; i < vals.length; i++) {
+        if (vals[i] && typeof vals[i] === 'object') stack.push(vals[i]);
+      }
+    }
+  }
+};
+
 /**
  * 4. TOKEN GENERATOR (Standard JWT)
  */
@@ -286,7 +308,7 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
         const payloadStr = fromBase64Url(payloadB64);
         decoded = JSON.parse(payloadStr);
         if (decoded && typeof decoded === 'object' && (payloadStr.indexOf('__proto__') !== -1 || payloadStr.indexOf('\\u') !== -1)) {
-          delete decoded.__proto__;
+          stripProtoKeys(decoded);
         }
       } catch {
         return ctx.status(401).send("Token verification failed");
@@ -434,7 +456,7 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
       const payloadStr = fromBase64Url(payloadB64);
       decoded = JSON.parse(payloadStr);
       if (decoded && typeof decoded === 'object' && (payloadStr.indexOf('__proto__') !== -1 || payloadStr.indexOf('\\u') !== -1)) {
-        delete decoded.__proto__;
+        stripProtoKeys(decoded);
       }
     } catch {
       return ctx.status(401).send("Token verification failed");

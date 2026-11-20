@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795165378408,
+  "lastUpdate": 1795166432803,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3664,6 +3664,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3899.529423808131,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "d522e9674ef067984e337e6ec9b0a48cad9713d1",
+          "message": "refactor(core,tests): make _poolState readonly and use deterministic entered signals in pool tests",
+          "timestamp": "2026-11-20T09:19:40Z",
+          "tree_id": "64fd6826df2c32744477e471c2fe04cb76e407f7",
+          "url": "https://github.com/xarhang/bareJS/commit/d522e9674ef067984e337e6ec9b0a48cad9713d1"
+        },
+        "date": 1795166432553,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1160.892846461296,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1891.767255643541,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 6878.7061510719295,
             "unit": "undefined"
           }
         ]

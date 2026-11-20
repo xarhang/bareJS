@@ -661,8 +661,19 @@ export class BareJS<
   public compile() {
     const isLog = this._useLog;
     this.tree = new RadixNode();
+    const explicitOptionsPaths = new Set<string>();
     for (const route of this.routes) {
+      if (route.method === 'OPTIONS') explicitOptionsPaths.add(route.path);
       this.tree.insert(route.path, route.method, this.compileHandler(route.handlers, isLog));
+    }
+    for (const route of this.routes) {
+      if (route.method === 'OPTIONS' || explicitOptionsPaths.has(route.path)) continue;
+      const corsIdx = route.handlers.findIndex((h: any) => h?.__isCors);
+      if (corsIdx !== -1 && !this.groupMiddleware.includes(route.handlers[corsIdx])) {
+        explicitOptionsPaths.add(route.path);
+        const preflightPipeline = [...route.handlers.slice(0, corsIdx + 1), () => new Response(null, { status: 204 })];
+        this.tree.insert(route.path, 'OPTIONS', this.compileHandler(preflightPipeline, isLog));
+      }
     }
 
     const tree = this.tree;
@@ -674,8 +685,16 @@ export class BareJS<
       if (ctx._headers) {
         for (const k in ctx._headers) {
           const val = ctx._headers[k];
-          if (val !== undefined && !res.headers.has(k)) {
+          if (val === undefined) continue;
+          if (!res.headers.has(k)) {
             try { res.headers.set(k, val); } catch { /* ignore invalid header values on error path */ }
+          } else if (k.toLowerCase() === 'vary') {
+            const existing = res.headers.get('vary') || '';
+            const parts = existing.toLowerCase().split(',').map((v) => v.trim());
+            const toAdd = val.split(',').map((v) => v.trim()).filter((v) => v && !parts.includes(v.toLowerCase()));
+            if (toAdd.length > 0) {
+              try { res.headers.set('vary', existing ? `${existing}, ${toAdd.join(', ')}` : toAdd.join(', ')); } catch { /* ignore */ }
+            }
           }
         }
       }
@@ -970,7 +989,7 @@ export class BareJS<
     if (!this.compiled) this.compile();
     const maxRequestBodySize = options.maxRequestBodySize ?? 10 * 1024 * 1024;
 
-    const finalPort = port || BARE_CONFIG.port || 3000;
+    const finalPort = port ?? BARE_CONFIG.port ?? 3000;
     const isProd = process.env.NODE_ENV === 'production';
 
     if (!isProd) {

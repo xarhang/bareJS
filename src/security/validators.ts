@@ -62,70 +62,24 @@ export const typebox = (schema: any): Middleware => {
  * Native Engine (n)
  */
 export const native = (schema: any): Middleware => {
-  const props = schema?.properties || {};
-  const keys = Object.keys(props);
-  const kLen = keys.length;
-  const reqSet = Array.isArray(schema?.required) ? new Set<string>(schema.required) : null;
-  const noExtra = schema?.additionalProperties === false;
-
-  const matchesNativeType = (val: any, expected: string | undefined): boolean => {
-    if (expected === undefined) return true;
-    if (expected === 'array') return Array.isArray(val);
-    if (expected === 'integer') return typeof val === 'number' && Number.isInteger(val);
-    if (expected === 'object') return val !== null && typeof val === 'object' && !Array.isArray(val);
-    if (expected === 'null') return val === null;
-    return typeof val === expected;
-  };
+  const check = compileNativeCheck(schema);
 
   const mw: Middleware = async (ctx: any, next?: any) => {
     try {
       const isCtx = ctx instanceof Object && 'req' in ctx;
       const body = isCtx ? await ctx.jsonBody() : await ctx.json();
 
-      if (!body || typeof body !== 'object' || Array.isArray(body)) {
-        return errorJSON({ status: 'error', message: 'Invalid JSON object payload' });
+      const res = check(body);
+      if (!res.ok) {
+        return errorJSON({
+          status: 'error',
+          code: res.error?.code || 'TYPE_MISMATCH',
+          message: res.error?.message || 'Validation failed',
+          ...(res.error?.path ? { field: res.error.path } : {})
+        });
       }
 
-      for (let i = 0; i < kLen; i++) {
-        const k = keys[i]!;
-        const hasKey = Object.hasOwn(body, k) && body[k] !== undefined;
-        if (!hasKey) {
-          if (!reqSet || reqSet.has(k)) {
-            return errorJSON({
-              status: 'error',
-              code: 'TYPE_MISMATCH',
-              message: `Field '${k}' must be of type ${props[k]?.type}`,
-              field: k
-            });
-          }
-          continue;
-        }
-        if (!matchesNativeType(body[k], props[k]?.type)) {
-          return errorJSON({
-            status: 'error',
-            code: 'TYPE_MISMATCH',
-            message: `Field '${k}' must be of type ${props[k]?.type}`,
-            field: k
-          });
-        }
-      }
-
-      if (noExtra) {
-        const bodyKeys = Object.keys(body);
-        for (let i = 0; i < bodyKeys.length; i++) {
-          const bk = bodyKeys[i]!;
-          if (!Object.hasOwn(props, bk)) {
-            return errorJSON({
-              status: 'error',
-              code: 'ADDITIONAL_PROPERTIES',
-              message: `Unknown field '${bk}' is not allowed`,
-              field: bk
-            });
-          }
-        }
-      }
-
-      if (isCtx) (ctx as any).body = body;
+      if (isCtx) (ctx as any).body = res.data;
 
       return next ? next() : undefined;
     } catch (e: any) {
@@ -210,46 +164,189 @@ export interface RouteSchemas {
   maxBodySize?: number;
 }
 
-const compileNativeCheck = (schema: any): ((val: any) => { ok: boolean; data?: any; error?: any }) => {
-  const props = schema?.properties || {};
-  const keys = Object.keys(props);
-  const reqSet = Array.isArray(schema?.required) ? new Set<string>(schema.required) : null;
-  const noExtra = schema?.additionalProperties === false;
-  const matches = (val: any, expected: string | undefined): boolean => {
-    if (expected === undefined) return true;
-    if (expected === 'array') return Array.isArray(val);
-    if (expected === 'integer') return typeof val === 'number' && Number.isInteger(val);
-    if (expected === 'object') return val !== null && typeof val === 'object' && !Array.isArray(val);
-    if (expected === 'null') return val === null;
-    return typeof val === expected;
-  };
-  return (val: any) => {
-    if (!val || typeof val !== 'object' || Array.isArray(val)) {
-      return { ok: false, error: { message: 'Invalid JSON object payload' } };
+const matchesJsonType = (val: any, expected: string | string[] | undefined): boolean => {
+  if (expected === undefined) return true;
+  if (Array.isArray(expected)) return expected.some((t) => matchesJsonType(val, t));
+  if (expected === 'array') return Array.isArray(val);
+  if (expected === 'integer') return typeof val === 'number' && Number.isInteger(val);
+  if (expected === 'number') return typeof val === 'number' && Number.isFinite(val);
+  if (expected === 'object') return val !== null && typeof val === 'object' && !Array.isArray(val);
+  if (expected === 'null') return val === null;
+  return typeof val === expected;
+};
+
+const validateJsonSchemaNode = (
+  val: any,
+  schema: any,
+  path: string,
+  requireAllPropsIfOmitted: boolean
+): { ok: boolean; error?: any } => {
+  if (!schema || typeof schema !== 'object') return { ok: true };
+
+  if (Object.hasOwn(schema, 'const') && val !== schema.const) {
+    return { ok: false, error: { message: `Value at '${path || 'root'}' must equal ${JSON.stringify(schema.const)}`, path } };
+  }
+  if (Array.isArray(schema.enum) && !schema.enum.some((e: any) => e === val)) {
+    return { ok: false, error: { message: `Value at '${path || 'root'}' must be one of enum values`, path } };
+  }
+  if (Array.isArray(schema.allOf)) {
+    for (let i = 0; i < schema.allOf.length; i++) {
+      const r = validateJsonSchemaNode(val, schema.allOf[i], path, false);
+      if (!r.ok) return r;
     }
-    for (let i = 0; i < keys.length; i++) {
-      const k = keys[i]!;
-      const hasKey = Object.hasOwn(val, k) && val[k] !== undefined;
-      if (!hasKey) {
-        if (!reqSet || reqSet.has(k)) {
-          return { ok: false, error: { message: `Field '${k}' must be of type ${props[k]?.type}`, path: k } };
+  }
+  if (Array.isArray(schema.anyOf)) {
+    let matched = false;
+    for (let i = 0; i < schema.anyOf.length; i++) {
+      if (validateJsonSchemaNode(val, schema.anyOf[i], path, false).ok) {
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      return { ok: false, error: { message: `Value at '${path || 'root'}' failed anyOf constraint`, path } };
+    }
+  }
+  if (Array.isArray(schema.oneOf)) {
+    let count = 0;
+    for (let i = 0; i < schema.oneOf.length; i++) {
+      if (validateJsonSchemaNode(val, schema.oneOf[i], path, false).ok) count++;
+    }
+    if (count !== 1) {
+      return { ok: false, error: { message: `Value at '${path || 'root'}' must match exactly one schema in oneOf`, path } };
+    }
+  }
+
+  if (!matchesJsonType(val, schema.type)) {
+    return { ok: false, error: { message: path ? `Field '${path}' must be of type ${schema.type}` : `Expected type ${schema.type}`, path } };
+  }
+
+  if (typeof val === 'number') {
+    if (typeof schema.minimum === 'number' && val < schema.minimum) {
+      return { ok: false, error: { message: `Field '${path}' must be >= ${schema.minimum}`, path } };
+    }
+    if (typeof schema.maximum === 'number' && val > schema.maximum) {
+      return { ok: false, error: { message: `Field '${path}' must be <= ${schema.maximum}`, path } };
+    }
+    if (typeof schema.exclusiveMinimum === 'number' && val <= schema.exclusiveMinimum) {
+      return { ok: false, error: { message: `Field '${path}' must be > ${schema.exclusiveMinimum}`, path } };
+    }
+    if (typeof schema.exclusiveMaximum === 'number' && val >= schema.exclusiveMaximum) {
+      return { ok: false, error: { message: `Field '${path}' must be < ${schema.exclusiveMaximum}`, path } };
+    }
+  }
+
+  if (typeof val === 'string') {
+    if (typeof schema.minLength === 'number' && val.length < schema.minLength) {
+      return { ok: false, error: { message: `Field '${path}' length must be >= ${schema.minLength}`, path } };
+    }
+    if (typeof schema.maxLength === 'number' && val.length > schema.maxLength) {
+      return { ok: false, error: { message: `Field '${path}' length must be <= ${schema.maxLength}`, path } };
+    }
+    if (typeof schema.pattern === 'string') {
+      try {
+        if (!new RegExp(schema.pattern).test(val)) {
+          return { ok: false, error: { message: `Field '${path}' does not match pattern`, path } };
         }
-        continue;
-      }
-      if (!matches(val[k], props[k]?.type)) {
-        return { ok: false, error: { message: `Field '${k}' must be of type ${props[k]?.type}`, path: k } };
+      } catch { /* ignore invalid regex */ }
+    }
+  }
+
+  if (Array.isArray(val)) {
+    if (typeof schema.minItems === 'number' && val.length < schema.minItems) {
+      return { ok: false, error: { message: `Field '${path}' must have at least ${schema.minItems} items`, path } };
+    }
+    if (typeof schema.maxItems === 'number' && val.length > schema.maxItems) {
+      return { ok: false, error: { message: `Field '${path}' must have at most ${schema.maxItems} items`, path } };
+    }
+    if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
+      for (let i = 0; i < val.length; i++) {
+        const r = validateJsonSchemaNode(val[i], schema.items, path ? `${path}[${i}]` : `[${i}]`, false);
+        if (!r.ok) return r;
       }
     }
-    if (noExtra) {
+  }
+
+  if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+    const props = schema.properties && typeof schema.properties === 'object' ? schema.properties : null;
+    const reqList = Array.isArray(schema.required) ? schema.required : null;
+    const reqSet = reqList ? new Set<string>(reqList) : null;
+
+    if (reqList) {
+      for (let i = 0; i < reqList.length; i++) {
+        const rk = reqList[i]!;
+        if (!Object.hasOwn(val, rk) || val[rk] === undefined) {
+          const expectedType = props?.[rk]?.type;
+          return {
+            ok: false,
+            error: {
+              message: expectedType ? `Field '${rk}' must be of type ${expectedType}` : `Missing required field '${rk}'`,
+              path: path ? `${path}.${rk}` : rk
+            }
+          };
+        }
+      }
+    }
+
+    if (props) {
+      const pKeys = Object.keys(props);
+      for (let i = 0; i < pKeys.length; i++) {
+        const k = pKeys[i]!;
+        const hasKey = Object.hasOwn(val, k) && val[k] !== undefined;
+        if (!hasKey) {
+          if (requireAllPropsIfOmitted && !reqSet) {
+            return {
+              ok: false,
+              error: {
+                message: `Field '${k}' must be of type ${props[k]?.type}`,
+                path: path ? `${path}.${k}` : k
+              }
+            };
+          }
+          continue;
+        }
+        const subPath = path ? `${path}.${k}` : k;
+        const r = validateJsonSchemaNode(val[k], props[k], subPath, false);
+        if (!r.ok) return r;
+      }
+    }
+
+    if (schema.additionalProperties === false) {
       const valKeys = Object.keys(val);
       for (let i = 0; i < valKeys.length; i++) {
         const vk = valKeys[i]!;
-        if (!Object.hasOwn(props, vk)) {
-          return { ok: false, error: { message: `Unknown field '${vk}' is not allowed`, path: vk } };
+        if (!props || !Object.hasOwn(props, vk)) {
+          return {
+            ok: false,
+            error: {
+              code: 'ADDITIONAL_PROPERTIES',
+              message: `Unknown field '${vk}' is not allowed`,
+              path: path ? `${path}.${vk}` : vk
+            }
+          };
         }
       }
     }
-    return { ok: true, data: val };
+  }
+
+  return { ok: true };
+};
+
+const compileNativeCheck = (schema: any): ((val: any) => { ok: boolean; data?: any; error?: any }) => {
+  const hasCombinators = Boolean(schema?.anyOf || schema?.oneOf || schema?.allOf);
+  const topRequireAll = !hasCombinators && !Array.isArray(schema?.required) && Boolean(schema?.properties);
+  const topExpectsObj = !schema?.type || schema.type === 'object';
+  return (val: any) => {
+    if (!schema || typeof schema !== 'object') {
+      return (!val || typeof val !== 'object' || Array.isArray(val))
+        ? { ok: false, error: { message: 'Invalid JSON object payload' } }
+        : { ok: true, data: val };
+    }
+    if (topExpectsObj && (!val || typeof val !== 'object' || Array.isArray(val)) && !hasCombinators) {
+      return { ok: false, error: { message: 'Invalid JSON object payload' } };
+    }
+    const r = validateJsonSchemaNode(val, schema, '', topRequireAll);
+    return r.ok ? { ok: true, data: val } : r;
   };
 };
 
@@ -343,11 +440,104 @@ const buildProjectorStatements = (schema: any, srcVar: string, dstVar: string, d
   return stmts;
 };
 
+const schemaNeedsFallbackProjector = (schema: any): boolean => {
+  if (!schema || typeof schema !== 'object') return false;
+  if (Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf) || Array.isArray(schema.allOf)) return true;
+  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') return true;
+  if (schema.patternProperties && typeof schema.patternProperties === 'object') return true;
+  if (schema.type === 'array' && schema.items) return schemaNeedsFallbackProjector(schema.items);
+  if (schema.properties && typeof schema.properties === 'object') {
+    for (const sub of Object.values<any>(schema.properties)) {
+      if (schemaNeedsFallbackProjector(sub)) return true;
+    }
+  }
+  return false;
+};
+
+const collectAllOfObjectProps = (schema: any, outProps: Record<string, any>): boolean => {
+  let hasProps = false;
+  if (schema?.properties && typeof schema.properties === 'object') {
+    Object.assign(outProps, schema.properties);
+    hasProps = true;
+  }
+  if (Array.isArray(schema?.allOf)) {
+    for (const sub of schema.allOf) {
+      if (collectAllOfObjectProps(sub, outProps)) hasProps = true;
+    }
+  }
+  return hasProps;
+};
+
+const projectWithSchema = (val: any, schema: any): any => {
+  if (!schema || typeof schema !== 'object' || val === null || typeof val !== 'object') return val;
+
+  if (Array.isArray(val)) {
+    if (schema.items && typeof schema.items === 'object') {
+      return val.map((item) => projectWithSchema(item, schema.items));
+    }
+    return val;
+  }
+
+  const branches = schema.anyOf || schema.oneOf;
+  if (Array.isArray(branches) && branches.length > 0) {
+    for (const b of branches) {
+      if (b && typeof b === 'object' && compileSingleSchema(b)(val).ok) {
+        return projectWithSchema(val, b);
+      }
+    }
+    return val;
+  }
+
+  if (Array.isArray(schema.allOf)) {
+    const mergedProps: Record<string, any> = {};
+    if (collectAllOfObjectProps(schema, mergedProps)) {
+      const out: Record<string, any> = {};
+      for (const [k, sub] of Object.entries<any>(mergedProps)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+        if (Object.hasOwn(val, k) && val[k] !== undefined) {
+          out[k] = projectWithSchema(val[k], sub);
+        }
+      }
+      return out;
+    }
+  }
+
+  if (schema.properties && typeof schema.properties === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, sub] of Object.entries<any>(schema.properties)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      if (Object.hasOwn(val, k) && val[k] !== undefined) {
+        out[k] = projectWithSchema(val[k], sub);
+      }
+    }
+    return out;
+  }
+
+  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+    const out: Record<string, any> = {};
+    for (const k of Object.keys(val)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      if (val[k] !== undefined) {
+        out[k] = projectWithSchema(val[k], schema.additionalProperties);
+      }
+    }
+    return out;
+  }
+
+  return val;
+};
+
 const compileProjector = (schema: any): ((val: any) => any) | null => {
   if (!schema || '_def' in schema) return null; // Zod safeParse strips unknown keys natively
+  if (schemaNeedsFallbackProjector(schema)) {
+    return (val: any) => projectWithSchema(val, schema);
+  }
   if (schema.type === 'array' && schema.items) {
+    if (schema.items.type === 'array') {
+      return (val: any) => projectWithSchema(val, schema);
+    }
     const itemStmts = buildProjectorStatements(schema.items, 'item', 'outItem');
-    if (itemStmts === null) return null;
+    if (itemStmts === null) return (val: any) => projectWithSchema(val, schema);
     return new Function(
       `return function(arr) {
         if (!Array.isArray(arr)) return arr;
@@ -368,7 +558,7 @@ const compileProjector = (schema: any): ((val: any) => any) | null => {
     )();
   }
   const objStmts = buildProjectorStatements(schema, 'o', 'out');
-  if (objStmts === null) return null;
+  if (objStmts === null) return (val: any) => projectWithSchema(val, schema);
   return new Function(
     `return function(o) {
       if (!o || typeof o !== 'object' || Array.isArray(o)) return o;
@@ -441,6 +631,8 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
   const paramsCheck = schemas.params ? compileSingleSchema(schemas.params) : null;
   const headersCheck = schemas.headers ? compileSingleSchema(schemas.headers) : null;
   const bodyProjector = schemas.stripUnknown && schemas.body ? compileProjector(schemas.body) : null;
+  const queryProjector = schemas.stripUnknown && schemas.query ? compileProjector(schemas.query) : null;
+  const paramsProjector = schemas.stripUnknown && schemas.params ? compileProjector(schemas.params) : null;
   const responseFilter = schemas.response ? createResponseFilter(schemas.response) : null;
   const maxBodySize = schemas.maxBodySize ?? 1048576;
   const hasSyncParts = Boolean(paramsCheck || queryCheck || headersCheck);
@@ -450,13 +642,13 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
       const coerced = coerceFields(ctx.params, schemas.params);
       const r = paramsCheck(coerced);
       if (!r.ok) return errorJSON({ status: 'error', code: 'PARAMS_INVALID', error: r.error });
-      ctx.params = r.data;
+      ctx.params = paramsProjector ? paramsProjector(r.data) : r.data;
     }
     if (queryCheck) {
       const coerced = coerceFields(ctx.query, schemas.query);
       const r = queryCheck(coerced);
       if (!r.ok) return errorJSON({ status: 'error', code: 'QUERY_INVALID', error: r.error });
-      ctx._query = r.data;
+      ctx._query = queryProjector ? queryProjector(r.data) : r.data;
     }
     if (headersCheck) {
       const hdrObj: Record<string, string> = {};

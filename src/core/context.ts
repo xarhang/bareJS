@@ -188,6 +188,7 @@ export class Context {
     if (dotIdx < 0) return null;
     const value = raw.slice(0, dotIdx);
     const sigB64 = raw.slice(dotIdx + 1);
+    if (!/^[A-Za-z0-9_-]{43}$/.test(sigB64)) return null;
     const expected = createHmac('sha256', secret).update(value).digest();
     const actual = Buffer.from(sigB64, 'base64url');
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
@@ -227,7 +228,7 @@ export class Context {
           throw err;
         }
         const parsed = JSON.parse(text);
-        if (text.indexOf('__proto__') !== -1 || text.indexOf('\\u') !== -1) {
+        if (text.indexOf('__proto__') !== -1 || text.indexOf('constructor') !== -1 || text.indexOf('prototype') !== -1 || text.indexOf('\\u') !== -1) {
           const stack: any[] = [parsed];
           while (stack.length > 0) {
             const cur = stack.pop();
@@ -236,6 +237,8 @@ export class Context {
               for (let i = 0; i < cur.length; i++) stack.push(cur[i]);
             } else {
               if (Object.hasOwn(cur, '__proto__')) delete cur['__proto__'];
+              if (Object.hasOwn(cur, 'constructor')) delete cur['constructor'];
+              if (Object.hasOwn(cur, 'prototype')) delete cur['prototype'];
               const keys = Object.keys(cur);
               for (let i = 0; i < keys.length; i++) stack.push(cur[keys[i]!]);
             }
@@ -399,8 +402,11 @@ export class Context {
                 try { controller.enqueue(formatChunk({ data, event, id })); } catch { closed = true; }
               }
             };
-            await source(send, safeClose);
-            safeClose();
+            const maybePromise = source(send, safeClose);
+            if (maybePromise && typeof (maybePromise as any).then === 'function') {
+              await maybePromise;
+              safeClose();
+            }
           } else {
             for await (const item of source) {
               if (closed) break;
@@ -464,15 +470,42 @@ export class Context {
     }
 
     const maxTotalBytes = maxFileSize * maxFiles;
+    const maxRawBytes = maxTotalBytes + 65536;
     const contentLen = Number(this.req?.headers?.get('content-length') || 0);
-    if (Number.isFinite(contentLen) && contentLen > maxTotalBytes + 65536) {
+    if (Number.isFinite(contentLen) && contentLen > maxRawBytes) {
       throw Object.assign(new Error('Payload Too Large'), { status: 413 });
     }
 
     let form: Awaited<ReturnType<Request['formData']>>;
     try {
-      form = await this.req.formData();
-    } catch {
+      if (!this.req.headers.has('content-length') && this.req.body) {
+        const reader = this.req.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            received += value.byteLength;
+            if (received > maxRawBytes) {
+              try { await reader.cancel(); } catch {}
+              throw Object.assign(new Error('Payload Too Large'), { status: 413 });
+            }
+            chunks.push(value);
+          }
+        }
+        const combined = new Uint8Array(received);
+        let offset = 0;
+        for (let i = 0; i < chunks.length; i++) {
+          combined.set(chunks[i]!, offset);
+          offset += chunks[i]!.byteLength;
+        }
+        form = await new Response(combined, { headers: this.req.headers }).formData();
+      } else {
+        form = await this.req.formData();
+      }
+    } catch (e: any) {
+      if (e?.status === 413) throw e;
       throw Object.assign(new Error('Malformed multipart/form-data payload'), { status: 400 });
     }
     const fields: Record<string, string> = {};
@@ -481,6 +514,10 @@ export class Context {
 
     for (const [fieldName, value] of form.entries()) {
       if (typeof value === 'string') {
+        totalBytes += Buffer.byteLength(value, 'utf-8');
+        if (totalBytes > maxTotalBytes) {
+          throw Object.assign(new Error(`Total upload size exceeds ${maxTotalBytes} bytes`), { status: 413 });
+        }
         if (fieldName !== '__proto__' && fieldName !== 'constructor' && fieldName !== 'prototype') {
           fields[fieldName] = value;
         }

@@ -84,7 +84,27 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
         );
       }
 
-      const recheck = await externalStore.get(key);
+      if ((ctx as any)._detached) {
+        (ctx as any)._idempotencyKey = undefined;
+        await externalStore.release(key, lockToken);
+        return undefined;
+      }
+
+      let recheck: CachedIdempotentEntry | undefined;
+      try {
+        recheck = await externalStore.get(key);
+      } catch (err) {
+        (ctx as any)._idempotencyKey = undefined;
+        await externalStore.release(key, lockToken);
+        throw err;
+      }
+
+      if ((ctx as any)._detached) {
+        (ctx as any)._idempotencyKey = undefined;
+        await externalStore.release(key, lockToken);
+        return undefined;
+      }
+
       if (recheck && Date.now() < recheck.expiresAt) {
         (ctx as any)._idempotencyKey = undefined;
         await externalStore.release(key, lockToken);

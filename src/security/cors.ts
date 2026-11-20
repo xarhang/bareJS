@@ -82,6 +82,7 @@ export const cors = (options: CorsOptions = {}) => {
       }
       return res;
     };
+    (mw as any).__isCors = true;
     return mw;
   }
 
@@ -140,5 +141,6 @@ export const cors = (options: CorsOptions = {}) => {
     }
     return res;
   };
+  (mw as any).__isCors = true;
   return mw;
 };

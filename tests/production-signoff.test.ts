@@ -951,4 +951,306 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     // R3 arrived while R2 was still in flight -> must get 409 (R1 must not delete R2's lock!)
     expect(r3.status).toBe(409);
   });
+
+  test("39. app.listen(0) uses ephemeral port and applyCtxHeaders merges Vary on error/static responses", async () => {
+    const app = new BareJS();
+    app.use(cors({ origin: "https://app.example.com" }));
+    app.onError(() => new Response("err", { status: 500, headers: { Vary: "Accept-Encoding" } }));
+    app.get("/boom", () => { throw new Error("boom"); });
+
+    const res = await app.request("/boom", { headers: { Origin: "https://app.example.com" } });
+    expect(res.status).toBe(500);
+    const vary = (res.headers.get("vary") || "").toLowerCase();
+    expect(vary).toContain("accept-encoding");
+    expect(vary).toContain("origin");
+
+    const srv = app.listen(0);
+    try {
+      expect(srv.port).not.toBe(3000);
+      expect(srv.port).toBeGreaterThan(0);
+    } finally {
+      await app.stop(true);
+    }
+  });
+
+  test("40. RadixNode supports per-route param names, :__proto__ own property, and lookup() wildcard backtracking", async () => {
+    const { RadixNode } = await import("../src/core/radix");
+    const app = new BareJS();
+    app.get("/users/:userId", (ctx) => ({ route: 1, params: ctx.params }));
+    app.get("/users/:id/posts", (ctx) => ({ route: 2, params: ctx.params }));
+    app.get("/p/:__proto__", (ctx) => ({
+      hasOwn: Object.hasOwn(ctx.params, "__proto__"),
+      val: ctx.params["__proto__"]
+    }));
+
+    expect(await (await app.request("/users/42")).json()).toEqual({ route: 1, params: { userId: "42" } });
+    expect(await (await app.request("/users/42/posts")).json()).toEqual({ route: 2, params: { id: "42" } });
+    expect(await (await app.request("/p/admin")).json()).toEqual({ hasOwn: true, val: "admin" });
+
+    // lookup() parity for /files/* on /files and backtracking /a/:id/b -> /a/*
+    const tree = new RadixNode();
+    tree.insert("/files/*", "GET", () => "files");
+    tree.insert("/a/:id/b", "GET", () => "ab");
+    tree.insert("/a/*", "GET", () => "a-wild");
+
+    const ctx1 = new Context(new Request("http://localhost/files"));
+    expect(tree.lookup("GET", "/files", 0, ctx1)).not.toBeNull();
+    expect(ctx1.params["*"]).toBe("");
+
+    const ctx2 = new Context(new Request("http://localhost/a/foo/c"));
+    expect(tree.lookup("GET", "/a/foo/c", 0, ctx2)).not.toBeNull();
+    expect(ctx2.params["*"]).toBe("foo/c");
+  });
+
+  test("41. Scoped cors() on mounted sub-routers handles OPTIONS preflight with 204", async () => {
+    const { BareRouter } = await import("../src/index");
+    const app = new BareJS();
+
+    const sub = new BareRouter();
+    sub.use(cors({ origin: "https://sub.example.com" }));
+    sub.post("/items", () => ({ ok: true }));
+    app.use("/sub", sub);
+
+    const sub2 = new BareRouter();
+    sub2.post("/items", () => ({ ok: true }));
+    app.use("/scoped", cors({ origin: "https://scoped.example.com" }), sub2);
+
+    const r1 = await app.request("/sub/items", {
+      method: "OPTIONS",
+      headers: { Origin: "https://sub.example.com" }
+    });
+    expect(r1.status).toBe(204);
+    expect(r1.headers.get("access-control-allow-origin")).toBe("https://sub.example.com");
+
+    const r2 = await app.request("/scoped/items", {
+      method: "OPTIONS",
+      headers: { Origin: "https://scoped.example.com" }
+    });
+    expect(r2.status).toBe(204);
+    expect(r2.headers.get("access-control-allow-origin")).toBe("https://scoped.example.com");
+  });
+
+  test("42. Context.upload() enforces size limits on chunked requests without Content-Length and multipart string fields", async () => {
+    const app = new BareJS();
+    app.post("/up", async (ctx) => {
+      try {
+        return await ctx.upload({ maxFileSize: 100, maxFiles: 1 });
+      } catch (e: any) {
+        return ctx.status(e?.status || 500).json({ error: e?.message });
+      }
+    });
+
+    const boundary = "----barejs-test-boundary";
+    const bigField = "A".repeat(2000);
+    const bodyText = `--${boundary}\r\nContent-Disposition: form-data; name="big"\r\n\r\n${bigField}\r\n--${boundary}--\r\n`;
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(bodyText));
+        controller.close();
+      }
+    });
+    const req = new Request("http://localhost/up", {
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      body: stream
+    });
+    const res = await app.fetch(req);
+    expect(res.status).toBe(413);
+  });
+
+  test("43. Context.sse() supports sync timer callback, jsonBody() strips constructor/prototype, getSignedCookie() rejects non-canonical base64url", async () => {
+    const ctx = new Context();
+    ctx.reset(new Request("http://localhost/sse"));
+    const sseRes = ctx.sse((send, close) => {
+      setTimeout(() => {
+        send("hello");
+        close();
+      }, 10);
+    });
+    expect(await sseRes.text()).toContain("data: hello");
+
+    const ctxJson = new Context();
+    ctxJson.reset(
+      new Request("http://localhost/j", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: '{"constructor":{"prototype":{"x":1}},"ok":true}'
+      })
+    );
+    const parsed = await ctxJson.jsonBody();
+    expect(Object.hasOwn(parsed, "constructor")).toBe(false);
+    expect(parsed.ok).toBe(true);
+
+    const c1 = new Context();
+    c1.reset(new Request("http://localhost/c"));
+    c1.setCookie("sid", "u1", { secret: "sec-123" });
+    const cookieVal = (c1._setCookies![0]!.split(";")[0]!).slice("sid=".length);
+    const c2 = new Context();
+    c2.reset(new Request("http://localhost/c", { headers: { Cookie: `sid=${cookieVal}==` } }));
+    expect(c2.getSignedCookie("sid", "sec-123")).toBeNull();
+  });
+
+  test("44. idempotency releases lock when timeout fires during acquireToken or recheck throws, and acquireToken isolates tokens", async () => {
+    const { idempotency, timeout, redisStore } = await import("../src/index");
+    let locks = 0;
+    const store: any = {
+      async get() { return undefined; },
+      async set() {},
+      async acquireToken() {
+        await Bun.sleep(40);
+        locks++;
+        return "tok-1";
+      },
+      async acquire() { return true; },
+      async release() { locks = Math.max(0, locks - 1); }
+    };
+
+    const app = new BareJS();
+    app.use(timeout({ ms: 15 }));
+    app.use(idempotency({ store }));
+    app.use(() => Response.json({ denied: true }, { status: 401 }));
+    app.post("/x", () => ({ ok: true }));
+
+    const r1 = await app.request("/x", { method: "POST", headers: { "Idempotency-Key": "k-to" } });
+    expect(r1.status).toBe(408);
+    await Bun.sleep(50);
+    expect(locks).toBe(0);
+
+    // Recheck throws -> must release lock
+    let recheckLocks = 0;
+    let calls = 0;
+    const errStore: any = {
+      async get() {
+        calls++;
+        if (calls === 2) throw new Error("redis read error");
+        return undefined;
+      },
+      async set() {},
+      async acquireToken() { recheckLocks++; return "tok-err"; },
+      async acquire() { return true; },
+      async release() { recheckLocks = Math.max(0, recheckLocks - 1); }
+    };
+    const app2 = new BareJS();
+    app2.use(idempotency({ store: errStore }));
+    app2.post("/y", () => ({ ok: true }));
+    const r2 = await app2.request("/y", { method: "POST", headers: { "Idempotency-Key": "k-err" } });
+    expect(r2.status).toBe(500);
+    expect(recheckLocks).toBe(0);
+
+    // Direct redisStore.acquireToken() + release(k, tok) isolates per-request tokens
+    const kv = new Map<string, { val: string; exp: number }>();
+    const mockRedis: any = {
+      async get(k: string) {
+        const e = kv.get(k);
+        if (!e || Date.now() > e.exp) { kv.delete(k); return null; }
+        return e.val;
+      },
+      async set(k: string, v: string, _px: string, ms: number, nx?: string) {
+        if (nx === "NX" && (await this.get(k)) !== null) return null;
+        kv.set(k, { val: v, exp: Date.now() + ms });
+        return "OK";
+      },
+      async eval(_lua: string, _n: number, k: string, tok: string) {
+        if ((await this.get(k)) === tok) { kv.delete(k); return 1; }
+        return 0;
+      }
+    };
+    const rs = redisStore(mockRedis);
+    const tok1 = await rs.acquireToken!("iso-k", 20);
+    expect(tok1).toBeTruthy();
+    await Bun.sleep(30);
+    const tok2 = await rs.acquireToken!("iso-k", 5000);
+    expect(tok2).toBeTruthy();
+    await rs.release("iso-k", tok1!); // Holder 1 releases -> must NOT delete Holder 2's active lock!
+    expect(await rs.acquireToken!("iso-k", 5000)).toBeNull();
+  });
+
+  test("45. createResponseFilter and stripUnknown project Type.Union, Type.Intersect, and query/params", async () => {
+    const f1 = createResponseFilter(
+      Type.Object({
+        profile: Type.Union([Type.Object({ name: Type.String() }), Type.Null()])
+      })
+    );
+    expect(f1({ profile: { name: "Alice", passwordHash: "secret" } })).toEqual({ profile: { name: "Alice" } });
+
+    const f2 = createResponseFilter(
+      Type.Intersect([Type.Object({ id: Type.Number() }), Type.Object({ name: Type.String() })])
+    );
+    expect(f2({ id: 1, name: "Bob", secretToken: "leak" })).toEqual({ id: 1, name: "Bob" });
+
+    const app = new BareJS();
+    app.get(
+      "/q",
+      schemaValidator({
+        query: Type.Object({ page: Type.Number() }),
+        stripUnknown: true
+      }),
+      (ctx) => ctx.query
+    );
+    const r = await app.request("/q?page=2&admin=true");
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ page: 2 });
+  });
+
+  test("46. validate() and schemaValidator() enforce nested plain JSON Schema constraints", async () => {
+    const { validate } = await import("../src/index");
+    const nestedSchema = {
+      type: "object",
+      properties: {
+        user: {
+          type: "object",
+          properties: { age: { type: "integer", minimum: 18 } },
+          required: ["age"],
+          additionalProperties: false
+        }
+      },
+      required: ["user"],
+      additionalProperties: false
+    };
+
+    const app = new BareJS();
+    app.post("/v", validate(nestedSchema), (ctx) => ({ ok: true, body: ctx.body }));
+    app.post("/sv", schemaValidator({ body: nestedSchema }), (ctx) => ({ ok: true, body: ctx.body }));
+
+    const bad1 = await app.request("/v", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: { age: 12 } })
+    });
+    expect(bad1.status).toBe(400);
+
+    const bad2 = await app.request("/sv", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: { age: 20, role: "admin" } })
+    });
+    expect(bad2.status).toBe(400);
+
+    const good = await app.request("/v", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: { age: 25 } })
+    });
+    expect(good.status).toBe(200);
+  });
+
+  test("47. bareClient strips default Content-Type for FormData and skips undefined :param", async () => {
+    const { bareClient } = await import("../src/index");
+    const app = new BareJS();
+    app.post("/up", async (ctx) => {
+      const fd = await ctx.req.formData();
+      return { name: fd.get("name") };
+    });
+    app.get("/users/:id", (ctx) => ({ id: ctx.params.id }));
+
+    const client = bareClient(app, { headers: { "Content-Type": "application/json" } });
+    const fd = new FormData();
+    fd.append("name", "alice");
+    const upRes = await client.post("/up", { body: fd });
+    expect(upRes).toEqual({ name: "alice" });
+
+    // When param is undefined, :id stays :id (not "undefined")
+    const uRes = await client.get("/users/:id", { params: { id: undefined as any } });
+    expect(uRes).toEqual({ id: ":id" });
+  });
 });

@@ -93,7 +93,7 @@ const buildUrl = (baseUrl: string, path: string, options?: ClientRequestOptions)
   if (options?.params) {
     const params = options.params;
     finalPath = finalPath.replace(/:([a-zA-Z0-9_]+)(?=\/|\?|$)/g, (match, key) =>
-      Object.hasOwn(params, key) ? encodeURIComponent(String(params[key])) : match
+      Object.hasOwn(params, key) && params[key] !== undefined ? encodeURIComponent(String(params[key])) : match
     );
   }
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
@@ -145,6 +145,7 @@ export const bareClient = <AppOrRoutes = any>(
         (typeof ReadableStream !== 'undefined' && b instanceof ReadableStream);
 
       if (isRawBody) {
+        if (b instanceof FormData) headers.delete('content-type');
         init.body = b as RequestInit['body'];
       } else {
         if (!headers.has('content-type')) {

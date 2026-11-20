@@ -68,6 +68,7 @@ export const native = (schema: any): Middleware => {
   const reqSet = Array.isArray(schema.required) ? new Set<string>(schema.required) : null;
 
   const matchesNativeType = (val: any, expected: string | undefined): boolean => {
+    if (expected === undefined) return true;
     if (expected === 'array') return Array.isArray(val);
     if (expected === 'integer') return typeof val === 'number' && Number.isInteger(val);
     if (expected === 'object') return val !== null && typeof val === 'object' && !Array.isArray(val);
@@ -331,7 +332,12 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
     }
     if (headersCheck) {
       const hdrObj: Record<string, string> = {};
-      ctx.req.headers.forEach((v, k) => { hdrObj[k.toLowerCase()] = v; });
+      ctx.req.headers.forEach((v, k) => {
+        const lower = k.toLowerCase();
+        if (lower !== '__proto__' && lower !== 'constructor' && lower !== 'prototype') {
+          hdrObj[lower] = v;
+        }
+      });
       const r = headersCheck(hdrObj);
       if (!r.ok) return errorJSON({ status: 'error', code: 'HEADERS_INVALID', error: r.error });
     }

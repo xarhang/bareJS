@@ -31,7 +31,11 @@ export const circuitBreaker = (options: CircuitBreakerOptions = {}): Middleware 
     if (state !== nextState) {
       const prev = state;
       state = nextState;
-      options.onStateChange?.(prev, nextState);
+      try {
+        options.onStateChange?.(prev, nextState);
+      } catch {
+        // Ignore user callback errors on state transition
+      }
     }
   };
 

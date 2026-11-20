@@ -6,6 +6,7 @@ export interface OpenAPIOptions {
   tags?: Array<{ name: string; description?: string }>;
   securitySchemes?: Record<string, Record<string, any>>;
   security?: Array<Record<string, string[]>>;
+  excludePaths?: string[];
 }
 
 const zodToJsonSchema = (schema: any): Record<string, any> => {
@@ -30,7 +31,7 @@ const zodToJsonSchema = (schema: any): Record<string, any> => {
   if (typeName === 'ZodNumber') return { type: 'number' };
   if (typeName === 'ZodBoolean') return { type: 'boolean' };
   if (typeName === 'ZodArray') return { type: 'array', items: zodToJsonSchema(def.type) };
-  if (typeName === 'ZodOptional' || typeName === 'ZodDefault') return zodToJsonSchema(def.innerType);
+  if (typeName === 'ZodOptional' || typeName === 'ZodDefault' || typeName === 'ZodNullable') return zodToJsonSchema(def.innerType);
   if (typeName === 'ZodEnum') return { type: 'string', enum: def.values };
   return { type: 'object' };
 };
@@ -44,9 +45,10 @@ const extractSchema = (schema: any): Record<string, any> => {
 
 export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {}) => {
   const paths: Record<string, Record<string, any>> = {};
+  const excluded = new Set<string>(['/docs', '/docs/json', ...(options.excludePaths || [])]);
 
   for (const route of routes) {
-    if (route.path === '/docs' || route.path === '/docs/json') continue;
+    if (excluded.has(route.path)) continue;
 
     const openApiPath = ('/' + route.path)
       .replace(/\/+/g, '/')

@@ -1,0 +1,291 @@
+import { describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import {
+  BareJS,
+  Context,
+  bareAuth,
+  createToken,
+  idempotency,
+  native,
+  staticFile,
+  circuitBreaker,
+  bareClient,
+  generateOpenAPISpec,
+  Z
+} from "../src/index";
+
+describe("Security & QA Deep Audit v2 Fixes", () => {
+  test("1. Non-async middleware returning a Promise<Response> short-circuits and is awaited", async () => {
+    const app = new BareJS();
+    let handlerReached = false;
+
+    const promiseAuth = (_ctx: Context) =>
+      new Promise<Response>((resolve) => {
+        setTimeout(() => resolve(Response.json({ error: "Denied" }, { status: 401 })), 5);
+      });
+
+    app.get("/protected", promiseAuth, () => {
+      handlerReached = true;
+      return { ok: true };
+    });
+
+    const res = await app.request("/protected");
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Denied" });
+    expect(handlerReached).toBe(false);
+  });
+
+  test("2. Non-async middleware returning Promise<undefined> continues to handler", async () => {
+    const app = new BareJS();
+    const promisePass = (ctx: Context) =>
+      new Promise<undefined>((resolve) => {
+        setTimeout(() => {
+          ctx.set("tag", "passed");
+          resolve(undefined);
+        }, 5);
+      });
+
+    app.get("/ok", promisePass, (ctx: Context) => ({ tag: ctx.get("tag") }));
+
+    const res = await app.request("/ok");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ tag: "passed" });
+  });
+
+  test("3. bareAuth does not mask downstream synchronous handler errors as 401", async () => {
+    const secret = "super-secret-key";
+    const token = await createToken({ sub: "u1" }, secret);
+    const mw = bareAuth(secret);
+
+    const ctx = new Context();
+    ctx.req = new Request("http://localhost/fail", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    expect(() =>
+      mw(ctx, () => {
+        throw new Error("Database connection lost");
+      })
+    ).toThrow("Database connection lost");
+  });
+
+  test("4. In-memory idempotency skips SSE streams and prevents concurrent race during Response buffering", async () => {
+    const app = new BareJS();
+    let sseCalls = 0;
+    app.use(idempotency({ ttlMs: 5000 }));
+
+    app.post("/stream", (ctx: Context) => {
+      sseCalls++;
+      return ctx.sse((send, close) => {
+        send({ step: sseCalls });
+        close();
+      });
+    });
+
+    const r1 = await app.request("/stream", {
+      method: "POST",
+      headers: { "Idempotency-Key": "sse-1" }
+    });
+    expect(r1.status).toBe(200);
+    await r1.text();
+
+    const r2 = await app.request("/stream", {
+      method: "POST",
+      headers: { "Idempotency-Key": "sse-1" }
+    });
+    expect(r2.status).toBe(200);
+    expect(r2.headers.get("X-Idempotent-Replayed")).toBeNull();
+    expect(sseCalls).toBe(2);
+
+    // Handler returning undefined replays cleanly as null JSON
+    const app2 = new BareJS();
+    app2.use(idempotency({ ttlMs: 5000 }));
+    app2.post("/empty", () => undefined);
+    const e1 = await app2.request("/empty", {
+      method: "POST",
+      headers: { "Idempotency-Key": "empty-1" }
+    });
+    expect(e1.status).toBe(200);
+    expect(await e1.json()).toBeNull();
+
+    const e2 = await app2.request("/empty", {
+      method: "POST",
+      headers: { "Idempotency-Key": "empty-1" }
+    });
+    expect(e2.status).toBe(200);
+    expect(e2.headers.get("X-Idempotent-Replayed")).toBe("true");
+    expect(await e2.json()).toBeNull();
+  });
+
+  test("5. Context.setCookie rejects invalid sameSite and ignores non-finite maxAge", () => {
+    const ctx = new Context();
+    expect(() => ctx.setCookie("sid", "abc", { sameSite: "Lax\r\nX-Evil: 1" as any })).toThrow();
+
+    ctx.setCookie("sid", "abc", { maxAge: Number.NaN });
+    const res = ctx.json({ ok: true });
+    const setCookie = res.headers.get("set-cookie") || "";
+    expect(setCookie).not.toContain("Max-Age=NaN");
+  });
+
+  test("6. Context.jsonBody strips __proto__ key and Context.reset clears _requestId & _detached", async () => {
+    const ctx = new Context();
+    ctx.req = new Request("http://localhost/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Request-Id": "req-1" },
+      body: '{"name":"alice","__proto__":{"polluted":true}}'
+    });
+    expect(ctx.requestId).toBe("req-1");
+    ctx._detached = true;
+    const body = await ctx.jsonBody();
+    expect(body.name).toBe("alice");
+    expect(Object.hasOwn(body, "__proto__")).toBe(false);
+    expect(({} as any).polluted).toBeUndefined();
+
+    ctx.reset(new Request("http://localhost/test2"));
+    expect(ctx._detached).toBe(false);
+    expect(ctx.requestId).not.toBe("req-1");
+  });
+
+  test("7. Context.redirect rejects CRLF header injection", () => {
+    const ctx = new Context();
+    expect(() => ctx.redirect("https://example.com\r\nSet-Cookie: evil=1")).toThrow();
+  });
+
+  test("8. Context.sse handles stream cancel() without throwing on subsequent send()", async () => {
+    const ctx = new Context();
+    let sendFn!: (data: any) => void;
+    const res = ctx.sse((send) => {
+      sendFn = send;
+      send("first");
+    });
+
+    const reader = res.body!.getReader();
+    const first = await reader.read();
+    expect(new TextDecoder().decode(first.value)).toContain("data: first");
+    await reader.cancel();
+    expect(() => sendFn("after-cancel")).not.toThrow();
+  });
+
+  test("9. Context.upload throws 400 on malformed multipart body", async () => {
+    const ctx = new Context();
+    ctx.req = new Request("http://localhost/upload", {
+      method: "POST",
+      headers: { "Content-Type": "multipart/form-data; boundary=invalid" },
+      body: "not-a-valid-multipart-payload"
+    });
+    let err: any;
+    try {
+      await ctx.upload();
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeDefined();
+    expect(err.status).toBe(400);
+  });
+
+  test("10. BareRouter.use rejects string prefix without BareRouter and supports multiple middlewares", async () => {
+    const app = new BareJS();
+    expect(() => app.use("/api", (() => {}) as any)).toThrow(TypeError);
+
+    app.use(
+      (ctx: Context) => { ctx.set("m1", 1); },
+      (ctx: Context) => { ctx.set("m2", 2); }
+    );
+    app.get("/multi", (ctx: Context) => ({ m1: ctx.get("m1"), m2: ctx.get("m2") }));
+
+    const res = await app.request("/multi");
+    expect(await res.json()).toEqual({ m1: 1, m2: 2 });
+  });
+
+  test("11. Custom app.docs('/swagger') excludes custom docs routes from OpenAPI spec and supports ZodNullable", async () => {
+    const app = new BareJS();
+    app.get("/items", { query: Z.object({ tag: Z.string().nullable() }) }, () => []);
+    app.docs("/swagger");
+
+    const res = await app.request("/swagger/json");
+    expect(res.status).toBe(200);
+    const spec = await res.json();
+    expect(spec.paths["/items"]).toBeDefined();
+    expect(spec.paths["/swagger"]).toBeUndefined();
+    expect(spec.paths["/swagger/json"]).toBeUndefined();
+
+    const direct = generateOpenAPISpec(app.routes, { excludePaths: ["/swagger", "/swagger/json"] });
+    expect(direct.paths["/swagger"]).toBeUndefined();
+  });
+
+  test("12. native() validator allows properties without explicit type", async () => {
+    const app = new BareJS();
+    app.post("/any-prop", native({ properties: { meta: {} }, required: ["meta"] }), (ctx: Context) => ctx.body);
+
+    const res = await app.request("/any-prop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meta: { nested: [1, 2] } })
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meta: { nested: [1, 2] } });
+  });
+
+  test("13. staticFile rejects empty 'bytes=-' Range header with 416", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "barejs-static-"));
+    try {
+      writeFileSync(join(dir, "hello.txt"), "hello world");
+      const app = new BareJS().use(staticFile(dir));
+
+      const res = await app.request("/hello.txt", {
+        headers: { Range: "bytes=-" }
+      });
+      expect(res.status).toBe(416);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("14. bareClient handles +json content-type and malformed JSON error bodies safely", async () => {
+    const mockFetch = (async (url: string) => {
+      if (url.endsWith("/problem")) {
+        return new Response(JSON.stringify({ title: "Conflict", detail: "Already exists" }), {
+          status: 409,
+          headers: { "Content-Type": "application/problem+json" }
+        });
+      }
+      return new Response("<html>Bad Gateway</html>", {
+        status: 502,
+        headers: { "Content-Type": "application/json" }
+      });
+    }) as any;
+
+    const client = bareClient("http://localhost", { fetch: mockFetch });
+
+    let err1: any;
+    try { await client.get("/problem"); } catch (e) { err1 = e; }
+    expect(err1.status).toBe(409);
+    expect(err1.data).toEqual({ title: "Conflict", detail: "Already exists" });
+
+    let err2: any;
+    try { await client.get("/bad-gateway"); } catch (e) { err2 = e; }
+    expect(err2.status).toBe(502);
+    expect(err2.data).toBe("<html>Bad Gateway</html>");
+  });
+
+  test("15. circuitBreaker isolates throwing onStateChange callback", async () => {
+    const app = new BareJS();
+    app.use(
+      circuitBreaker({
+        failureThreshold: 1,
+        onStateChange: () => {
+          throw new Error("metrics sink down");
+        }
+      })
+    );
+    app.get("/fail", () => new Response("err", { status: 500 }));
+
+    const r1 = await app.request("/fail");
+    expect(r1.status).toBe(500);
+
+    const r2 = await app.request("/fail");
+    expect(r2.status).toBe(503);
+  });
+});

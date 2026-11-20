@@ -110,6 +110,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
           });
         }
       } catch {
+        realRootPromise = null;
         return next?.();
       }
     }
@@ -132,6 +133,12 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
     const rangeHeader = ctx.req.headers?.get?.('range');
     if (rangeHeader && rangeHeader.startsWith('bytes=') && fileSize > 0) {
       const [startStr, endStr] = rangeHeader.slice(6).split('-');
+      if (!startStr && !endStr) {
+        return new Response(null, {
+          status: 416,
+          headers: { ...headers, 'Content-Range': `bytes */${fileSize}` }
+        });
+      }
       let start = startStr ? Number(startStr) : 0;
       let end = endStr ? Number(endStr) : fileSize - 1;
       if (!startStr && endStr) {

@@ -138,10 +138,18 @@ export const bareClient = <AppOrRoutes = any>(
     const res = await fetchImpl(url, init);
     let data: any = null;
     if (res.status !== 204 && res.status !== 205 && res.status !== 304) {
-      const ct = res.headers.get('content-type') || '';
-      if (ct.includes('application/json')) {
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (ct.includes('application/json') || ct.includes('+json')) {
         const text = await res.text();
-        data = text ? JSON.parse(text) : null;
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = text;
+          }
+        } else {
+          data = null;
+        }
       } else {
         data = await res.text();
       }

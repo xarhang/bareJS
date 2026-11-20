@@ -31,6 +31,10 @@ const importKey = async (secret: string): Promise<CryptoKey> => {
     ["sign", "verify"]
   );
 
+  if (keyCache.size >= 1000) {
+    const oldest = keyCache.keys().next().value;
+    if (oldest !== undefined) keyCache.delete(oldest);
+  }
   keyCache.set(secret, key);
   return key;
 };
@@ -140,6 +144,10 @@ const importPublicKey = async (keyOrPem: string | CryptoKey, alg: 'RS256' | 'ES2
     false,
     ['verify']
   );
+  if (pemKeyCache.size >= 1000) {
+    const oldest = pemKeyCache.keys().next().value;
+    if (oldest !== undefined) pemKeyCache.delete(oldest);
+  }
   pemKeyCache.set(cacheKey, imported);
   return imported;
 };
@@ -255,6 +263,7 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
       const sigB64 = token.slice(secondDot + 1);
       const data = token.slice(0, secondDot);
 
+      let decoded: any;
       try {
         const expectedSig = createHmac('sha256', secret).update(data).digest();
         const actualSig = Buffer.from(sigB64, 'base64url');
@@ -268,11 +277,11 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
           return ctx.status(401).send("Unsupported token algorithm");
         }
 
-        const decoded = JSON.parse(fromBase64Url(payloadB64));
-        return checkClaimsAndRevocation(ctx, decoded, token, next);
+        decoded = JSON.parse(fromBase64Url(payloadB64));
       } catch {
         return ctx.status(401).send("Token verification failed");
       }
+      return checkClaimsAndRevocation(ctx, decoded, token, next);
     };
 
     if (customRevoked || revocationStore) {
@@ -315,9 +324,11 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
   };
 
   const matchJwk = (keys: any[], kid: string | undefined, alg: 'RS256' | 'ES256') => {
+    const expectedKty = alg === 'RS256' ? 'RSA' : 'EC';
     const isUsable = (k: any) =>
       k &&
       k.use !== 'enc' &&
+      (!k.kty || k.kty === expectedKty) &&
       (!k.alg || k.alg === alg);
     return kid
       ? keys.find((k) => k.kid === kid && isUsable(k))
@@ -366,6 +377,7 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
     const sigB64 = token.slice(secondDot + 1);
     const data = token.slice(0, secondDot);
 
+    let decoded: any;
     try {
       const headerObj = JSON.parse(fromBase64Url(headerB64));
       const alg = headerObj?.alg as JwtAlgorithm | undefined;
@@ -403,11 +415,11 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
         }
       }
 
-      const decoded = JSON.parse(fromBase64Url(payloadB64));
-      return checkClaimsAndRevocation(ctx, decoded, token, next);
+      decoded = JSON.parse(fromBase64Url(payloadB64));
     } catch {
       return ctx.status(401).send("Token verification failed");
     }
+    return checkClaimsAndRevocation(ctx, decoded, token, next);
   };
 };
 

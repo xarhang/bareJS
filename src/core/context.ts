@@ -152,6 +152,10 @@ export class Context {
     if (options.domain && /[\r\n;]/.test(options.domain)) {
       throw new Error('Invalid cookie domain');
     }
+    const sameSite = options.sameSite ?? 'Lax';
+    if (sameSite !== 'Strict' && sameSite !== 'Lax' && sameSite !== 'None') {
+      throw new Error('Invalid cookie sameSite');
+    }
     let finalVal = value;
     if (options.secret) {
       const sig = createHmac('sha256', options.secret).update(value).digest('base64url');
@@ -160,11 +164,13 @@ export class Context {
     let cookieStr = `${name}=${encodeURIComponent(finalVal)}`;
     cookieStr += `; Path=${path}`;
     if (options.domain) cookieStr += `; Domain=${options.domain}`;
-    if (options.maxAge !== undefined) cookieStr += `; Max-Age=${Math.floor(options.maxAge)}`;
+    if (options.maxAge !== undefined && Number.isFinite(options.maxAge)) {
+      cookieStr += `; Max-Age=${Math.floor(options.maxAge)}`;
+    }
     if (options.expires) cookieStr += `; Expires=${options.expires.toUTCString()}`;
     if (options.httpOnly !== false) cookieStr += '; HttpOnly';
     if (options.secure) cookieStr += '; Secure';
-    cookieStr += `; SameSite=${options.sameSite ?? 'Lax'}`;
+    cookieStr += `; SameSite=${sameSite}`;
 
     if (!this._setCookies) this._setCookies = [];
     this._setCookies.push(cookieStr);
@@ -216,7 +222,20 @@ export class Context {
           err.status = 413;
           throw err;
         }
-        return this.body = JSON.parse(text);
+        const parsed = JSON.parse(text);
+        if (text.indexOf('"__proto__"') !== -1) {
+          const stripProto = (val: any): void => {
+            if (!val || typeof val !== 'object') return;
+            if (Array.isArray(val)) {
+              for (let i = 0; i < val.length; i++) stripProto(val[i]);
+              return;
+            }
+            if (Object.hasOwn(val, '__proto__')) delete val['__proto__'];
+            for (const k of Object.keys(val)) stripProto(val[k]);
+          };
+          stripProto(parsed);
+        }
+        return this.body = parsed;
       } catch (e: any) {
         if (e?.status === 413) throw e;
         return this.body = null;
@@ -235,7 +254,9 @@ export class Context {
     this._cookies = undefined;
     this._setCookies = undefined;
     this.body = undefined;
+    this._requestId = undefined;
     this._peerIp = undefined;
+    this._detached = false;
     return this;
   }
 
@@ -328,6 +349,9 @@ export class Context {
   }
 
   public redirect(url: string, status: number = 302): Response {
+    if (/[\r\n]/.test(url)) {
+      throw new Error('Invalid redirect URL');
+    }
     const headers: Record<string, string> = {
       'location': url,
       ...(this._headers || {})
@@ -356,31 +380,40 @@ export class Context {
       return encoder.encode(out);
     };
 
+    let closed = false;
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
+        const safeClose = () => {
+          if (!closed) {
+            closed = true;
+            try { controller.close(); } catch { /* already closed */ }
+          }
+        };
         try {
           if (typeof source === 'function') {
-            let closed = false;
             const send = (data: any, event?: string, id?: string) => {
-              if (!closed) controller.enqueue(formatChunk({ data, event, id }));
-            };
-            const close = () => {
               if (!closed) {
-                closed = true;
-                controller.close();
+                try { controller.enqueue(formatChunk({ data, event, id })); } catch { closed = true; }
               }
             };
-            await source(send, close);
-            close();
+            await source(send, safeClose);
+            safeClose();
           } else {
             for await (const item of source) {
-              controller.enqueue(formatChunk(item));
+              if (closed) break;
+              try { controller.enqueue(formatChunk(item)); } catch { closed = true; break; }
             }
-            controller.close();
+            safeClose();
           }
         } catch (err) {
-          controller.error(err);
+          if (!closed) {
+            closed = true;
+            try { controller.error(err); } catch { /* already closed */ }
+          }
         }
+      },
+      cancel() {
+        closed = true;
       }
     });
 
@@ -433,7 +466,12 @@ export class Context {
       throw Object.assign(new Error('Payload Too Large'), { status: 413 });
     }
 
-    const form = await this.req.formData();
+    let form: Awaited<ReturnType<Request['formData']>>;
+    try {
+      form = await this.req.formData();
+    } catch {
+      throw Object.assign(new Error('Malformed multipart/form-data payload'), { status: 400 });
+    }
     const fields: Record<string, string> = {};
     const files: UploadedFile[] = [];
     let totalBytes = 0;

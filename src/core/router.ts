@@ -150,16 +150,25 @@ export class BareRouter<Routes extends RouteSchema = {}> {
 
   public use<R2 extends RouteSchema = {}>(mw: BareRouter<R2>): BareRouter<Routes & R2>;
   public use<P extends string, R2 extends RouteSchema = {}>(prefix: P, mw: BareRouter<R2>): BareRouter<Routes & PrefixRoutes<P, R2>>;
-  public use(mw: any): BareRouter<Routes>;
-  public use(prefixOrMw: any, maybeMw?: any): any {
-    if (typeof prefixOrMw === 'string' && (maybeMw instanceof BareRouter || (maybeMw && maybeMw.routes))) {
-      this._mountRouter(prefixOrMw, maybeMw);
+  public use(...mws: any[]): BareRouter<Routes>;
+  public use(prefixOrMw: any, ...rest: any[]): any {
+    const maybeMw = rest[0];
+    if (typeof prefixOrMw === 'string') {
+      if (maybeMw instanceof BareRouter || (maybeMw && maybeMw.routes)) {
+        this._mountRouter(prefixOrMw, maybeMw);
+      } else {
+        throw new TypeError(`BareRouter.use("${prefixOrMw}", ...) requires a BareRouter instance`);
+      }
     } else if (prefixOrMw instanceof BareRouter || (prefixOrMw && prefixOrMw.routes)) {
       this._mountRouter("", prefixOrMw);
     } else if (prefixOrMw && typeof prefixOrMw.install === 'function') {
       prefixOrMw.install(this);
     } else {
-      this.groupMiddleware.push(prefixOrMw);
+      if (typeof prefixOrMw === 'function') this.groupMiddleware.push(prefixOrMw);
+      for (let i = 0; i < rest.length; i++) {
+        const mw = rest[i];
+        if (typeof mw === 'function') this.groupMiddleware.push(mw);
+      }
     }
     return this;
   }

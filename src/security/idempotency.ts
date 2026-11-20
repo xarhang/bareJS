@@ -22,7 +22,7 @@ const buildReplayResponse = (existing: CachedIdempotentEntry): Response => {
       }
     });
   }
-  return Response.json(existing.body, {
+  return Response.json(existing.body ?? null, {
     status: existing.status,
     headers: { 'X-Idempotent-Replayed': 'true' }
   });
@@ -161,8 +161,8 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     if (!key) return;
     (ctx as any)._idempotencyKey = undefined;
     (ctx as any)._idemInFlight = undefined;
-    inFlight.delete(key);
-    if (status >= 200 && status < 300) {
+    const isStream = resVal instanceof Response && (resVal.headers.get('content-type') || '').includes('text/event-stream');
+    if (!isStream && status >= 200 && status < 300) {
       if (resVal instanceof Response) {
         const ct = resVal.headers.get('content-type') || 'application/json';
         resVal.clone().arrayBuffer().then((buf) => {
@@ -173,16 +173,19 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
             contentType: ct,
             expiresAt: Date.now() + ttlMs
           });
-        }).catch(() => {});
-      } else {
-        evictIfNeeded();
-        cache.set(key, {
-          status,
-          body: resVal,
-          expiresAt: Date.now() + ttlMs
+        }).catch(() => {}).finally(() => {
+          inFlight.delete(key);
         });
+        return;
       }
+      evictIfNeeded();
+      cache.set(key, {
+        status,
+        body: resVal,
+        expiresAt: Date.now() + ttlMs
+      });
     }
+    inFlight.delete(key);
   };
 
   (mw as any).__idempotencyRelease = (ctx: Context) => {

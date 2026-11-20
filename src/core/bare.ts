@@ -198,7 +198,7 @@ export class BareJS<
 
     this.get(jsonPath, () => {
       if (!cachedSpec) {
-        cachedSpec = JSON.stringify(generateOpenAPISpec(this.routes, { title: this.name, ...options }));
+        cachedSpec = JSON.stringify(generateOpenAPISpec(this.routes, { title: this.name, excludePaths: [basePath, jsonPath], ...options }));
       }
       return new Response(cachedSpec, {
         status: 200,
@@ -505,6 +505,9 @@ export class BareJS<
     // Middleware Hoisting: Pass functions as arguments to avoid array lookup
     const fnNames = pipeline.map((_, i) => `fn${i}`);
 
+    const noop = () => { };
+    let continueAsyncDef = '';
+
     if (isAsync) {
       for (let i = 0; i < len - 1; i++) {
         code += `let r${i} = fn${i}(ctx, noop);\n`;
@@ -519,9 +522,29 @@ export class BareJS<
         ${finalizeCode}
       `;
     } else {
+      continueAsyncDef = `
+        const fns = [${fnNames.join(', ')}];
+        const continueAsync = async (${isLog ? 'idx, pending, ctx, doLog' : 'idx, pending, ctx'}) => {
+          let r = await pending;
+          if (r instanceof Response) { applyShortCircuit(r, ctx); ${isLog ? 'doLog(r.status);' : ''} return r; }
+          for (let i = idx + 1; i < fns.length - 1; i++) {
+            r = fns[i](ctx, noop);
+            if (r) {
+              if (typeof r.then === 'function') r = await r;
+              if (r instanceof Response) { applyShortCircuit(r, ctx); ${isLog ? 'doLog(r.status);' : ''} return r; }
+            }
+          }
+          let res = fns[fns.length - 1](ctx);
+          if (res && typeof res.then === 'function') res = await res;
+          ${finalizeCode}
+        };
+      `;
       for (let i = 0; i < len - 1; i++) {
         code += `const r${i} = fn${i}(ctx, noop);\n`;
-        code += `if (r${i} && r${i} instanceof Response) { applyShortCircuit(r${i}, ctx); ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
+        code += `if (r${i}) {\n`;
+        code += `  if (r${i} instanceof Response) { applyShortCircuit(r${i}, ctx); ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
+        code += `  if (typeof r${i}.then === 'function') return continueAsync(${i}, r${i}, ${argSig});\n`;
+        code += `}\n`;
       }
       code += `
         let res = fn${len - 1}(ctx);
@@ -530,10 +553,9 @@ export class BareJS<
       `;
     }
 
-    const noop = () => { };
     const fnHeader = isAsync
       ? `let lastHdrs = null, lastInit200 = null; return async function(${argSig})`
-      : `let lastHdrs = null, lastInit200 = null; return function(${argSig})`;
+      : `let lastHdrs = null, lastInit200 = null; ${continueAsyncDef} return function(${argSig})`;
 
     return wrapIdem(
       new Function(...fnNames, 'noop', 'json200', 'text200', ...extraNames, `${fnHeader} { ${code} }`)(...pipeline, noop, json200, text200, ...extraVals)

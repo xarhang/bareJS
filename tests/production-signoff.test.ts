@@ -1602,6 +1602,12 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     expect((app as any).pool.length).toBe(0);
   });
 
+  const getPoolStats = (app: BareJS<any, any>) => ({
+    free: (app as any)._poolState.top as number,
+    capacity: (app as any).maxPool as number,
+    backingLength: ((app as any).pool as Array<Context | undefined>).length,
+  });
+
   test("67. clears acquired LIFO slot to undefined, respects maxPool & BareJS(0), retires detached contexts, and isolates concurrent state", async () => {
     // 1) Acquired slot is cleared to undefined while in-flight
     const slotApp = new BareJS(2);
@@ -1611,13 +1617,13 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     let inFlightSlot0: any = "unset";
     slotApp.get("/warm", () => ({ ok: true }));
     slotApp.get("/hold", async () => {
-      inFlightPoolFree = slotApp._getPoolStats().free;
+      inFlightPoolFree = getPoolStats(slotApp).free;
       inFlightSlot0 = (slotApp as any).pool[0];
       await inFlightGate;
       return { ok: true };
     });
     await slotApp.request("/warm");
-    expect(slotApp._getPoolStats()).toEqual({ free: 1, capacity: 2, backingLength: 1 });
+    expect(getPoolStats(slotApp)).toEqual({ free: 1, capacity: 2, backingLength: 1 });
     expect((slotApp as any).pool[0]).toBeDefined();
 
     const holdPromise = slotApp.request("/hold");
@@ -1626,7 +1632,7 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     expect(inFlightSlot0).toBeUndefined();
     releaseInFlight();
     await holdPromise;
-    expect(slotApp._getPoolStats().free).toBe(1);
+    expect(getPoolStats(slotApp).free).toBe(1);
     expect((slotApp as any).pool[0]).toBeDefined();
 
     // 2) Detached Context (timeout) is NOT pushed back to pool
@@ -1638,7 +1644,7 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     const detRes = await detApp.request("/slow");
     expect(detRes.status).toBe(408);
     await Bun.sleep(35);
-    expect(detApp._getPoolStats().free).toBe(0);
+    expect(getPoolStats(detApp).free).toBe(0);
     expect((detApp as any).pool[0]).toBeUndefined();
 
     // 3) free count never exceeds maxPool under concurrency and concurrent requests do not leak state
@@ -1661,14 +1667,14 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
       expect(results[i]!.hdr).toBe(String(i));
       expect(results[i]!.body).toEqual({ id: String(i), stored: String(i), q: String(i) });
     }
-    expect(concApp._getPoolStats().free).toBeLessThanOrEqual(3);
-    expect(concApp._getPoolStats().free).toBeGreaterThan(0);
+    expect(getPoolStats(concApp).free).toBeLessThanOrEqual(3);
+    expect(getPoolStats(concApp).free).toBeGreaterThan(0);
 
     // 4) new BareJS(0) never retains Context instances
     const zeroPoolApp = new BareJS(0);
     zeroPoolApp.get("/z", () => ({ ok: true }));
     await Promise.all(Array.from({ length: 5 }, () => zeroPoolApp.request("/z")));
-    expect(zeroPoolApp._getPoolStats()).toEqual({ free: 0, capacity: 0, backingLength: 0 });
+    expect(getPoolStats(zeroPoolApp)).toEqual({ free: 0, capacity: 0, backingLength: 0 });
   });
 
   test("68. recompile preserves pool ownership safely across route additions and concurrent in-flight requests", async () => {
@@ -1676,7 +1682,7 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
 
     app.get("/a", () => "A");
     await app.request("/a");
-    expect(app._getPoolStats().free).toBe(1);
+    expect(getPoolStats(app).free).toBe(1);
     const firstPooledCtx = (app as any).pool[0];
     expect(firstPooledCtx).toBeDefined();
 
@@ -1690,8 +1696,8 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
 
     expect(await responses[0].text()).toBe("A");
     expect(await responses[1].text()).toBe("B");
-    expect(app._getPoolStats().free).toBeGreaterThan(0);
-    expect(app._getPoolStats().free).toBeLessThanOrEqual(2);
+    expect(getPoolStats(app).free).toBeGreaterThan(0);
+    expect(getPoolStats(app).free).toBeLessThanOrEqual(2);
 
     // Also verify recompile while an earlier handler generation has an in-flight request
     const overlapApp = new BareJS(2);
@@ -1705,12 +1711,12 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     });
 
     await overlapApp.request("/warm");
-    expect(overlapApp._getPoolStats().free).toBe(1);
+    expect(getPoolStats(overlapApp).free).toBe(1);
 
     // Acquire the pooled context on generation 1 and keep it in-flight
     const inFlightOldGen = overlapApp.request("/slow");
     await Bun.sleep(5);
-    expect(overlapApp._getPoolStats().free).toBe(0);
+    expect(getPoolStats(overlapApp).free).toBe(0);
     expect((overlapApp as any).pool[0]).toBeUndefined();
 
     // Trigger recompile while generation 1 request is still in-flight
@@ -1722,11 +1728,11 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
 
     const newGenRes = await overlapApp.request("/new");
     expect(await newGenRes.text()).toBe("new-gen");
-    expect(overlapApp._getPoolStats().free).toBe(1);
+    expect(getPoolStats(overlapApp).free).toBe(1);
 
     releaseSlow();
     const oldGenRes = await inFlightOldGen;
     expect(await oldGenRes.text()).toBe("old-gen");
-    expect(overlapApp._getPoolStats().free).toBe(2);
+    expect(getPoolStats(overlapApp).free).toBe(2);
   });
 });

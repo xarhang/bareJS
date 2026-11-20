@@ -9,7 +9,7 @@ All notable changes to **BareJS** are documented in this file.
   - Replaced power-of-two ring-buffer pre-allocation with `normalizePoolSize(poolSize, 1024, 65_536)` and a lazy bounded LIFO stack (`0..65536`, where `new BareJS(0)` disables retention).
   - Cleared acquired pool slots (`pool[slot] = undefined`) while requests are in-flight so the backing array never retains references to active or timed-out/detached `Context` instances.
   - Moved the LIFO stack pointer into a shared mutable `_poolState = { top: 0 }` object captured across all JIT handler generations and added automatic recompilation invalidation (`_onRouteMutate`) when routes or middleware are registered after initial requests.
-  - Added internal diagnostic helper `_getPoolStats()` (`/** @internal */`) without exposing internal pool state on the public production API.
+  - Removed `public get poolTop()` and ensured zero test instrumentation appears in emitted public `.d.ts` declarations.
 - **Zero-Allocation Sync-Peek JSON Body & Validator Fast Path** (`src/core/context.ts`, `src/security/validators.ts`):
   - Added `ctx.jsonBodySyncOrAsync()` using `Bun.peek(req.text())` for in-memory/buffered requests while preserving streaming `readBodyWithLimit()` for `Transfer-Encoding: chunked` and pull-based `ReadableStream` bodies.
   - Updated `schemaValidator` (`body`) to execute synchronously without Promise allocation when the JSON body is already buffered and validated via TypeBox or Native JSON Schema (**2.17x faster** on POST JSON + Schema Validation: `8.44 µs -> 3.89 µs`, beating Elysia's `5.11 µs`).

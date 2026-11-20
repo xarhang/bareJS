@@ -82,19 +82,6 @@ export class BareJS<
   private _useLog: boolean = false;
   private _trustProxyBox = { val: false };
 
-  /** @internal */
-  _getPoolStats(): {
-    free: number;
-    capacity: number;
-    backingLength: number;
-  } {
-    return {
-      free: this._poolState.top,
-      capacity: this.maxPool,
-      backingLength: this.pool.length,
-    };
-  }
-
   protected override _onRouteMutate(): void {
     if (this.compiled) {
       this.compiled = false;

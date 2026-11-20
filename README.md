@@ -56,7 +56,7 @@ All benchmark numbers below are **automatically generated on every push to `main
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 
-> Verified with **316 Automated Tests (5,833 assertions)** and **100.00% Function & 100.00% Line Coverage**.
+> Verified with **401 Automated Tests (6,129 assertions)** and **100.00% Function & 100.00% Line Coverage**.
 >
 > [!TIP]
 > **View our [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/)** for historical data and detailed performance trends.

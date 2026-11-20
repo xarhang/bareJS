@@ -2,6 +2,47 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.56] - 2026-11-19
+
+### Security
+- **Caller-Scoped Idempotency & Header Replay** (`src/security/idempotency.ts`, `src/security/store.ts`):
+  - Scoped idempotency cache & lock keys by caller identity (SHA-256 of `Authorization` and `Cookie` headers by default, or custom `keyScope(ctx)`) so one user can never replay another user's cached response.
+  - Preserved and replayed `Location`, `Content-Location`, and `ETag` headers on idempotent hits (in-memory and `redisStore`).
+  - Added per-request lock ownership tokens (`acquireToken` / `release(key, token)`) and double-release guards so a timed-out request cannot release a newer request's lock.
+- **ES256 Signature Malleability & Canonical JWT/Cookie Verification** (`src/security/auth.ts`, `src/core/context.ts`):
+  - Computed and checked the ECDSA P-256 `(r, n - s)` low/high-S twin signature (`getEs256TwinToken`) during token revocation so revoked ES256 tokens cannot be bypassed via signature malleability.
+  - Enforced canonical base64url encoding check (rejecting non-zero trailing bits) on JWT signatures and `ctx.getSignedCookie()`.
+  - Replaced recursive JWT payload sanitization with an iterative `stripProtoKeys` traversal stripping `__proto__`, `constructor`, and `prototype` at any depth.
+- **Streaming Body Size Enforcement** (`src/core/context.ts`):
+  - Added streaming `readBodyWithLimit()` to `ctx.jsonBody()` and `ctx.upload()` so chunked requests without `Content-Length` (or with spoofed `Content-Length`) abort immediately with `413` once bytes exceed `maxBytes`.
+  - Sanitized `constructor` and `prototype` keys in `ctx.jsonBody()` and enforced multipart field/file size limits on string and binary parts.
+- **Flood-Resistant Rate Limiting** (`src/security/rateLimit.ts`):
+  - Stopped evicting live rate-limit buckets when `maxEntries` is reached under key-flooding; overflow keys now share a bounded overflow bucket so an attacker cannot reset a victim's counter.
+- **Radix Router & Request-ID Hardening** (`src/core/radix.ts`, `src/core/bare.ts`, `src/utils/requestId.ts`):
+  - Replaced post-compile regex replacement on `rawRouterCode` with an `emitCall` callback in `RadixNode.jitCompile()`, eliminating codegen corruption when route paths contain handler call substrings.
+  - Used `Object.create(null)` for Radix `children`/`handlers`, per-method `handlerParams`, block-scoped `{ const _p = ... }` emission, and safe `Object.defineProperty` handling for `:__proto__` parameters.
+  - Stripped ASCII control characters (`\x00-\x1f`, `\x7f`) from incoming `X-Request-Id` headers.
+
+### Added
+- **Repeated Query Key Support (`ctx.queryAll`)** (`src/core/context.ts`, `src/security/validators.ts`):
+  - Added `ctx.queryAll(key)` returning all values for repeated query parameters (`?a=1&a=2`) and auto-coerced repeated keys into array-typed `query` schema fields across JSON Schema, TypeBox, and Zod (including `.optional()`, `.default()`, and `.nullable()` wrappers).
+- **Extended JSON Schema & OpenAPI Support** (`src/security/validators.ts`, `src/utils/openapi.ts`):
+  - Added deep structural equality for `const`/`enum`, plus `multipleOf`, `uniqueItems`, `not`, `minProperties`, `maxProperties`, `patternProperties` (alongside `additionalProperties`), `dependentRequired`, and tuple `items: [...]` validation in `native()`.
+  - Extended `stripUnknown` / `createResponseFilter` (`projectWithSchema`) to combine `properties`, `patternProperties`, and schema-valued `additionalProperties`, as well as TypeBox/JSON Schema tuples, `Type.Record`, `Type.Union`, and `Type.Intersect`.
+  - Enhanced OpenAPI generation for Zod `nullable`, `int`, `min`/`max`, `email`/`uuid` checks, and wildcard routes (`/{wildcard}`).
+
+### Fixed
+- **Resilience & Timer Hardening** (`src/security/timeout.ts`, `src/security/resilience.ts`):
+  - Clamped `timeout(ms)` delay to `[0, 2^31 - 1]` so large or `Infinity` timeouts never trigger Bun `TimeoutOverflowWarning` (1ms immediate timeout).
+  - Added a probe deadline (`resetTimeoutMs`) in `circuitBreaker()` so a hung `HALF_OPEN` probe transitions back to `OPEN` instead of wedging the circuit indefinitely.
+- **CORS, Compression, SSE & Bootstrap Fixes** (`src/security/cors.ts`, `src/utils/compress.ts`, `src/core/bare.ts`, `src/core/loader.ts`, `src/client/index.ts`):
+  - Merged `Vary` headers without overwriting existing values, synthesized scoped `OPTIONS` preflight handlers using the most specific mounted `cors()`, and applied global CORS headers to `404` responses.
+  - Made `compress()` SSE `Content-Type: text/event-stream` detection case-insensitive.
+  - Fixed `app.listen(0)` ephemeral port selection (`??`), synchronous `bootstrapConfig()` loading via `createRequire`, `ctx.sse()` sync callback lifecycle, and `bareClient` `FormData` `Content-Type` boundary handling.
+- **Tests**: Expanded `tests/production-signoff.test.ts` to 64 end-to-end production & security sign-off tests (**401 tests / 6,129 assertions**).
+
+---
+
 ## [0.1.55] - 2026-11-19
 
 ### Fixed

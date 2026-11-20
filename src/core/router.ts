@@ -1,8 +1,7 @@
 import {
   type Context,
   type Middleware,
-  type Handler,
-  type GroupCallback
+  type Handler
 } from '../core/context';
 import { schemaValidator, type RouteSchemas } from '../security/validators';
 

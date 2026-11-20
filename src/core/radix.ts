@@ -221,6 +221,4 @@ export class RadixNode {
 
     return code;
   }
-
-  public id = Math.random().toString(36).slice(2);
 }

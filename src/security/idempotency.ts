@@ -92,7 +92,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
               const buf = await clonedRes.arrayBuffer();
               await externalStore.set(key, { status, rawBody: buf, contentType: ct, expiresAt: Date.now() + ttlMs }, ttlMs);
             } else {
-              await externalStore.set(key, { status, body: resVal, expiresAt: Date.now() + ttlMs }, ttlMs);
+              await externalStore.set(key, { status, body: resVal ?? null, expiresAt: Date.now() + ttlMs }, ttlMs);
             }
           }
         } catch {

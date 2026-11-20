@@ -68,7 +68,6 @@ export class BareJS<
   // private poolIdx = 0;
   private hotFetch?: (req: Request, peerIp?: string) => any;
   private compiled = false;
-  private poolMask: number;
   private _useLog: boolean = false;
   private _trustProxy: boolean = false;
   private errorHandler?: (err: any, ctx: Context) => any;
@@ -157,7 +156,6 @@ export class BareJS<
     super();
     bootstrapConfig();
     const size = Math.pow(2, Math.ceil(Math.log2(poolSize)));
-    this.poolMask = size - 1;
     for (let i = 0; i < size; i++) {
       this.pool.push(new Context());
     }
@@ -857,7 +855,8 @@ export class BareJS<
               const s = url.indexOf('/', 8);
               const q = s === -1 ? -1 : url.indexOf('?', s);
               const path = s === -1 ? '/' : (q === -1 ? url.slice(s) : url.slice(s, q));
-              const normalized = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+              const collapsed = path.replace(/\/+/g, '/');
+              const normalized = collapsed.length > 1 && collapsed.endsWith('/') ? collapsed.slice(0, -1) : collapsed;
               let handler = wsRoutes.get(normalized);
               let params: Record<string, string> | undefined;
               if (!handler) {

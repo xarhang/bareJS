@@ -2,7 +2,7 @@
 
 All notable changes to **BareJS** are documented in this file.
 
-## [0.1.56] - 2026-11-19
+## [0.1.57] - 2026-11-20
 
 ### Performance
 - **Zero-Allocation Sync-Peek JSON Body & Validator Fast Path** (`src/core/context.ts`, `src/security/validators.ts`):

@@ -87,20 +87,23 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     (mw as any).__idempotencyCommit = (ctx: Context, resVal: any, status: number) => {
       const key = (ctx as any)._idempotencyKey;
       if (!key) return;
-      (ctx as any)._idempotencyKey = undefined;
-      (ctx as any)._idemInFlight = undefined;
-      const isStream = resVal instanceof Response && (resVal.headers.get('content-type') || '').includes('text/event-stream');
+      const isResp = resVal instanceof Response;
+      const isStream = isResp && (resVal.headers.get('content-type') || '').includes('text/event-stream');
       let clonedRes: any = null;
-      if (!isStream && status >= 200 && status < 300 && resVal instanceof Response) {
+      if (!isStream && status >= 200 && status < 300 && isResp) {
         try { clonedRes = resVal.clone(); } catch { clonedRes = null; }
       }
       const ct = clonedRes ? (clonedRes.headers.get('content-type') || 'application/json') : undefined;
       return (async () => {
         try {
-          if (!isStream && status >= 200 && status < 300) {
-            if (clonedRes) {
-              const buf = await clonedRes.arrayBuffer();
-              await externalStore.set(key, { status, rawBody: buf, contentType: ct, expiresAt: Date.now() + ttlMs }, ttlMs);
+          if (!(ctx as any)._detached && !isStream && status >= 200 && status < 300) {
+            if (isResp) {
+              if (clonedRes) {
+                const buf = await clonedRes.arrayBuffer();
+                if (!(ctx as any)._detached) {
+                  await externalStore.set(key, { status, rawBody: buf, contentType: ct, expiresAt: Date.now() + ttlMs }, ttlMs);
+                }
+              }
             } else {
               await externalStore.set(key, { status, body: resVal ?? null, expiresAt: Date.now() + ttlMs }, ttlMs);
             }
@@ -108,6 +111,8 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
         } catch {
           // Best-effort cache write
         } finally {
+          (ctx as any)._idempotencyKey = undefined;
+          (ctx as any)._idemInFlight = undefined;
           await externalStore.release(key);
         }
       })();
@@ -126,7 +131,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
   }
 
   const cache = new Map<string, CachedIdempotentEntry>();
-  const inFlight = new Map<string, number>();
+  const inFlight = new Map<string, { token: string; expiresAt: number }>();
 
   const evictIfNeeded = () => {
     if (cache.size >= maxKeys) {
@@ -152,9 +157,9 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
       cache.delete(key);
     }
 
-    const lockExp = inFlight.get(key);
-    if (lockExp !== undefined) {
-      if (now < lockExp) {
+    const lockEntry = inFlight.get(key);
+    if (lockEntry !== undefined) {
+      if (now < lockEntry.expiresAt) {
         (ctx as any)._idempotencyKey = undefined;
         return Response.json(
           { status: 'error', code: 'IDEMPOTENT_IN_FLIGHT', message: 'Duplicate request is currently in flight' },
@@ -164,25 +169,43 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
       inFlight.delete(key);
     }
 
-    inFlight.set(key, now + ttlMs);
+    const token = crypto.randomUUID();
+    inFlight.set(key, { token, expiresAt: now + ttlMs });
     (ctx as any)._idempotencyKey = key;
-    (ctx as any)._idemInFlight = inFlight;
+    (ctx as any)._idemToken = token;
+    (ctx as any)._idemInFlight = {
+      delete: (k: string) => {
+        const cur = inFlight.get(k);
+        if (cur && cur.token === token) inFlight.delete(k);
+      }
+    };
     return undefined;
+  };
+
+  const releaseOwned = (ctx: Context, key: string) => {
+    const token = (ctx as any)._idemToken;
+    (ctx as any)._idempotencyKey = undefined;
+    (ctx as any)._idemToken = undefined;
+    (ctx as any)._idemInFlight = undefined;
+    const cur = inFlight.get(key);
+    if (cur && (!token || cur.token === token)) {
+      inFlight.delete(key);
+    }
   };
 
   (mw as any).__idempotencyCommit = (ctx: Context, resVal: any, status: number) => {
     const key = (ctx as any)._idempotencyKey;
     if (!key) return;
-    (ctx as any)._idempotencyKey = undefined;
-    (ctx as any)._idemInFlight = undefined;
-    const isStream = resVal instanceof Response && (resVal.headers.get('content-type') || '').includes('text/event-stream');
-    if (!isStream && status >= 200 && status < 300) {
-      if (resVal instanceof Response) {
+    const isResp = resVal instanceof Response;
+    const isStream = isResp && (resVal.headers.get('content-type') || '').includes('text/event-stream');
+    if (!(ctx as any)._detached && !isStream && status >= 200 && status < 300) {
+      if (isResp) {
         let cloned: any = null;
         try { cloned = resVal.clone(); } catch { cloned = null; }
         if (cloned) {
           const ct = cloned.headers.get('content-type') || 'application/json';
           return cloned.arrayBuffer().then((buf: ArrayBuffer) => {
+            if ((ctx as any)._detached) return;
             evictIfNeeded();
             cache.set(key, {
               status,
@@ -191,28 +214,26 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
               expiresAt: Date.now() + ttlMs
             });
           }).catch(() => {}).finally(() => {
-            inFlight.delete(key);
+            releaseOwned(ctx, key);
           });
         }
-        inFlight.delete(key);
+        releaseOwned(ctx, key);
         return;
       }
       evictIfNeeded();
       cache.set(key, {
         status,
-        body: resVal,
+        body: resVal ?? null,
         expiresAt: Date.now() + ttlMs
       });
     }
-    inFlight.delete(key);
+    releaseOwned(ctx, key);
   };
 
   (mw as any).__idempotencyRelease = (ctx: Context) => {
     const key = (ctx as any)._idempotencyKey;
     if (key) {
-      (ctx as any)._idempotencyKey = undefined;
-      (ctx as any)._idemInFlight = undefined;
-      inFlight.delete(key);
+      releaseOwned(ctx, key);
     }
   };
 

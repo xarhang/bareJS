@@ -537,7 +537,7 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     expect(seen.size).toBe(1);
   });
 
-  test("23. redisStore FIFO token queue prevents expired holder on same store instance from deleting active lock", async () => {
+  test("23. redisStore pop() releases active live lock after an earlier expired acquisition on same store", async () => {
     const kv = new Map<string, string>();
     const mockRedis = {
       get: async (k: string) => kv.get(k) ?? null,
@@ -550,10 +550,10 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     };
     const store = redisStore(mockRedis);
     expect(await store.acquire("k", 20)).toBe(true);
-    kv.delete("barejs:idem:lock:k"); // simulate TTL expiry
+    kv.delete("barejs:idem:lock:k"); // simulate TTL expiry of first lock
     expect(await store.acquire("k", 5000)).toBe(true);
-    await store.release("k"); // delayed release of first acquisition
-    expect(await store.acquire("k", 5000)).toBe(false); // second lock still active!
+    await store.release("k"); // normal release of live lock
+    expect(await store.acquire("k", 5000)).toBe(true);
   });
 
   test("24. idempotency releases in-flight lock if Response.clone() throws (disturbed body)", async () => {
@@ -632,5 +632,121 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
 
     const cfg = initConfig(["bad"] as any);
     expect((cfg as any)[0]).toBeUndefined();
+  });
+
+  test("28. Context.sse splits standalone CR (\\r) to prevent SSE field injection", async () => {
+    const ctx = new Context();
+    const res = ctx.sse((send, close) => {
+      send("hello\revent: injected\rdata: fake");
+      close();
+    });
+    const text = await res.text();
+    expect(text).toBe("data: hello\ndata: event: injected\ndata: data: fake\n\n");
+  });
+
+  test("29. bareAuth rejects Base64Url trailing-bit malleability on revoked tokens", async () => {
+    const { createToken, revokeToken } = await import("../src/index");
+    const secret = "malleability-secret";
+    const tok = await createToken({ sub: "user1" }, secret);
+    revokeToken(tok, 60_000);
+
+    const parts = tok.split(".");
+    const sig = parts[2]!;
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const lastIdx = alphabet.indexOf(sig[sig.length - 1]!);
+    const flippedChar = alphabet[lastIdx ^ 1]!;
+    const mutatedTok = `${parts[0]}.${parts[1]}.${sig.slice(0, -1)}${flippedChar}`;
+
+    const app = new BareJS();
+    app.use(bareAuth(secret));
+    app.get("/me", () => ({ ok: true }));
+
+    expect((await app.request("/me", { headers: { Authorization: `Bearer ${tok}` } })).status).toBe(401);
+    expect((await app.request("/me", { headers: { Authorization: `Bearer ${mutatedTok}` } })).status).toBe(401);
+  });
+
+  test("30. Mounted sub-app derive() cleans up pool keys and post-compile trustProxy(true) applies to overflow", async () => {
+    const sub = new BareJS().derive(() => ({ leaked: "SECRET_TOKEN" }));
+    sub.get("/a", (ctx) => ({ leaked: (ctx as any).leaked }));
+    const app = new BareJS(1).route("/sub", sub);
+    app.get("/b", (ctx) => ({ leaked: (ctx as any).leaked ?? null }));
+
+    expect(await (await app.request("/sub/a")).json()).toEqual({ leaked: "SECRET_TOKEN" });
+    expect(await (await app.request("/b")).json()).toEqual({ leaked: null });
+
+    const app2 = new BareJS(1);
+    app2.get("/slow-ip", async (ctx) => {
+      await Bun.sleep(20);
+      return { ip: ctx.ip };
+    });
+    await app2.request("/slow-ip"); // pre-compile
+    app2.trustProxy(true);
+    const [r1, r2] = await Promise.all([
+      app2.request("/slow-ip", { headers: { "x-forwarded-for": "1.2.3.4" } }).then((r) => r.json()),
+      app2.request("/slow-ip", { headers: { "x-forwarded-for": "5.6.7.8" } }).then((r) => r.json())
+    ]);
+    expect(r1.ip).toBe("1.2.3.4");
+    expect(r2.ip).toBe("5.6.7.8");
+  });
+
+  test("31. idempotency before cors/staticFile does not stall dispatch & timeout prevents late commit caching", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bare-idem-static-"));
+    try {
+      writeFileSync(join(dir, "asset.txt"), "ok");
+      const app = new BareJS();
+      app.use(idempotency());
+      app.use(cors({ origin: "https://app.test" }));
+      app.use(staticFile(dir));
+      expect((await app.request("/asset.txt")).status).toBe(200);
+      expect((await app.request("/any", { method: "OPTIONS", headers: { Origin: "https://app.test" } })).status).toBe(204);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+
+    // timeout + slow streaming Response idempotency commit
+    const app2 = new BareJS();
+    let calls = 0;
+    app2.use(timeout(20));
+    app2.use(idempotency({ ttlMs: 5000 }));
+    app2.post("/stream-slow", () => {
+      calls++;
+      return new Response(
+        new ReadableStream({
+          async start(c) {
+            if (calls === 1) await Bun.sleep(50);
+            c.enqueue(new TextEncoder().encode(JSON.stringify({ calls })));
+            c.close();
+          }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
+    const t1 = await app2.request("/stream-slow", { method: "POST", headers: { "Idempotency-Key": "slow-k" } });
+    expect(t1.status).toBe(408);
+    await Bun.sleep(70);
+    const t2 = await app2.request("/stream-slow", { method: "POST", headers: { "Idempotency-Key": "slow-k" } });
+    expect(t2.status).toBe(200);
+    expect(await t2.json()).toEqual({ calls: 2 });
+  });
+
+  test("32. ZodEffects query coercion, 2D+ array projection, and native(null) safety", async () => {
+    const { native, validate } = await import("../src/index");
+    expect(() => native(null as any)).not.toThrow();
+    expect(() => validate(null as any)).not.toThrow();
+
+    const app = new BareJS();
+    app.get(
+      "/q",
+      schemaValidator({ query: Z.object({ page: Z.number() }).refine((v) => v.page > 0) }),
+      (ctx) => ({ page: ctx.query.page })
+    );
+    const rq = await app.request("/q?page=3");
+    expect(rq.status).toBe(200);
+    expect(await rq.json()).toEqual({ page: 3 });
+
+    const filter2d = createResponseFilter(
+      Type.Object({ matrix: Type.Array(Type.Array(Type.Object({ id: Type.Number() }))) })
+    );
+    expect(filter2d({ matrix: [[{ id: 1, secret: "leaked" }]] })).toEqual({ matrix: [[{ id: 1 }]] });
   });
 });

@@ -274,7 +274,7 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
         const expectedSig = createHmac('sha256', secret).update(data).digest();
         const actualSig = Buffer.from(sigB64, 'base64url');
 
-        if (actualSig.length !== expectedSig.length || !timingSafeEqual(actualSig, expectedSig)) {
+        if (actualSig.length !== expectedSig.length || actualSig.toString('base64url') !== sigB64 || !timingSafeEqual(actualSig, expectedSig)) {
           return ctx.status(401).send("Invalid signature");
         }
 
@@ -402,7 +402,7 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
         if (!secret) return ctx.status(401).send("Unsupported token algorithm");
         const expectedSig = createHmac('sha256', secret).update(data).digest();
         const actualSig = Buffer.from(sigB64, 'base64url');
-        if (actualSig.length !== expectedSig.length || !timingSafeEqual(actualSig, expectedSig)) {
+        if (actualSig.length !== expectedSig.length || actualSig.toString('base64url') !== sigB64 || !timingSafeEqual(actualSig, expectedSig)) {
           return ctx.status(401).send("Invalid signature");
         }
       } else {
@@ -416,6 +416,9 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
           return ctx.status(401).send("Invalid signature");
         }
         const sigBuf = Buffer.from(sigB64, 'base64url');
+        if (sigBuf.toString('base64url') !== sigB64) {
+          return ctx.status(401).send("Invalid signature");
+        }
         const sigBytes = sigBuf.buffer.slice(sigBuf.byteOffset, sigBuf.byteOffset + sigBuf.byteLength);
         const valid = await crypto.subtle.verify(
           getVerifyParams(alg),

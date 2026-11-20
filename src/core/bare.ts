@@ -69,7 +69,7 @@ export class BareJS<
   private hotFetch?: (req: Request, peerIp?: string) => any;
   private compiled = false;
   private _useLog: boolean = false;
-  private _trustProxy: boolean = false;
+  private _trustProxyBox = { val: false };
   private errorHandler?: (err: any, ctx: Context) => any;
   private wsRoutes = new Map<string, WebSocketRouteHandler>();
   private startHooks: (() => void | Promise<void>)[] = [];
@@ -307,7 +307,7 @@ export class BareJS<
   ]);
   public derive<T extends Record<string, any>>(fn: (ctx: Context & Derived) => Promise<T> | T): BareJS<Derived & T, Routes> {
     this._hasDerive = true;
-    this.use(async (ctx: any, next: any) => {
+    const deriveMw = async (ctx: any, next: any) => {
       const derived = await fn(ctx);
       if (derived && typeof derived === 'object') {
         const keys = Object.keys(derived);
@@ -323,7 +323,9 @@ export class BareJS<
         }
       }
       return next();
-    });
+    };
+    (deriveMw as any).__isDerive = true;
+    this.use(deriveMw);
     return this as any;
   }
 
@@ -719,11 +721,12 @@ export class BareJS<
     const hNames = hoistedHandlers.map((_, i) => `h${i}`);
 
     const hasIdem = this.routes.some((r: any) => r.handlers.some((h: any) => h?.__idempotencyCommit));
-    const deriveCleanup = this._hasDerive
+    const hasDerive = this._hasDerive || this.routes.some((r: any) => r.handlers.some((h: any) => h?.__isDerive));
+    const deriveCleanup = hasDerive
       ? `if (ctx._derivedKeys) { for (let i = 0; i < ctx._derivedKeys.length; i++) delete ctx[ctx._derivedKeys[i]]; ctx._derivedKeys = undefined; }`
       : '';
     const idemCleanup = hasIdem
-      ? `if (ctx._idempotencyKey) { ctx._idemInFlight.delete(ctx._idempotencyKey); ctx._idempotencyKey = undefined; ctx._idemInFlight = undefined; }`
+      ? `if (ctx._idempotencyKey) { if (ctx._idemInFlight) ctx._idemInFlight.delete(ctx._idempotencyKey); ctx._idempotencyKey = undefined; ctx._idemInFlight = undefined; }`
       : '';
 
     const releaseCode = `
@@ -766,8 +769,13 @@ export class BareJS<
           const mws = this.groupMiddleware;
           const dispatch = async (idx: number): Promise<Response | undefined> => {
             if (idx >= mws.length) return undefined;
-            const r = await mws[idx](ctx, () => dispatch(idx + 1));
+            let nextCalled = false;
+            const r = await mws[idx](ctx, () => {
+              nextCalled = true;
+              return dispatch(idx + 1);
+            });
             if (r instanceof Response) return applyCtxHeaders(r, ctx);
+            if (!nextCalled) return dispatch(idx + 1);
             return undefined;
           };
           return dispatch(0);
@@ -798,8 +806,13 @@ export class BareJS<
           const mws = this.groupMiddleware;
           const dispatch = async (idx: number): Promise<Response | undefined> => {
             if (idx >= mws.length) return undefined;
-            const r = await mws[idx](ctx, () => dispatch(idx + 1));
+            let nextCalled = false;
+            const r = await mws[idx](ctx, () => {
+              nextCalled = true;
+              return dispatch(idx + 1);
+            });
             if (r instanceof Response) return applyCtxHeaders(r, ctx);
+            if (!nextCalled) return dispatch(idx + 1);
             return undefined;
           };
           return dispatch(0);
@@ -825,9 +838,9 @@ export class BareJS<
         }`
       : '';
 
-    const trustProxyVal = this._trustProxy;
-    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyVal', ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...hNames];
-    const values = [pool, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyVal, ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...hoistedHandlers];
+    const trustProxyBox = this._trustProxyBox;
+    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyBox', ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...hNames];
+    const values = [pool, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyBox, ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...hoistedHandlers];
 
     const logInit = isLog ? `
     const start = performance.now();
@@ -853,7 +866,7 @@ export class BareJS<
     else s = urlLen;
 
     const method = req.method;
-    const ctx = poolTop > 0 ? pool[--poolTop] : new Context(trustProxyVal);
+    const ctx = poolTop > 0 ? pool[--poolTop] : new Context(trustProxyBox.val);
     let out;
     ${logInit}
 
@@ -910,7 +923,7 @@ export class BareJS<
   public name: string = "App";
 
   public trustProxy(enabled: boolean = true): this {
-    this._trustProxy = enabled;
+    this._trustProxyBox.val = enabled;
     for (let i = 0; i < this.pool.length; i++) {
       this.pool[i]!._trustProxy = enabled;
     }

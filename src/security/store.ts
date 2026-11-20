@@ -162,7 +162,7 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
     async release(key: string): Promise<void> {
       const lockKey = `${prefix}idem:lock:${key}`;
       const q = lockTokens.get(key);
-      const token = q?.shift();
+      const token = q?.pop();
       if (q && q.length === 0) lockTokens.delete(key);
       if (!token) return;
       if (useSend) {

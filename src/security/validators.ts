@@ -62,10 +62,10 @@ export const typebox = (schema: any): Middleware => {
  * Native Engine (n)
  */
 export const native = (schema: any): Middleware => {
-  const props = schema.properties || {};
+  const props = schema?.properties || {};
   const keys = Object.keys(props);
   const kLen = keys.length;
-  const reqSet = Array.isArray(schema.required) ? new Set<string>(schema.required) : null;
+  const reqSet = Array.isArray(schema?.required) ? new Set<string>(schema.required) : null;
 
   const matchesNativeType = (val: any, expected: string | undefined): boolean => {
     if (expected === undefined) return true;
@@ -246,6 +246,44 @@ const compileSingleSchema = (schema: any): ((val: any) => { ok: boolean; data?: 
   }
 };
 
+const buildArrayProjectorStmts = (
+  itemsSchema: any,
+  srcArrVar: string,
+  dstAssignPrefix: string,
+  depth: number,
+  idx: number
+): string | null => {
+  if (!itemsSchema) return null;
+  const arrOut = `ar_${depth}_${idx}`;
+  const arrIdx = `j_${depth}_${idx}`;
+  const itemVar = `ai_${depth}_${idx}`;
+  if (itemsSchema.type === 'array' && itemsSchema.items) {
+    const innerStmts = buildArrayProjectorStmts(itemsSchema.items, itemVar, `${arrOut}[${arrIdx}] = `, depth + 1, idx + 1);
+    if (innerStmts === null) return null;
+    return `if (Array.isArray(${srcArrVar})) {\n` +
+      `  const ${arrOut} = new Array(${srcArrVar}.length);\n` +
+      `  for (let ${arrIdx} = 0; ${arrIdx} < ${srcArrVar}.length; ${arrIdx}++) {\n` +
+      `    const ${itemVar} = ${srcArrVar}[${arrIdx}];\n` +
+      `    ${innerStmts}\n` +
+      `  }\n` +
+      `  ${dstAssignPrefix}${arrOut};\n` +
+      `} else {\n  ${dstAssignPrefix}${srcArrVar};\n}`;
+  }
+  const itemDst = `ao_${depth}_${idx}`;
+  const itemStmts = buildProjectorStatements(itemsSchema, itemVar, itemDst, depth + 1);
+  if (itemStmts === null) return null;
+  return `if (Array.isArray(${srcArrVar})) {\n` +
+    `  const ${arrOut} = new Array(${srcArrVar}.length);\n` +
+    `  for (let ${arrIdx} = 0; ${arrIdx} < ${srcArrVar}.length; ${arrIdx}++) {\n` +
+    `    const ${itemVar} = ${srcArrVar}[${arrIdx}];\n` +
+    `    if (${itemVar} && typeof ${itemVar} === 'object' && !Array.isArray(${itemVar})) {\n` +
+    `      const ${itemDst} = {};\n${itemStmts}      ${arrOut}[${arrIdx}] = ${itemDst};\n` +
+    `    } else {\n      ${arrOut}[${arrIdx}] = ${itemVar};\n    }\n` +
+    `  }\n` +
+    `  ${dstAssignPrefix}${arrOut};\n` +
+    `} else {\n  ${dstAssignPrefix}${srcArrVar};\n}`;
+};
+
 const buildProjectorStatements = (schema: any, srcVar: string, dstVar: string, depth = 0): string | null => {
   const props = schema?.properties;
   if (!props || typeof props !== 'object') return null;
@@ -259,23 +297,9 @@ const buildProjectorStatements = (schema: any, srcVar: string, dstVar: string, d
     stmts += `const ${valVar} = Object.hasOwn(${srcVar}, ${keyLit}) ? ${srcVar}[${keyLit}] : undefined;\n`;
 
     if (subSchema?.type === 'array' && subSchema?.items) {
-      const itemVar = `ai_${depth}_${idx}`;
-      const itemDst = `ao_${depth}_${idx}`;
-      const arrIdx = `j_${depth}_${idx}`;
-      const arrOut = `ar_${depth}_${idx}`;
-      const itemStmts = buildProjectorStatements(subSchema.items, itemVar, itemDst, depth + 1);
-      if (itemStmts !== null) {
-        stmts += `if (${valVar} !== undefined) {\n`;
-        stmts += `  if (Array.isArray(${valVar})) {\n`;
-        stmts += `    const ${arrOut} = new Array(${valVar}.length);\n`;
-        stmts += `    for (let ${arrIdx} = 0; ${arrIdx} < ${valVar}.length; ${arrIdx}++) {\n`;
-        stmts += `      const ${itemVar} = ${valVar}[${arrIdx}];\n`;
-        stmts += `      if (${itemVar} && typeof ${itemVar} === 'object' && !Array.isArray(${itemVar})) {\n`;
-        stmts += `        const ${itemDst} = {};\n${itemStmts}        ${arrOut}[${arrIdx}] = ${itemDst};\n`;
-        stmts += `      } else {\n        ${arrOut}[${arrIdx}] = ${itemVar};\n      }\n`;
-        stmts += `    }\n`;
-        stmts += `    ${dstVar}[${keyLit}] = ${arrOut};\n`;
-        stmts += `  } else {\n    ${dstVar}[${keyLit}] = ${valVar};\n  }\n}\n`;
+      const arrBlock = buildArrayProjectorStmts(subSchema.items, valVar, `${dstVar}[${keyLit}] = `, depth, idx);
+      if (arrBlock !== null) {
+        stmts += `if (${valVar} !== undefined) {\n${arrBlock}\n}\n`;
         continue;
       }
     }
@@ -346,14 +370,25 @@ export const createResponseFilter = (schema: any): ((val: any) => any) => {
 
 const unwrapPropType = (propSchema: any): string | undefined => {
   let cur = propSchema;
-  while (cur?._def && (cur._def.typeName === 'ZodOptional' || cur._def.typeName === 'ZodDefault' || cur._def.typeName === 'ZodNullable')) {
-    cur = cur._def.innerType;
+  while (cur?._def) {
+    const tn = cur._def.typeName;
+    if (tn === 'ZodOptional' || tn === 'ZodDefault' || tn === 'ZodNullable') {
+      cur = cur._def.innerType;
+    } else if (tn === 'ZodEffects') {
+      cur = cur._def.schema;
+    } else {
+      break;
+    }
   }
   return cur?.type || cur?._def?.typeName;
 };
 
 const coerceFields = (obj: Record<string, any>, schema: any): Record<string, any> => {
-  const props = schema?.properties || (schema?._def?.shape ? (typeof schema._def.shape === 'function' ? schema._def.shape() : schema._def.shape) : null);
+  let cur = schema;
+  while (cur?._def?.typeName === 'ZodEffects') {
+    cur = cur._def.schema;
+  }
+  const props = cur?.properties || (cur?._def?.shape ? (typeof cur._def.shape === 'function' ? cur._def.shape() : cur._def.shape) : null);
   if (!props) return obj;
   const out: Record<string, any> = { ...obj };
   for (const [k, propSchema] of Object.entries<any>(props)) {

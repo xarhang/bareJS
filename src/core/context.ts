@@ -367,7 +367,7 @@ export class Context {
   ): Response {
     const encoder = new TextEncoder();
     const formatDataLines = (raw: string): string =>
-      raw.split(/\r?\n/).map((line) => `data: ${line}`).join('\n') + '\n\n';
+      raw.split(/\r\n|\r|\n/).map((line) => `data: ${line}`).join('\n') + '\n\n';
     const formatChunk = (chunk: string | { event?: string; data: any; id?: string; retry?: number }): Uint8Array => {
       if (typeof chunk === 'string') {
         return encoder.encode(formatDataLines(chunk));

@@ -108,6 +108,17 @@ export class Context {
     return result;
   }
 
+  /** All values for a (possibly repeated) query key, in order. */
+  public queryAll(key: string): string[] {
+    const url = this.req?.url;
+    const qIdx = url ? url.indexOf('?') : -1;
+    if (qIdx === -1) return [];
+    const out: string[] = [];
+    const sp = new URLSearchParams(url!.slice(qIdx + 1));
+    for (const [k, v] of sp) if (k === key) out.push(v);
+    return out;
+  }
+
   public getQuery(key: string): string | undefined {
     const q = this.query;
     return Object.hasOwn(q, key) ? q[key] : undefined;

@@ -1527,3 +1527,24 @@ describe("Round 8 regressions", () => {
     expect(await n({})).toBe(400);
   });
 });
+
+describe("Round 9 regressions", () => {
+  test("61. repeated query keys populate array-typed query schema fields", async () => {
+    const { BareJS: B2 } = await import("../src/index");
+    const app = new B2();
+    app.get("/q", { query: { type: "object", properties: { a: { type: "array", items: { type: "number" } } }, required: ["a"] } } as any, (ctx: any) => ({ q: ctx.query }));
+    const r = await app.request("/q?a=1&a=2");
+    expect(r.status).toBe(200);
+    expect((await r.json()).q.a).toEqual([1, 2]);
+  });
+
+  test("62. native() enforces patternProperties and dependentRequired", async () => {
+    const app = new BareJS();
+    app.post("/", native({ type: "object", patternProperties: { "^x_": { type: "number" } }, dependentRequired: { a: ["b"] } }), () => "ok");
+    const post = (b: any) => app.request("/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.status);
+    expect(await post({ x_1: 1 })).toBe(200);
+    expect(await post({ x_1: "s" })).toBe(400);
+    expect(await post({ a: 1 })).toBe(400);
+    expect(await post({ a: 1, b: 2 })).toBe(200);
+  });
+});

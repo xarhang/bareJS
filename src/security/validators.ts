@@ -357,6 +357,30 @@ const validateJsonSchemaNode = (
       }
     }
 
+    if (schema.patternProperties && typeof schema.patternProperties === 'object') {
+      const valKeys = Object.keys(val);
+      for (const [pat, sub] of Object.entries<any>(schema.patternProperties)) {
+        let re: RegExp;
+        try { re = new RegExp(pat); } catch { continue; }
+        for (let i = 0; i < valKeys.length; i++) {
+          const vk = valKeys[i]!;
+          if (!re.test(vk)) continue;
+          const r = validateJsonSchemaNode(val[vk], sub, path ? `${path}.${vk}` : vk, false);
+          if (!r.ok) return r;
+        }
+      }
+    }
+    if (schema.dependentRequired && typeof schema.dependentRequired === 'object') {
+      for (const [dk, deps] of Object.entries<any>(schema.dependentRequired)) {
+        if (!Object.hasOwn(val, dk) || !Array.isArray(deps)) continue;
+        for (const d of deps) {
+          if (!Object.hasOwn(val, d)) {
+            return { ok: false, error: { message: `Field '${d}' is required when '${dk}' is present`, path: path ? `${path}.${d}` : d } };
+          }
+        }
+      }
+    }
+
     if (schema.additionalProperties === false) {
       const valKeys = Object.keys(val);
       for (let i = 0; i < valKeys.length; i++) {
@@ -693,6 +717,8 @@ const unwrapPropType = (propSchema: any): string | undefined => {
   return cur?.type || cur?._def?.typeName;
 };
 
+const NUMERIC_RE = /^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/;
+
 const coerceFields = (obj: Record<string, any>, schema: any): Record<string, any> => {
   let cur = schema;
   while (cur?._def?.typeName === 'ZodEffects') {
@@ -729,6 +755,22 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
   const paramsProjector = schemas.stripUnknown && schemas.params ? compileProjector(schemas.params) : null;
   const responseFilter = schemas.response ? createResponseFilter(schemas.response) : null;
   const maxBodySize = schemas.maxBodySize ?? 1048576;
+  const queryArrayKeys: string[] = [];
+  const queryArrayNumeric = new Set<string>();
+  {
+    let qs: any = schemas.query;
+    while (qs?._def?.schema) qs = qs._def.schema;
+    const qProps = qs?.properties || (qs?._def?.shape ? (typeof qs._def.shape === 'function' ? qs._def.shape() : qs._def.shape) : null);
+    if (qProps) {
+      for (const [k, ps] of Object.entries<any>(qProps)) {
+        const isArr = ps?.type === 'array' || ps?._def?.typeName === 'ZodArray';
+        if (!isArr) continue;
+        queryArrayKeys.push(k);
+        const it = ps.items?.type ?? ps._def?.type?._def?.typeName;
+        if (it === 'number' || it === 'integer' || it === 'ZodNumber') queryArrayNumeric.add(k);
+      }
+    }
+  }
   const hasSyncParts = Boolean(paramsCheck || queryCheck || headersCheck);
 
   const validateSyncParts = (ctx: Context): Response | undefined => {
@@ -740,6 +782,10 @@ export const schemaValidator = (schemas: RouteSchemas): Middleware => {
     }
     if (queryCheck) {
       const coerced = coerceFields(ctx.query, schemas.query);
+      for (const k of queryArrayKeys) {
+        const all = ctx.queryAll(k);
+        if (all.length > 0) coerced[k] = all.map((v) => (queryArrayNumeric.has(k) && NUMERIC_RE.test(v) ? Number(v) : v));
+      }
       const r = queryCheck(coerced);
       if (!r.ok) return errorJSON({ status: 'error', code: 'QUERY_INVALID', error: r.error });
       ctx._query = queryProjector ? queryProjector(r.data) : r.data;

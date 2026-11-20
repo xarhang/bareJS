@@ -113,88 +113,94 @@ export class RadixNode {
       code += `${indent}}\n`;
     }
 
-    // 1. Static Keys Logic
-    if (this.staticKeys.length > 0) {
-      if (this.staticKeys.length === 1) {
-        const key = this.staticKeys[0]!;
-        const kLen = key.length;
-        const nextIdxVar = `nextIdxL${level}`;
+    // 1. Static Keys & 2. Param Node Logic (requires idxPrefix < urlLen)
+    if (this.staticKeys.length > 0 || this.paramNode) {
+      code += `${indent}if (${idxPrefix} < urlLen) {\n`;
+      const innerIndent = indent + '  ';
 
-        code += `${indent}if (${pathPrefix}.startsWith(${JSON.stringify(key)}, ${idxPrefix})) {\n`;
-        code += `${indent}  const ${nextIdxVar} = ${idxPrefix} + ${kLen};\n`;
-        code += `${indent}  if (${nextIdxVar} === urlLen || ${pathPrefix}.charCodeAt(${nextIdxVar}) === 47) {\n`;
+      if (this.staticKeys.length > 0) {
+        if (this.staticKeys.length === 1) {
+          const key = this.staticKeys[0]!;
+          const kLen = key.length;
+          const nextIdxVar = `nextIdxL${level}`;
 
-        const child = this.children[key]!;
-        const newIdxVar = `newIdxL${level}`;
-        code += `${indent}    const ${newIdxVar} = ${nextIdxVar} === urlLen ? urlLen : (${nextIdxVar} + 1);\n`;
+          code += `${innerIndent}if (${pathPrefix}.startsWith(${JSON.stringify(key)}, ${idxPrefix})) {\n`;
+          code += `${innerIndent}  const ${nextIdxVar} = ${idxPrefix} + ${kLen};\n`;
+          code += `${innerIndent}  if (${nextIdxVar} === urlLen || ${pathPrefix}.charCodeAt(${nextIdxVar}) === 47) {\n`;
 
-        code += child.jitCompile(register, level + 1, pathPrefix, newIdxVar, paramAccumulator);
-
-        code += `${indent}  }\n`;
-        code += `${indent}}\n`;
-
-      } else if (this.staticKeys.length > 4) {
-        code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
-        code += `${indent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
-        code += `${indent}switch (${pathPrefix}.slice(${idxPrefix}, slash${level})) {\n`;
-        for (const key of this.staticKeys) {
-          code += `${indent}  case ${JSON.stringify(key)}: {\n`;
           const child = this.children[key]!;
-          code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramAccumulator);
-          code += `${indent}    break;\n`;
-          code += `${indent}  }\n`;
-        }
-        code += `${indent}}\n`;
-      } else {
-        code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
-        code += `${indent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
-        code += `${indent}const len${level} = slash${level} - (${idxPrefix});\n\n`; 
+          const newIdxVar = `newIdxL${level}`;
+          code += `${innerIndent}    const ${newIdxVar} = ${nextIdxVar} === urlLen ? urlLen : (${nextIdxVar} + 1);\n`;
 
-        const byLen = new Map<number, string[]>();
-        for (const key of this.staticKeys) {
-          let list = byLen.get(key.length);
-          if (!list) {
-            list = [];
-            byLen.set(key.length, list);
-          }
-          list.push(key);
-        }
+          code += child.jitCompile(register, level + 1, pathPrefix, newIdxVar, paramAccumulator);
 
-        code += `${indent}switch(len${level}) {\n`;
-        for (const [kLen, keysForLen] of byLen) {
-          code += `${indent}  case ${kLen}:\n`;
-          for (const key of keysForLen) {
-            if (kLen === 1) {
-              code += `${indent}    if (${pathPrefix}.charCodeAt(${idxPrefix}) === ${key.charCodeAt(0)}) {\n`;
-            } else {
-              code += `${indent}    if (${pathPrefix}.startsWith(${JSON.stringify(key)}, ${idxPrefix})) {\n`;
-            }
+          code += `${innerIndent}  }\n`;
+          code += `${innerIndent}}\n`;
 
+        } else if (this.staticKeys.length > 4) {
+          code += `${innerIndent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
+          code += `${innerIndent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
+          code += `${innerIndent}switch (${pathPrefix}.slice(${idxPrefix}, slash${level})) {\n`;
+          for (const key of this.staticKeys) {
+            code += `${innerIndent}  case ${JSON.stringify(key)}: {\n`;
             const child = this.children[key]!;
             code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramAccumulator);
-
-            code += `${indent}    }\n`;
+            code += `${innerIndent}    break;\n`;
+            code += `${innerIndent}  }\n`;
           }
-          code += `${indent}    break;\n`;
+          code += `${innerIndent}}\n`;
+        } else {
+          code += `${innerIndent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
+          code += `${innerIndent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
+          code += `${innerIndent}const len${level} = slash${level} - (${idxPrefix});\n\n`;
+
+          const byLen = new Map<number, string[]>();
+          for (const key of this.staticKeys) {
+            let list = byLen.get(key.length);
+            if (!list) {
+              list = [];
+              byLen.set(key.length, list);
+            }
+            list.push(key);
+          }
+
+          code += `${innerIndent}switch(len${level}) {\n`;
+          for (const [kLen, keysForLen] of byLen) {
+            code += `${innerIndent}  case ${kLen}:\n`;
+            for (const key of keysForLen) {
+              if (kLen === 1) {
+                code += `${innerIndent}    if (${pathPrefix}.charCodeAt(${idxPrefix}) === ${key.charCodeAt(0)}) {\n`;
+              } else {
+                code += `${innerIndent}    if (${pathPrefix}.startsWith(${JSON.stringify(key)}, ${idxPrefix})) {\n`;
+              }
+
+              const child = this.children[key]!;
+              code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramAccumulator);
+
+              code += `${innerIndent}    }\n`;
+            }
+            code += `${innerIndent}    break;\n`;
+          }
+          code += `${innerIndent}}\n`;
         }
-        code += `${indent}}\n`;
-      }
-    }
-
-    // 2. Param Node Logic (Fallback)
-    if (this.paramNode) {
-      const pNode = this.paramNode;
-      if (this.staticKeys.length <= 1) {
-        code += `${indent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
-        code += `${indent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
       }
 
-      const pVar = `pL${level}`;
-      code += `${indent}if (slash${level} > ${idxPrefix}) {\n`;
-      code += `${indent}  const ${pVar} = ${pathPrefix}.slice(${idxPrefix}, slash${level});\n`;
+      if (this.paramNode) {
+        const pNode = this.paramNode;
+        if (this.staticKeys.length <= 1) {
+          code += `${innerIndent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
+          code += `${innerIndent}if (slash${level} === -1 || slash${level} > urlLen) slash${level} = urlLen;\n`;
+        }
 
-      const newAccumulator = [...paramAccumulator, { name: this.paramName!, varName: pVar }];
-      code += pNode.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, newAccumulator);
+        const pVar = `pL${level}`;
+        code += `${innerIndent}if (slash${level} > ${idxPrefix}) {\n`;
+        code += `${innerIndent}  const ${pVar} = ${pathPrefix}.slice(${idxPrefix}, slash${level});\n`;
+
+        const newAccumulator = [...paramAccumulator, { name: this.paramName!, varName: pVar }];
+        code += pNode.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, newAccumulator);
+        code += `${innerIndent}}\n`;
+      }
+
       code += `${indent}}\n`;
     }
 

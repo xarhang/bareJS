@@ -288,4 +288,51 @@ describe("Security & QA Deep Audit v2 Fixes", () => {
     const r2 = await app.request("/fail");
     expect(r2.status).toBe(503);
   });
+
+  test("16. JIT router does not read past urlLen into query string (GET /users?profile/sub != /users/profile)", async () => {
+    const app = new BareJS();
+    app.post("/users", () => ({ created: true }));
+    app.get("/posts", () => ({ posts: [] }));
+    app.get("/users/profile", () => ({ secret: "profile" }));
+
+    const res = await app.request("/users?profile/sub");
+    expect(res.status).toBe(404);
+
+    const valid = await app.request("/users/profile");
+    expect(valid.status).toBe(200);
+    expect(await valid.json()).toEqual({ secret: "profile" });
+  });
+
+  test("17. app.stop() executes all onStop hooks even if an earlier hook throws", async () => {
+    const app = new BareJS();
+    const calls: string[] = [];
+    app.onStop(() => {
+      calls.push("first");
+      throw new Error("cleanup failure");
+    });
+    app.onStop(() => {
+      calls.push("second");
+    });
+
+    await app.stop();
+    expect(calls).toEqual(["first", "second"]);
+  });
+
+  test("18. csrf() normalizes x-forwarded-proto with trailing colon when trustProxy is enabled", async () => {
+    const { csrf } = await import("../src/index");
+    const app = new BareJS().trustProxy(true);
+    app.use(csrf());
+    app.post("/submit", () => ({ ok: true }));
+
+    const res = await app.request("http://internal/submit", {
+      method: "POST",
+      headers: {
+        Origin: "https://app.example.com",
+        "X-Forwarded-Host": "app.example.com",
+        "X-Forwarded-Proto": "https:"
+      }
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
 });

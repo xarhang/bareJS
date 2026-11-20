@@ -79,6 +79,7 @@ export const rateLimit = (options: RateLimitOptions = {}): Middleware => {
         }
       }
       bucket = { count: 1, resetAt: now + windowMs };
+      buckets.delete(key);
       buckets.set(key, bucket);
     } else {
       bucket.count++;

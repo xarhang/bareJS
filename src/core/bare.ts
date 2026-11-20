@@ -146,7 +146,11 @@ export class BareJS<
       this.server = undefined;
     }
     for (const hook of this.stopHooks) {
-      await hook();
+      try {
+        await hook();
+      } catch (e) {
+        console.error(`[${this.name}] onStop error:`, e);
+      }
     }
   }
   constructor(poolSize: number = 1024) {

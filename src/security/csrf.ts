@@ -23,7 +23,7 @@ const resolveRequestOrigin = (ctx: Context): string => {
       const fwdHost = ctx.req.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
       const fwdProto = ctx.req.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
       if (fwdHost) {
-        const proto = fwdProto ? `${fwdProto}:` : parsed.protocol;
+        const proto = fwdProto ? `${fwdProto.replace(/:$/, '')}:` : parsed.protocol;
         return `${proto}//${fwdHost}`;
       }
     }

@@ -74,7 +74,7 @@ All benchmark numbers below are **automatically generated on every push to `main
 * **Built-In Resilience (`circuitBreaker`, `idempotency`, `createSingleflight`, `app.cron`)**: Prevent cascading failures (`503 Retry-After`), double-charges (`409 IDEMPOTENT_IN_FLIGHT`), cache stampedes (100 concurrent calls -> 1 DB hit), and overlapping background jobs.
 * **Native Zero-Dep Gzip (`compress`)**: Compresses responses via Bun's native C/Zig `Bun.gzipSync` with `minSize` threshold and automatic SSE/204/304 bypass.
 * **End-to-End Type Inference (`bareClient(app)`)**: Automatic compile-time inference of route paths (across all HTTP methods on shared paths), `params`, `query`, `headers`, `body`, and `response` types directly from your `BareJS` app or mounted `BareRouter`—with zero runtime overhead.
-* **Concurrency-Safe Object Pooling**: Recycles `Context` instances via a LIFO free-list stack with automatic cleanup on release—zero cross-request state leakage.
+* **Concurrency-Safe Object Pooling**: Recycles `Context` instances through a bounded LIFO free-list with complete framework-managed state cleanup on release (preventing cross-request leakage of framework-managed context state under the documented request lifecycle). Timed-out contexts are detached and retired from the pool to prevent reuse while asynchronous work may still be running.
 * **Dual Response Ergonomics & Full HTTP Methods**: Return plain objects/strings directly (Elysia style) OR use `ctx.json()`, `ctx.html()`, `ctx.text()`, `ctx.redirect()`, `ctx.send()`, with `get`, `post`, `put`, `patch`, `delete`, `options`, `head`, and `all`.
 * **Unified Schema Validation & Auto-Coercion**: Validate `body`, `query`, `params`, `headers`, `response`, and `maxBodySize` (`413` DoS guard) in one object with **TypeBox**, **Zod**, or **Native JSON Schema**—with automatic `number`/`boolean` coercion on `query` and `params`.
 * **Batteries-Included Zero-Trust Security Suite**: Built-in `securityHeaders()`, `cors()`, `csrf()`, `timeout()`, `rateLimit()`, `trustProxy(false)` anti-spoofing, `maxRequestBodySize` server cap, `bareAuth()` (constant-time HS256 JWT + `revokeToken()` / `isRevoked`), `Hash` (Argon2id), HMAC-signed cookies, `ctx.upload()`, and symlink-safe `staticFile()`.
@@ -393,7 +393,7 @@ app.listen(3000, '0.0.0.0', true, { maxRequestBodySize: 2 * 1024 * 1024 });
 | Variable / File | Default | Description |
 | :--- | :--- | :--- |
 | `bare.config.ts` | Optional | Centralized config for `port` and Argon2/bcrypt `hash` parameters. |
-| `poolSize` | `1024` | `new BareJS(poolSize)` — rounded up to power of 2 for $O(1)$ pooling. |
+| `poolSize` | `1024` | `new BareJS(poolSize)` — defines the maximum number of released `Context` instances retained in the bounded LIFO free-list (`0..65536`). Push and pop operations are $O(1)$; no power-of-two sizing or ring-buffer mask is required. |
 | `NODE_ENV` | `development` | Set to `production` to mask 500 stack traces and disable startup banner. |
 
 ---

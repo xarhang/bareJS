@@ -155,11 +155,20 @@ export class BareJS<
       }
     }
   }
-  constructor(poolSize: number = 1024) {
+  private static readonly DEFAULT_POOL_SIZE = 1024;
+  private static readonly MAX_POOL_SIZE = 65_536;
+
+  constructor(poolSize: number = BareJS.DEFAULT_POOL_SIZE) {
     super();
     bootstrapConfig();
-    const size = Math.pow(2, Math.ceil(Math.log2(poolSize)));
-    for (let i = 0; i < size; i++) {
+    const requestedPoolSize = Number.isFinite(poolSize)
+      ? Math.floor(poolSize)
+      : BareJS.DEFAULT_POOL_SIZE;
+    const maxPool = Math.min(
+      BareJS.MAX_POOL_SIZE,
+      Math.max(0, requestedPoolSize)
+    );
+    for (let i = 0; i < maxPool; i++) {
       this.pool.push(new Context());
     }
     try {

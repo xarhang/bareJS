@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795164588646,
+  "lastUpdate": 1795164936121,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3586,6 +3586,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 6406.6714716847155,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "9d3df660dac2c63d58663e0bbf3717a2c303faa8",
+          "message": "docs: update CHANGELOG.md and README.md for shared LIFO pool state and 413 tests",
+          "timestamp": "2026-11-20T08:54:43Z",
+          "tree_id": "df6decc9add3258093ea304d93634036e88d98a4",
+          "url": "https://github.com/xarhang/bareJS/commit/9d3df660dac2c63d58663e0bbf3717a2c303faa8"
+        },
+        "date": 1795164935737,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 569.5954958136829,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 819.911149645961,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 2819.350899836836,
             "unit": "undefined"
           }
         ]

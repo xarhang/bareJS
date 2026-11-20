@@ -70,6 +70,7 @@ type AddRouterRoute<Routes extends RouteSchema, M extends string> = {
 export class BareRouter<Routes extends RouteSchema = {}> {
   declare readonly __routes: Routes;
   public routes: any[] = [];
+  protected _onRouteMutate?(): void;
 
   constructor(
     public prefix: string = "",
@@ -97,6 +98,7 @@ export class BareRouter<Routes extends RouteSchema = {}> {
       path: fullPath || "", 
       handlers: [...this.groupMiddleware, ...resolvedHandlers]
     });
+    this._onRouteMutate?.();
     return this;
 }
 
@@ -123,6 +125,7 @@ export class BareRouter<Routes extends RouteSchema = {}> {
 
     callback(subRouter);
     this.routes.push(...subRouter.routes);
+    this._onRouteMutate?.();
     return this;
   };
 
@@ -137,6 +140,7 @@ export class BareRouter<Routes extends RouteSchema = {}> {
         handlers: [...this.groupMiddleware, ...r.handlers]
       });
     }
+    this._onRouteMutate?.();
   }
 
   public route<P extends string, R2 extends RouteSchema = {}>(
@@ -174,6 +178,7 @@ export class BareRouter<Routes extends RouteSchema = {}> {
           }
         }
       }
+      this._onRouteMutate?.();
       return this;
     }
 
@@ -188,6 +193,7 @@ export class BareRouter<Routes extends RouteSchema = {}> {
         this.groupMiddleware.push(item);
       }
     }
+    this._onRouteMutate?.();
     return this;
   }
 }

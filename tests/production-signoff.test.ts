@@ -1607,26 +1607,26 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     const slotApp = new BareJS(2);
     let releaseInFlight!: () => void;
     const inFlightGate = new Promise<void>((r) => { releaseInFlight = r; });
-    let inFlightPoolTop = -1;
+    let inFlightPoolFree = -1;
     let inFlightSlot0: any = "unset";
     slotApp.get("/warm", () => ({ ok: true }));
     slotApp.get("/hold", async () => {
-      inFlightPoolTop = slotApp.poolTop;
+      inFlightPoolFree = slotApp._getPoolStats().free;
       inFlightSlot0 = (slotApp as any).pool[0];
       await inFlightGate;
       return { ok: true };
     });
     await slotApp.request("/warm");
-    expect(slotApp.poolTop).toBe(1);
+    expect(slotApp._getPoolStats()).toEqual({ free: 1, capacity: 2, backingLength: 1 });
     expect((slotApp as any).pool[0]).toBeDefined();
 
     const holdPromise = slotApp.request("/hold");
     await Bun.sleep(5);
-    expect(inFlightPoolTop).toBe(0);
+    expect(inFlightPoolFree).toBe(0);
     expect(inFlightSlot0).toBeUndefined();
     releaseInFlight();
     await holdPromise;
-    expect(slotApp.poolTop).toBe(1);
+    expect(slotApp._getPoolStats().free).toBe(1);
     expect((slotApp as any).pool[0]).toBeDefined();
 
     // 2) Detached Context (timeout) is NOT pushed back to pool
@@ -1638,10 +1638,10 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     const detRes = await detApp.request("/slow");
     expect(detRes.status).toBe(408);
     await Bun.sleep(35);
-    expect(detApp.poolTop).toBe(0);
+    expect(detApp._getPoolStats().free).toBe(0);
     expect((detApp as any).pool[0]).toBeUndefined();
 
-    // 3) poolTop never exceeds maxPool under concurrency and concurrent requests do not leak state
+    // 3) free count never exceeds maxPool under concurrency and concurrent requests do not leak state
     const concApp = new BareJS(3);
     concApp.get("/c/:id", async (ctx: Context) => {
       ctx.set("reqId", ctx.params.id);
@@ -1661,14 +1661,72 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
       expect(results[i]!.hdr).toBe(String(i));
       expect(results[i]!.body).toEqual({ id: String(i), stored: String(i), q: String(i) });
     }
-    expect(concApp.poolTop).toBeLessThanOrEqual(3);
-    expect(concApp.poolTop).toBeGreaterThan(0);
+    expect(concApp._getPoolStats().free).toBeLessThanOrEqual(3);
+    expect(concApp._getPoolStats().free).toBeGreaterThan(0);
 
     // 4) new BareJS(0) never retains Context instances
     const zeroPoolApp = new BareJS(0);
     zeroPoolApp.get("/z", () => ({ ok: true }));
     await Promise.all(Array.from({ length: 5 }, () => zeroPoolApp.request("/z")));
-    expect(zeroPoolApp.poolTop).toBe(0);
-    expect((zeroPoolApp as any).pool.length).toBe(0);
+    expect(zeroPoolApp._getPoolStats()).toEqual({ free: 0, capacity: 0, backingLength: 0 });
+  });
+
+  test("68. recompile preserves pool ownership safely across route additions and concurrent in-flight requests", async () => {
+    const app = new BareJS(2);
+
+    app.get("/a", () => "A");
+    await app.request("/a");
+    expect(app._getPoolStats().free).toBe(1);
+    const firstPooledCtx = (app as any).pool[0];
+    expect(firstPooledCtx).toBeDefined();
+
+    // Register a new route after initial requests have already populated the pool
+    app.get("/b", () => "B");
+
+    const responses = await Promise.all([
+      app.request("/a"),
+      app.request("/b"),
+    ]);
+
+    expect(await responses[0].text()).toBe("A");
+    expect(await responses[1].text()).toBe("B");
+    expect(app._getPoolStats().free).toBeGreaterThan(0);
+    expect(app._getPoolStats().free).toBeLessThanOrEqual(2);
+
+    // Also verify recompile while an earlier handler generation has an in-flight request
+    const overlapApp = new BareJS(2);
+    let releaseSlow!: () => void;
+    const slowGate = new Promise<void>((r) => { releaseSlow = r; });
+    overlapApp.get("/warm", () => "warm");
+    overlapApp.get("/slow", async (ctx: Context) => {
+      ctx.set("tag", "old-gen");
+      await slowGate;
+      return ctx.get("tag");
+    });
+
+    await overlapApp.request("/warm");
+    expect(overlapApp._getPoolStats().free).toBe(1);
+
+    // Acquire the pooled context on generation 1 and keep it in-flight
+    const inFlightOldGen = overlapApp.request("/slow");
+    await Bun.sleep(5);
+    expect(overlapApp._getPoolStats().free).toBe(0);
+    expect((overlapApp as any).pool[0]).toBeUndefined();
+
+    // Trigger recompile while generation 1 request is still in-flight
+    overlapApp.get("/new", (ctx: Context) => {
+      ctx.set("tag", "new-gen");
+      return ctx.get("tag");
+    });
+    overlapApp.compile();
+
+    const newGenRes = await overlapApp.request("/new");
+    expect(await newGenRes.text()).toBe("new-gen");
+    expect(overlapApp._getPoolStats().free).toBe(1);
+
+    releaseSlow();
+    const oldGenRes = await inFlightOldGen;
+    expect(await oldGenRes.text()).toBe("old-gen");
+    expect(overlapApp._getPoolStats().free).toBe(2);
   });
 });

@@ -74,16 +74,33 @@ export class BareJS<
   declare readonly __routes: Routes;
   private tree = new RadixNode();
   private pool: Array<Context | undefined> = [];
-  private _getPoolTop?: () => number;
-  public get poolTop(): number {
-    return this._getPoolTop ? this._getPoolTop() : 0;
-  }
+  private _poolState = { top: 0 };
   private readonly maxPool: number;
   // private poolIdx = 0;
   private hotFetch?: (req: Request, peerIp?: string) => any;
   private compiled = false;
   private _useLog: boolean = false;
   private _trustProxyBox = { val: false };
+
+  /** @internal */
+  _getPoolStats(): {
+    free: number;
+    capacity: number;
+    backingLength: number;
+  } {
+    return {
+      free: this._poolState.top,
+      capacity: this.maxPool,
+      backingLength: this.pool.length,
+    };
+  }
+
+  protected override _onRouteMutate(): void {
+    if (this.compiled) {
+      this.compiled = false;
+      this.fetch = this._lazyFetch;
+    }
+  }
   private errorHandler?: (err: any, ctx: Context) => any;
   private wsRoutes = new Map<string, WebSocketRouteHandler>();
   private startHooks: (() => void | Promise<void>)[] = [];
@@ -100,6 +117,7 @@ export class BareJS<
 
   public useLog(enabled: boolean = true): this {
     this._useLog = enabled;
+    this._onRouteMutate();
     return this;
   }
 
@@ -200,10 +218,12 @@ export class BareJS<
   });
   public setNotFound(handler: () => NotFoundResponse) {
     this.notFoundHandler = handler;
+    this._onRouteMutate();
   }
 
   public onError(handler: (err: any, ctx: Context) => any): this {
     this.errorHandler = handler;
+    this._onRouteMutate();
     return this;
   }
 
@@ -806,7 +826,7 @@ export class BareJS<
         ctx._requestId = undefined;
         ctx._peerIp = undefined;
         ctx.params = EMPTY_PARAMS;
-        if (poolTop < maxPool) pool[poolTop++] = ctx;
+        if (poolState.top < maxPool) pool[poolState.top++] = ctx;
       }
     `;
 
@@ -927,9 +947,10 @@ export class BareJS<
         }
       : undefined;
 
+    const poolState = this._poolState;
     const trustProxyBox = this._trustProxyBox;
-    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyBox', ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...(apply404Cors ? ['apply404Cors'] : []), ...hNames];
-    const values = [pool, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyBox, ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...(apply404Cors ? [apply404Cors] : []), ...hoistedHandlers];
+    const args = ['pool', 'poolState', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyBox', ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...(apply404Cors ? ['apply404Cors'] : []), ...hNames];
+    const values = [pool, poolState, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyBox, ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...(apply404Cors ? [apply404Cors] : []), ...hoistedHandlers];
 
     const logInit = isLog ? `
     const start = performance.now();
@@ -949,10 +970,8 @@ export class BareJS<
   const _rel = (ctx) => { ${releaseCode} };
   const _onErr = (e, ctx${isLog ? ', doLog' : ''}) => { ${handleErrCode} };`
       : '';
-    const fnBody = `
-  let poolTop = 0;
-  while (poolTop < pool.length && pool[poolTop] !== undefined) poolTop++;${compactHelpers}
-  const _fetch = function(req, peerIp) {
+    const fnBody = `${compactHelpers}
+  return function(req, peerIp) {
     const url = req.url;
     let s = url.indexOf('/', 8);
     const q = s === -1 ? -1 : url.indexOf('?', s);
@@ -962,8 +981,8 @@ export class BareJS<
 
     const method = req.method;
     let ctx;
-    if (poolTop > 0) {
-      const slot = --poolTop;
+    if (poolState.top > 0) {
+      const slot = --poolState.top;
       ctx = pool[slot];
       pool[slot] = undefined;
     } else {
@@ -993,23 +1012,22 @@ export class BareJS<
       ${handleErrCode}
     }
   };
-  _fetch._getPoolTop = () => poolTop;
-  return _fetch;
 `;
 
     this.hotFetch = new Function(...args, fnBody)(...values);
-    this._getPoolTop = (this.hotFetch as any)._getPoolTop;
     this.compiled = true;
     this.fetch = this.hotFetch!;
   }
 
-  public fetch = (req: Request, peerIp?: string): any => {
+  private readonly _lazyFetch = (req: Request, peerIp?: string): any => {
     if (!this.compiled) {
       this.compile();
       return this.hotFetch!(req, peerIp);
     }
     return this.hotFetch!(req, peerIp);
   };
+
+  public fetch = this._lazyFetch;
 
   /**
    * Ergonomic in-memory request helper for testing or internal invocations.

@@ -109,7 +109,7 @@ try {
     });
 
     const multiTable = [
-      '| Scenario | **BareJS** 🏆 | **ElysiaJS** | **Hono** |',
+      '| Scenario | **BareJS** | **ElysiaJS** | **Hono** |',
       '| :--- | :---: | :---: | :---: |',
       ...rows
     ].join('\n');

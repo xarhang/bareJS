@@ -28,7 +28,7 @@ All benchmark numbers below are **automatically generated on every push to `main
 
 <!-- MARKER: MULTI_BENCH_START -->
 
-| Scenario | **BareJS** 🏆 | **ElysiaJS** | **Hono** |
+| Scenario | **BareJS** | **ElysiaJS** | **Hono** |
 | :--- | :---: | :---: | :---: |
 | **1. 100 Routes + Dynamic Params** | **`670 ns`**<br><sub>`p99: 4.13 µs`</sub> | `1.09 µs`<br><sub>`p99: 5.19 µs`</sub> | `2.43 µs`<br><sub>`p99: 9.50 µs`</sub> |
 | **2. 10 Middlewares + Deep Path** | **`636 ns`**<br><sub>`p99: 3.73 µs`</sub> | `1.07 µs`<br><sub>`p99: 4.93 µs`</sub> | `2.80 µs`<br><sub>`p99: 9.44 µs`</sub> |

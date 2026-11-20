@@ -761,9 +761,7 @@ export class BareJS<
       return name;
     };
 
-    const rawRouterCode = tree.jitCompile(register);
     const EMPTY_PARAMS = Object.freeze({});
-    const hNames = hoistedHandlers.map((_, i) => `h${i}`);
 
     const hasIdem = this.routes.some((r: any) => r.handlers.some((h: any) => h?.__idempotencyCommit)) ||
       this.groupMiddleware.some((m: any) => m?.__idempotencyCommit);
@@ -801,13 +799,14 @@ export class BareJS<
       return errRes;`;
 
     const callSuffix = isLog ? '(ctx, doLog)' : '(ctx)';
-    const routerCode = rawRouterCode.replace(
-      /return (h\d+)\(ctx\);/g,
-      `out = $1${callSuffix};
-      if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { ${handleErrCode} });
-      ${releaseCode}
-      return out;`
+    const routerCode = tree.jitCompile(register, 0, 'url', 's', [], (hName: string) =>
+      `out = ${hName}${callSuffix};
+       if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { ${handleErrCode} });
+       ${releaseCode}
+       return out;`
     );
+
+    const hNames = hoistedHandlers.map((_, i) => `h${i}`);
 
     const hasGlobalMw = this.groupMiddleware.length > 0;
     const runGlobalOptions = hasGlobalMw

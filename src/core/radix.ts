@@ -138,7 +138,8 @@ export class RadixNode {
     level = 0,
     pathPrefix = 'url',
     idxPrefix = 's',
-    paramVars: string[] = []
+    paramVars: string[] = [],
+    emitCall: (hName: string) => string = (h) => `return ${h}(ctx);`
   ): string {
     let code = '';
     const indent = '  '.repeat(level);
@@ -150,7 +151,7 @@ export class RadixNode {
         const hName = register(h as Function);
         const pNames = this.handlerParams[m] || [];
         const pAssign = pNames.length > 0 ? this.emitParamsAssign('', pNames, paramVars).trim() + ' ' : '';
-        code += `${indent}    case ${JSON.stringify(m)}: ${pAssign}return ${hName}(ctx);\n`;
+        code += `${indent}    case ${JSON.stringify(m)}: ${pAssign}${emitCall(hName)}\n`;
       }
       code += `${indent}  }\n`;
       code += `${indent}}\n`;
@@ -172,7 +173,7 @@ export class RadixNode {
           } else {
             code += `${innerIndent}if (${pathPrefix}.startsWith(${JSON.stringify(key)}, ${idxPrefix}) && (${endCheck})) {\n`;
           }
-          code += child.jitCompile(register, level + 1, pathPrefix, `${idxPrefix} + ${kLen + 1}`, paramVars);
+          code += child.jitCompile(register, level + 1, pathPrefix, `${idxPrefix} + ${kLen + 1}`, paramVars, emitCall);
           code += `${innerIndent}}\n`;
         } else {
           code += `${innerIndent}let slash${level} = ${pathPrefix}.indexOf('/', ${idxPrefix});\n`;
@@ -200,7 +201,7 @@ export class RadixNode {
               }
 
               const child = this.children[key]!;
-              code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramVars);
+              code += child.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, paramVars, emitCall);
 
               code += `${innerIndent}    }\n`;
             }
@@ -222,7 +223,7 @@ export class RadixNode {
         code += `${innerIndent}  const ${pVar} = ${pathPrefix}.slice(${idxPrefix}, slash${level});\n`;
 
         const newVars = [...paramVars, pVar];
-        code += pNode.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, newVars);
+        code += pNode.jitCompile(register, level + 1, pathPrefix, `slash${level} + 1`, newVars, emitCall);
         code += `${innerIndent}}\n`;
       }
 
@@ -239,7 +240,7 @@ export class RadixNode {
         const pNames = [...(this.wildcardNode.handlerParams[m] || []), '*'];
         const pVars = [...paramVars, wVar];
         const pAssign = this.emitParamsAssign('', pNames, pVars).trim();
-        code += `${indent}  case ${JSON.stringify(m)}: ${pAssign} return ${hName}(ctx);\n`;
+        code += `${indent}  case ${JSON.stringify(m)}: ${pAssign} ${emitCall(hName)}\n`;
       }
       code += `${indent}}\n`;
     }

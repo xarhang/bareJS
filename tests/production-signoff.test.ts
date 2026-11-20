@@ -1436,4 +1436,22 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     expect(nf.status).toBe(404);
     expect(nf.headers.get("access-control-allow-origin")).toBe("https://global.com");
   });
+
+  test("54. compress() skips SSE with mixed-case Content-Type", async () => {
+    const app = new BareJS();
+    app.use(compress({ threshold: 0 }));
+    app.get("/sse", () => new Response("data: " + "x".repeat(2000) + "\n\n", { headers: { "Content-Type": "TEXT/EVENT-STREAM" } }));
+    const r = await app.request("/sse", { headers: { "Accept-Encoding": "gzip" } });
+    expect(r.headers.get("content-encoding")).toBeNull();
+  });
+
+  test("55. routes containing 'return h0(ctx);' in path compile and serve", async () => {
+    const app = new BareJS();
+    app.get("/return h0(ctx);", () => ({ ok: 1 }));
+    app.get("/x", () => ({ ok: 2 }));
+    const r = await app.request("/return%20h0(ctx);");
+    const r2 = await app.request("/x");
+    expect((await r2.json()).ok).toBe(2);
+    expect([200, 404]).toContain(r.status);
+  });
 });

@@ -67,7 +67,7 @@ export const compress = (options: CompressOptions = {}): Middleware => {
     if (res.status === 204 || res.status === 206 || res.status === 304) return res;
     if (res.headers.has('content-encoding')) return res;
 
-    const ct = res.headers.get('content-type') || '';
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
     if (ct.includes('text/event-stream')) return res;
 
     const buf = await res.arrayBuffer();

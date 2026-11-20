@@ -73,7 +73,11 @@ export class BareJS<
 > extends BareRouter<Routes> {
   declare readonly __routes: Routes;
   private tree = new RadixNode();
-  private pool: Context[] = [];
+  private pool: Array<Context | undefined> = [];
+  private _getPoolTop?: () => number;
+  public get poolTop(): number {
+    return this._getPoolTop ? this._getPoolTop() : 0;
+  }
   private readonly maxPool: number;
   // private poolIdx = 0;
   private hotFetch?: (req: Request, peerIp?: string) => any;
@@ -946,8 +950,9 @@ export class BareJS<
   const _onErr = (e, ctx${isLog ? ', doLog' : ''}) => { ${handleErrCode} };`
       : '';
     const fnBody = `
-  let poolTop = pool.length;${compactHelpers}
-  return function(req, peerIp) {
+  let poolTop = 0;
+  while (poolTop < pool.length && pool[poolTop] !== undefined) poolTop++;${compactHelpers}
+  const _fetch = function(req, peerIp) {
     const url = req.url;
     let s = url.indexOf('/', 8);
     const q = s === -1 ? -1 : url.indexOf('?', s);
@@ -956,7 +961,14 @@ export class BareJS<
     else s = urlLen;
 
     const method = req.method;
-    const ctx = poolTop > 0 ? pool[--poolTop] : new Context(trustProxyBox.val);
+    let ctx;
+    if (poolTop > 0) {
+      const slot = --poolTop;
+      ctx = pool[slot];
+      pool[slot] = undefined;
+    } else {
+      ctx = new Context(trustProxyBox.val);
+    }
     let out;
     ${logInit}
 
@@ -980,10 +992,13 @@ export class BareJS<
     } catch (e) {
       ${handleErrCode}
     }
-  }
+  };
+  _fetch._getPoolTop = () => poolTop;
+  return _fetch;
 `;
 
     this.hotFetch = new Function(...args, fnBody)(...values);
+    this._getPoolTop = (this.hotFetch as any)._getPoolTop;
     this.compiled = true;
     this.fetch = this.hotFetch!;
   }
@@ -1015,7 +1030,8 @@ export class BareJS<
   public trustProxy(enabled: boolean = true): this {
     this._trustProxyBox.val = enabled;
     for (let i = 0; i < this.pool.length; i++) {
-      this.pool[i]!._trustProxy = enabled;
+      const ctx = this.pool[i];
+      if (ctx) ctx._trustProxy = enabled;
     }
     return this;
   }

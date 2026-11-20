@@ -1602,19 +1602,73 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     expect((app as any).pool.length).toBe(0);
   });
 
-  test("67. retains no more than the configured number of contexts under concurrency", async () => {
-    const app = new BareJS(3);
-    app.get("/p", async () => {
-      await Bun.sleep(5);
+  test("67. clears acquired LIFO slot to undefined, respects maxPool & BareJS(0), retires detached contexts, and isolates concurrent state", async () => {
+    // 1) Acquired slot is cleared to undefined while in-flight
+    const slotApp = new BareJS(2);
+    let releaseInFlight!: () => void;
+    const inFlightGate = new Promise<void>((r) => { releaseInFlight = r; });
+    let inFlightPoolTop = -1;
+    let inFlightSlot0: any = "unset";
+    slotApp.get("/warm", () => ({ ok: true }));
+    slotApp.get("/hold", async () => {
+      inFlightPoolTop = slotApp.poolTop;
+      inFlightSlot0 = (slotApp as any).pool[0];
+      await inFlightGate;
       return { ok: true };
     });
-    await Promise.all(Array.from({ length: 20 }, () => app.request("/p")));
-    expect((app as any).pool.length).toBeLessThanOrEqual(3);
-    expect((app as any).pool.length).toBeGreaterThan(0);
+    await slotApp.request("/warm");
+    expect(slotApp.poolTop).toBe(1);
+    expect((slotApp as any).pool[0]).toBeDefined();
 
+    const holdPromise = slotApp.request("/hold");
+    await Bun.sleep(5);
+    expect(inFlightPoolTop).toBe(0);
+    expect(inFlightSlot0).toBeUndefined();
+    releaseInFlight();
+    await holdPromise;
+    expect(slotApp.poolTop).toBe(1);
+    expect((slotApp as any).pool[0]).toBeDefined();
+
+    // 2) Detached Context (timeout) is NOT pushed back to pool
+    const detApp = new BareJS(2);
+    detApp.get("/slow", timeout(10), async () => {
+      await Bun.sleep(30);
+      return { ok: true };
+    });
+    const detRes = await detApp.request("/slow");
+    expect(detRes.status).toBe(408);
+    await Bun.sleep(35);
+    expect(detApp.poolTop).toBe(0);
+    expect((detApp as any).pool[0]).toBeUndefined();
+
+    // 3) poolTop never exceeds maxPool under concurrency and concurrent requests do not leak state
+    const concApp = new BareJS(3);
+    concApp.get("/c/:id", async (ctx: Context) => {
+      ctx.set("reqId", ctx.params.id);
+      ctx.setHeader("x-req-id", ctx.params.id);
+      await Bun.sleep(5);
+      return { id: ctx.params.id, stored: ctx.get("reqId"), q: ctx.query.v };
+    });
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        concApp.request(`/c/${i}?v=${i}`).then(async (r) => ({
+          hdr: r.headers.get("x-req-id"),
+          body: await r.json(),
+        }))
+      )
+    );
+    for (let i = 0; i < 20; i++) {
+      expect(results[i]!.hdr).toBe(String(i));
+      expect(results[i]!.body).toEqual({ id: String(i), stored: String(i), q: String(i) });
+    }
+    expect(concApp.poolTop).toBeLessThanOrEqual(3);
+    expect(concApp.poolTop).toBeGreaterThan(0);
+
+    // 4) new BareJS(0) never retains Context instances
     const zeroPoolApp = new BareJS(0);
     zeroPoolApp.get("/z", () => ({ ok: true }));
     await Promise.all(Array.from({ length: 5 }, () => zeroPoolApp.request("/z")));
+    expect(zeroPoolApp.poolTop).toBe(0);
     expect((zeroPoolApp as any).pool.length).toBe(0);
   });
 });

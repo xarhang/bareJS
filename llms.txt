@@ -1,11 +1,12 @@
 # BareJS (`barejs`) — AI Quick Reference (`llms.txt`)
 
-> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`) with built-in security (Argon2id, HS256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip `compress`, `app.cron`, Security Headers, DoS limits) and **100% Function & Line Test Coverage (401 tests / 6,129 assertions)**.
+> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`) with built-in security (Argon2id, HS256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip `compress`, `app.cron`, Security Headers, DoS limits) and **100% Function & Line Test Coverage (413 tests / 6,205 assertions)**.
 
 ## 1. Installation & Minimal App
 ```ts
 import { BareJS, Context, Type } from 'barejs';
 
+// Optional poolSize (0..65536, default 1024): lazy bounded LIFO Context pool with in-flight slot clearing & shared state across JIT recompiles
 const app = new BareJS();
 
 // Direct return (Elysia style — auto-detects JSON, text, or Response)

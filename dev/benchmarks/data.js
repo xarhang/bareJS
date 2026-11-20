@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795164936121,
+  "lastUpdate": 1795165378408,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3625,6 +3625,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 2819.350899836836,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "0afff4f65b86a4036bf4a6aef8e00b0708084284",
+          "message": "refactor(core): keep pool test diagnostics out of emitted .d.ts",
+          "timestamp": "2026-11-20T09:02:05Z",
+          "tree_id": "4d2866bdc854e8dfdf806c9b61bd7d3aa83590b9",
+          "url": "https://github.com/xarhang/bareJS/commit/0afff4f65b86a4036bf4a6aef8e00b0708084284"
+        },
+        "date": 1795165377837,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 657.7271424223682,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 997.4122181964573,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3899.529423808131,
             "unit": "undefined"
           }
         ]

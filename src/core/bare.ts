@@ -10,6 +10,15 @@ import { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from "../uti
 import type { RouteSchemas } from "../security/validators";
 import type { RouteSchema } from "../client/index";
 
+export function normalizePoolSize(
+  poolSize: number,
+  defaultSize = 1024,
+  maximumSize = 65_536
+): number {
+  const requested = Number.isFinite(poolSize) ? Math.floor(poolSize) : defaultSize;
+  return Math.min(maximumSize, Math.max(0, requested));
+}
+
 export interface CronOptions {
   /** Execute the cron job immediately upon registration (default: false) */
   runOnStart?: boolean;
@@ -65,6 +74,7 @@ export class BareJS<
   declare readonly __routes: Routes;
   private tree = new RadixNode();
   private pool: Context[] = [];
+  private readonly maxPool: number;
   // private poolIdx = 0;
   private hotFetch?: (req: Request, peerIp?: string) => any;
   private compiled = false;
@@ -161,16 +171,11 @@ export class BareJS<
   constructor(poolSize: number = BareJS.DEFAULT_POOL_SIZE) {
     super();
     bootstrapConfig();
-    const requestedPoolSize = Number.isFinite(poolSize)
-      ? Math.floor(poolSize)
-      : BareJS.DEFAULT_POOL_SIZE;
-    const maxPool = Math.min(
-      BareJS.MAX_POOL_SIZE,
-      Math.max(0, requestedPoolSize)
+    this.maxPool = normalizePoolSize(
+      poolSize,
+      BareJS.DEFAULT_POOL_SIZE,
+      BareJS.MAX_POOL_SIZE
     );
-    for (let i = 0; i < maxPool; i++) {
-      this.pool.push(new Context());
-    }
     try {
       const pkgPath = join(process.cwd(), "package.json");
       const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
@@ -696,7 +701,7 @@ export class BareJS<
 
     const tree = this.tree;
     const pool = this.pool;
-    const maxPool = pool.length;
+    const maxPool = this.maxPool;
     const hNotFound = this.notFoundHandler;
     const customError = this.errorHandler;
     const applyCtxHeaders = (res: Response, ctx: Context): Response => {
@@ -941,7 +946,7 @@ export class BareJS<
   const _onErr = (e, ctx${isLog ? ', doLog' : ''}) => { ${handleErrCode} };`
       : '';
     const fnBody = `
-  let poolTop = maxPool;${compactHelpers}
+  let poolTop = pool.length;${compactHelpers}
   return function(req, peerIp) {
     const url = req.url;
     let s = url.indexOf('/', 8);
@@ -1039,7 +1044,7 @@ export class BareJS<
   \x1b[33m |____/ \\__,_|_|  \\___| \\___/|_____|\x1b[0m
                                          
    \x1b[32m🚀 ${this.name} is running in development mode\x1b[0m
-   \x1b[90m⚙️  Pool Size: ${this.pool.length} | JIT: Enabled | Port: ${finalPort}\x1b[0m
+   \x1b[90m⚙️  Pool Size: ${this.maxPool} | JIT: Enabled | Port: ${finalPort}\x1b[0m
    \x1b[36m🛡️  Hash: ${BARE_CONFIG.hash.algorithm} (${BARE_CONFIG.hash.memoryCost / 1024}MB) | Iterations: ${BARE_CONFIG.hash.timeCost}\x1b[0m
       `);
     }

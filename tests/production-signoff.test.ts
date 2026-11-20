@@ -1579,3 +1579,42 @@ describe("Round 10 regressions", () => {
     expect((await r.json()).q).toEqual({ tags: ["a", "b"], nums: [1, 2] });
   });
 });
+
+describe("Pool size normalization & lazy bounded LIFO retention", () => {
+  test.each([
+    [0, 0],
+    [-1, 0],
+    [1.9, 1],
+    [1000, 1000],
+    [1025, 1025],
+    [65_536, 65_536],
+    [65_537, 65_536],
+    [Number.NaN, 1024],
+    [Number.POSITIVE_INFINITY, 1024],
+  ])("65. normalizePoolSize(%p) -> %p", async (input, expected) => {
+    const { normalizePoolSize } = await import("../src/index");
+    expect(normalizePoolSize(input)).toBe(expected);
+  });
+
+  test("66. does not round poolSize=1025 to 2048 and lazily allocates Context instances", () => {
+    const app = new BareJS(1025);
+    expect((app as any).maxPool).toBe(1025);
+    expect((app as any).pool.length).toBe(0);
+  });
+
+  test("67. retains no more than the configured number of contexts under concurrency", async () => {
+    const app = new BareJS(3);
+    app.get("/p", async () => {
+      await Bun.sleep(5);
+      return { ok: true };
+    });
+    await Promise.all(Array.from({ length: 20 }, () => app.request("/p")));
+    expect((app as any).pool.length).toBeLessThanOrEqual(3);
+    expect((app as any).pool.length).toBeGreaterThan(0);
+
+    const zeroPoolApp = new BareJS(0);
+    zeroPoolApp.get("/z", () => ({ ok: true }));
+    await Promise.all(Array.from({ length: 5 }, () => zeroPoolApp.request("/z")));
+    expect((zeroPoolApp as any).pool.length).toBe(0);
+  });
+});

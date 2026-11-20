@@ -6,7 +6,7 @@
  */
 
 // --- 1. Core Engine ---
-export { BareJS, type WebSocketRouteHandler, type CronOptions, type NotFoundResponse } from './core/bare';
+export { BareJS, normalizePoolSize, type WebSocketRouteHandler, type CronOptions, type NotFoundResponse } from './core/bare';
 export { BareRouter, type InferSchema, type PrefixRoutes } from './core/router';
 
 /**

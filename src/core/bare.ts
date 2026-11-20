@@ -352,12 +352,33 @@ export class BareJS<
       return res;
     };
 
+    const compMw = pipeline.find((fn) => fn?.__compress);
+    if (compMw) {
+      const applyCompress = compMw.__compress;
+      const innerPipeline = pipeline.filter((fn) => !fn?.__compress);
+      const innerCompiled = this.compileHandler(innerPipeline, isLog);
+      return async (ctx: Context, doLog?: any) => {
+        const res = await innerCompiled(ctx, doLog);
+        return applyCompress(ctx, res);
+      };
+    }
+
     const cbIdx = pipeline.findIndex((fn) => fn?.__circuitBreaker);
     if (cbIdx !== -1) {
       const cbMw = pipeline[cbIdx]!;
       const runWithBreaker = cbMw.__circuitBreaker;
-      const prePipeline = pipeline.slice(0, cbIdx);
-      const postPipeline = pipeline.slice(cbIdx + 1);
+      const rawPre = pipeline.slice(0, cbIdx);
+      const prePipeline: any[] = [];
+      const hoistedToPost: any[] = [];
+      for (let i = 0; i < rawPre.length; i++) {
+        const fn = rawPre[i];
+        if (fn?.__timeout || fn?.__idempotencyCommit || fn?.__responseFilter) {
+          hoistedToPost.push(fn);
+        } else {
+          prePipeline.push(fn);
+        }
+      }
+      const postPipeline = [...hoistedToPost, ...pipeline.slice(cbIdx + 1)];
       const postCompiled = this.compileHandler(postPipeline, isLog);
       const noopPre = () => {};
       return async (ctx: Context, doLog?: any) => {
@@ -366,7 +387,7 @@ export class BareJS<
           if (preRes && typeof preRes.then === 'function') preRes = await preRes;
           if (preRes instanceof Response) {
             applyCtxHeadersToRes(preRes, ctx);
-            if (isLog && doLog) doLog(preRes.status);
+            if (isLog && doLog && !ctx._detached) doLog(preRes.status);
             return preRes;
           }
         }
@@ -377,15 +398,21 @@ export class BareJS<
         });
         if (!innerRan && out instanceof Response) {
           applyCtxHeadersToRes(out, ctx);
-          if (isLog && doLog) doLog(out.status);
+          if (isLog && doLog && !ctx._detached) doLog(out.status);
         }
         return out;
       };
     }
 
-    const timeoutMw = pipeline.find((fn) => fn?.__timeout);
-    if (timeoutMw) {
-      const { ms, status, message } = timeoutMw.__timeout;
+    const timeoutMws = pipeline.filter((fn) => fn?.__timeout);
+    if (timeoutMws.length > 0) {
+      let chosen = timeoutMws[0]!.__timeout;
+      for (let i = 1; i < timeoutMws.length; i++) {
+        if (timeoutMws[i]!.__timeout.ms < chosen.ms) {
+          chosen = timeoutMws[i]!.__timeout;
+        }
+      }
+      const { ms, status, message } = chosen;
       const innerPipeline = pipeline.filter((fn) => !fn?.__timeout);
       const innerCompiled = this.compileHandler(innerPipeline, isLog);
       return async (ctx: Context, doLog?: any) => {
@@ -410,17 +437,6 @@ export class BareJS<
         } finally {
           if (timer !== undefined) clearTimeout(timer);
         }
-      };
-    }
-
-    const compMw = pipeline.find((fn) => fn?.__compress);
-    if (compMw) {
-      const applyCompress = compMw.__compress;
-      const innerPipeline = pipeline.filter((fn) => !fn?.__compress);
-      const innerCompiled = this.compileHandler(innerPipeline, isLog);
-      return async (ctx: Context, doLog?: any) => {
-        const res = await innerCompiled(ctx, doLog);
-        return applyCompress(ctx, res);
       };
     }
 
@@ -574,7 +590,7 @@ export class BareJS<
         code += `let r${i} = fn${i}(ctx, noop);\n`;
         code += `if (r${i}) {\n`;
         code += `  if (r${i}.then) r${i} = await r${i};\n`;
-        code += `  if (r${i} instanceof Response) { applyShortCircuit(r${i}, ctx); ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
+        code += `  if (r${i} instanceof Response) { applyShortCircuit(r${i}, ctx); ${isLog ? 'if (!ctx._detached) doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
         code += `}\n`;
       }
       code += `
@@ -587,12 +603,12 @@ export class BareJS<
         const fns = [${fnNames.join(', ')}];
         const continueAsync = async (${isLog ? 'idx, pending, ctx, doLog' : 'idx, pending, ctx'}) => {
           let r = await pending;
-          if (r instanceof Response) { applyShortCircuit(r, ctx); ${isLog ? 'doLog(r.status);' : ''} return r; }
+          if (r instanceof Response) { applyShortCircuit(r, ctx); ${isLog ? 'if (!ctx._detached) doLog(r.status);' : ''} return r; }
           for (let i = idx + 1; i < fns.length - 1; i++) {
             r = fns[i](ctx, noop);
             if (r) {
               if (typeof r.then === 'function') r = await r;
-              if (r instanceof Response) { applyShortCircuit(r, ctx); ${isLog ? 'doLog(r.status);' : ''} return r; }
+              if (r instanceof Response) { applyShortCircuit(r, ctx); ${isLog ? 'if (!ctx._detached) doLog(r.status);' : ''} return r; }
             }
           }
           let res = fns[fns.length - 1](ctx, noop);
@@ -603,7 +619,7 @@ export class BareJS<
       for (let i = 0; i < len - 1; i++) {
         code += `const r${i} = fn${i}(ctx, noop);\n`;
         code += `if (r${i}) {\n`;
-        code += `  if (r${i} instanceof Response) { applyShortCircuit(r${i}, ctx); ${isLog ? 'doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
+        code += `  if (r${i} instanceof Response) { applyShortCircuit(r${i}, ctx); ${isLog ? 'if (!ctx._detached) doLog(r' + i + '.status);' : ''} return r${i}; }\n`;
         code += `  if (typeof r${i}.then === 'function') return continueAsync(${i}, r${i}, ${argSig});\n`;
         code += `}\n`;
       }
@@ -659,14 +675,7 @@ export class BareJS<
       return applyCtxHeaders(Response.json(res ?? null, { status }), ctx);
     };
 
-    const hError = (err: any, ctx: Context): Response | Promise<Response> => {
-      if (customError) {
-        const res = customError(err, ctx);
-        if (res && typeof res.then === 'function') {
-          return res.then((resolved: any) => formatCustomError(resolved, ctx));
-        }
-        return formatCustomError(res, ctx);
-      }
+    const defaultErrorRes = (err: any, ctx: Context): Response => {
       if (err?.status >= 400 && err?.status < 500) {
         return applyCtxHeaders(Response.json({
           status: err.status,
@@ -678,6 +687,24 @@ export class BareJS<
         message: process.env.NODE_ENV === 'development' ? (err?.message || "Internal Server Error") : "Internal Server Error",
         stack: process.env.NODE_ENV === 'development' ? err?.stack : undefined
       }, { status: 500 }), ctx);
+    };
+
+    const hError = (err: any, ctx: Context): Response | Promise<Response> => {
+      if (customError) {
+        try {
+          const res = customError(err, ctx);
+          if (res && typeof res.then === 'function') {
+            return res.then(
+              (resolved: any) => formatCustomError(resolved, ctx),
+              (handlerErr: any) => defaultErrorRes(handlerErr, ctx)
+            );
+          }
+          return formatCustomError(res, ctx);
+        } catch (handlerErr) {
+          return defaultErrorRes(handlerErr, ctx);
+        }
+      }
+      return defaultErrorRes(err, ctx);
     };
 
     const hoistedHandlers: Function[] = [];

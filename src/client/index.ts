@@ -92,7 +92,7 @@ const buildUrl = (baseUrl: string, path: string, options?: ClientRequestOptions)
   let finalPath = path;
   if (options?.params) {
     const params = options.params;
-    finalPath = finalPath.replace(/:([a-zA-Z0-9_]+)(?=\/|$)/g, (match, key) =>
+    finalPath = finalPath.replace(/:([a-zA-Z0-9_]+)(?=\/|\?|$)/g, (match, key) =>
       Object.hasOwn(params, key) ? encodeURIComponent(String(params[key])) : match
     );
   }

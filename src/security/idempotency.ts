@@ -90,7 +90,10 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
       (ctx as any)._idempotencyKey = undefined;
       (ctx as any)._idemInFlight = undefined;
       const isStream = resVal instanceof Response && (resVal.headers.get('content-type') || '').includes('text/event-stream');
-      const clonedRes = !isStream && status >= 200 && status < 300 && resVal instanceof Response ? resVal.clone() : null;
+      let clonedRes: any = null;
+      if (!isStream && status >= 200 && status < 300 && resVal instanceof Response) {
+        try { clonedRes = resVal.clone(); } catch { clonedRes = null; }
+      }
       const ct = clonedRes ? (clonedRes.headers.get('content-type') || 'application/json') : undefined;
       return (async () => {
         try {
@@ -123,7 +126,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
   }
 
   const cache = new Map<string, CachedIdempotentEntry>();
-  const inFlight = new Set<string>();
+  const inFlight = new Map<string, number>();
 
   const evictIfNeeded = () => {
     if (cache.size >= maxKeys) {
@@ -149,15 +152,19 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
       cache.delete(key);
     }
 
-    if (inFlight.has(key)) {
-      (ctx as any)._idempotencyKey = undefined;
-      return Response.json(
-        { status: 'error', code: 'IDEMPOTENT_IN_FLIGHT', message: 'Duplicate request is currently in flight' },
-        { status: 409 }
-      );
+    const lockExp = inFlight.get(key);
+    if (lockExp !== undefined) {
+      if (now < lockExp) {
+        (ctx as any)._idempotencyKey = undefined;
+        return Response.json(
+          { status: 'error', code: 'IDEMPOTENT_IN_FLIGHT', message: 'Duplicate request is currently in flight' },
+          { status: 409 }
+        );
+      }
+      inFlight.delete(key);
     }
 
-    inFlight.add(key);
+    inFlight.set(key, now + ttlMs);
     (ctx as any)._idempotencyKey = key;
     (ctx as any)._idemInFlight = inFlight;
     return undefined;
@@ -171,18 +178,24 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     const isStream = resVal instanceof Response && (resVal.headers.get('content-type') || '').includes('text/event-stream');
     if (!isStream && status >= 200 && status < 300) {
       if (resVal instanceof Response) {
-        const ct = resVal.headers.get('content-type') || 'application/json';
-        return resVal.clone().arrayBuffer().then((buf) => {
-          evictIfNeeded();
-          cache.set(key, {
-            status,
-            rawBody: buf,
-            contentType: ct,
-            expiresAt: Date.now() + ttlMs
+        let cloned: any = null;
+        try { cloned = resVal.clone(); } catch { cloned = null; }
+        if (cloned) {
+          const ct = cloned.headers.get('content-type') || 'application/json';
+          return cloned.arrayBuffer().then((buf: ArrayBuffer) => {
+            evictIfNeeded();
+            cache.set(key, {
+              status,
+              rawBody: buf,
+              contentType: ct,
+              expiresAt: Date.now() + ttlMs
+            });
+          }).catch(() => {}).finally(() => {
+            inFlight.delete(key);
           });
-        }).catch(() => {}).finally(() => {
-          inFlight.delete(key);
-        });
+        }
+        inFlight.delete(key);
+        return;
       }
       evictIfNeeded();
       cache.set(key, {

@@ -152,16 +152,27 @@ export class BareRouter<Routes extends RouteSchema = {}> {
   public use(...mws: any[]): BareRouter<Routes>;
   public use(prefixOrMw: any, ...rest: any[]): any {
     if (typeof prefixOrMw === 'string') {
-      let mounted = false;
+      const prefixMws: any[] = [];
+      const prefixRouters: any[] = [];
       for (let i = 0; i < rest.length; i++) {
         const item = rest[i];
         if (item instanceof BareRouter || (item && item.routes)) {
-          this._mountRouter(prefixOrMw, item);
-          mounted = true;
+          prefixRouters.push(item);
+        } else if (typeof item === 'function') {
+          prefixMws.push(item);
         }
       }
-      if (!mounted) {
+      if (prefixRouters.length === 0) {
         throw new TypeError(`BareRouter.use("${prefixOrMw}", ...) requires a BareRouter instance`);
+      }
+      for (let i = 0; i < prefixRouters.length; i++) {
+        const prevLen = this.routes.length;
+        this._mountRouter(prefixOrMw, prefixRouters[i]);
+        if (prefixMws.length > 0) {
+          for (let j = prevLen; j < this.routes.length; j++) {
+            this.routes[j].handlers = [...this.groupMiddleware, ...prefixMws, ...this.routes[j].handlers.slice(this.groupMiddleware.length)];
+          }
+        }
       }
       return this;
     }

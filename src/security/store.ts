@@ -74,7 +74,7 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
     }
   };
 
-  const lockTokens = new Map<string, string>();
+  const lockTokens = new Map<string, string[]>();
   const RELEASE_LUA = 'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end';
 
   return {
@@ -142,14 +142,18 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
       if (useSend) {
         const res = await client.send('SET', [lockKey, token, 'PX', String(ttlMs), 'NX']);
         if (res === 'OK' || res === true) {
-          lockTokens.set(key, token);
+          let q = lockTokens.get(key);
+          if (!q) { q = []; lockTokens.set(key, q); }
+          q.push(token);
           return true;
         }
         return false;
       }
       const res = await client.set(lockKey, token, 'PX', ttlMs, 'NX');
       if (res === 'OK' || res === true || res === 1) {
-        lockTokens.set(key, token);
+        let q = lockTokens.get(key);
+        if (!q) { q = []; lockTokens.set(key, q); }
+        q.push(token);
         return true;
       }
       return false;
@@ -157,8 +161,9 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
 
     async release(key: string): Promise<void> {
       const lockKey = `${prefix}idem:lock:${key}`;
-      const token = lockTokens.get(key);
-      lockTokens.delete(key);
+      const q = lockTokens.get(key);
+      const token = q?.shift();
+      if (q && q.length === 0) lockTokens.delete(key);
       if (!token) return;
       if (useSend) {
         try {

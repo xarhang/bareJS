@@ -264,6 +264,9 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
       const headerB64 = token.slice(0, firstDot);
       const payloadB64 = token.slice(firstDot + 1, secondDot);
       const sigB64 = token.slice(secondDot + 1);
+      if (!/^[A-Za-z0-9_-]+$/.test(sigB64)) {
+        return ctx.status(401).send("Invalid signature");
+      }
       const data = token.slice(0, secondDot);
 
       let decoded: any;
@@ -382,6 +385,9 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
     const headerB64 = token.slice(0, firstDot);
     const payloadB64 = token.slice(firstDot + 1, secondDot);
     const sigB64 = token.slice(secondDot + 1);
+    if (!/^[A-Za-z0-9_-]+$/.test(sigB64)) {
+      return ctx.status(401).send("Invalid signature");
+    }
     const data = token.slice(0, secondDot);
 
     let decoded: any;
@@ -422,7 +428,11 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
         }
       }
 
-      decoded = JSON.parse(fromBase64Url(payloadB64));
+      const payloadStr = fromBase64Url(payloadB64);
+      decoded = JSON.parse(payloadStr);
+      if (decoded && typeof decoded === 'object' && (payloadStr.indexOf('__proto__') !== -1 || payloadStr.indexOf('\\u') !== -1)) {
+        delete decoded.__proto__;
+      }
     } catch {
       return ctx.status(401).send("Token verification failed");
     }

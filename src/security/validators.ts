@@ -161,8 +161,15 @@ export const zod = (schema: z.ZodSchema): Middleware => {
  */
 export const validate = (schema: any): Middleware => {
   if (schema && '_def' in schema) return zod(schema);
-  if (schema && (schema.kind || schema.type || schema[Symbol.for('TypeBox.Kind')])) {
+  if (schema && (schema.kind || schema[Symbol.for('TypeBox.Kind')])) {
     return typebox(schema);
+  }
+  if (schema && schema.type) {
+    try {
+      return typebox(schema);
+    } catch {
+      return native(schema);
+    }
   }
   return native(schema);
 };
@@ -249,7 +256,7 @@ const buildProjectorStatements = (schema: any, srcVar: string, dstVar: string, d
     const keyLit = JSON.stringify(k);
     const valVar = `v_${depth}_${idx++}`;
     const nestedDst = `d_${depth}_${idx}`;
-    stmts += `const ${valVar} = ${srcVar}[${keyLit}];\n`;
+    stmts += `const ${valVar} = Object.hasOwn(${srcVar}, ${keyLit}) ? ${srcVar}[${keyLit}] : undefined;\n`;
 
     if (subSchema?.type === 'array' && subSchema?.items) {
       const itemVar = `ai_${depth}_${idx}`;

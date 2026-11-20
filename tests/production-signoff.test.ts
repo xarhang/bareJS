@@ -466,4 +466,171 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     expect(cfg.port).toBe(3000);
     expect(cfg.hash.algorithm).toBe("argon2id");
   });
+
+  test("20. bareAuth rejects non-canonical base64url signatures so revoked tokens cannot bypass revocation", async () => {
+    const { createToken, revokeToken } = await import("../src/index");
+    const secret = "canon-secret";
+    const tok = await createToken({ sub: "u1" }, secret);
+    revokeToken(tok, 60_000);
+
+    const app = new BareJS();
+    app.use(bareAuth(secret));
+    app.get("/me", () => ({ ok: true }));
+
+    for (const variant of [tok, `${tok}=`, `${tok}==`, `${tok}!`]) {
+      const res = await app.request("/me", { headers: { Authorization: `Bearer ${variant}` } });
+      expect(res.status).toBe(401);
+    }
+  });
+
+  test("21. timeout, compress, idempotency before circuitBreaker work properly and tightest timeout wins", async () => {
+    const app = new BareJS();
+    let count = 0;
+    app.use(compress({ minSize: 10 }));
+    app.use(timeout(5000));
+    app.use(idempotency({ ttlMs: 5000 }));
+    app.use(circuitBreaker({ failureThreshold: 5 }));
+    app.post("/pay", () => {
+      count++;
+      return { ok: true, count, pad: "x".repeat(50) };
+    });
+    app.get("/fast-timeout", timeout(20), async () => {
+      await Bun.sleep(80);
+      return { ok: true };
+    });
+
+    const r1 = await app.request("/pay", {
+      method: "POST",
+      headers: { "Idempotency-Key": "pre-cb-1", "Accept-Encoding": "gzip" }
+    });
+    expect(r1.status).toBe(200);
+    expect(r1.headers.get("content-encoding")).toBe("gzip");
+
+    const r2 = await app.request("/pay", {
+      method: "POST",
+      headers: { "Idempotency-Key": "pre-cb-1" }
+    });
+    expect(r2.headers.get("x-idempotent-replayed")).toBe("true");
+    expect(count).toBe(1);
+
+    const rTimeout = await app.request("/fast-timeout");
+    expect(rTimeout.status).toBe(408);
+  });
+
+  test("22. Throwing onError handler does not leak Context from pool", async () => {
+    const app = new BareJS(1);
+    const seen = new Set<Context>();
+    app.onError(() => {
+      throw new Error("onError crashed");
+    });
+    app.get("/boom", () => {
+      throw new Error("route boom");
+    });
+    app.get("/ok", (ctx) => {
+      seen.add(ctx);
+      return { ok: true };
+    });
+
+    expect((await app.request("/ok")).status).toBe(200);
+    expect((await app.request("/boom")).status).toBe(500);
+    expect((await app.request("/ok")).status).toBe(200);
+    expect(seen.size).toBe(1);
+  });
+
+  test("23. redisStore FIFO token queue prevents expired holder on same store instance from deleting active lock", async () => {
+    const kv = new Map<string, string>();
+    const mockRedis = {
+      get: async (k: string) => kv.get(k) ?? null,
+      del: async (k: string) => (kv.delete(k) ? 1 : 0),
+      set: async (k: string, v: string, _px?: string, _ttl?: number, nx?: string) => {
+        if (nx === "NX" && kv.has(k)) return null;
+        kv.set(k, v);
+        return "OK";
+      }
+    };
+    const store = redisStore(mockRedis);
+    expect(await store.acquire("k", 20)).toBe(true);
+    kv.delete("barejs:idem:lock:k"); // simulate TTL expiry
+    expect(await store.acquire("k", 5000)).toBe(true);
+    await store.release("k"); // delayed release of first acquisition
+    expect(await store.acquire("k", 5000)).toBe(false); // second lock still active!
+  });
+
+  test("24. idempotency releases in-flight lock if Response.clone() throws (disturbed body)", async () => {
+    const mw = idempotency({ ttlMs: 5000 });
+    const ctx1 = new Context();
+    ctx1.req = new Request("http://localhost/pay", { method: "POST", headers: { "Idempotency-Key": "disturbed" } });
+    expect(mw(ctx1, () => {})).toBeUndefined();
+
+    const usedRes = new Response("hello");
+    await usedRes.text(); // bodyUsed === true
+    (mw as any).__idempotencyCommit(ctx1, usedRes, 200);
+
+    const ctx2 = new Context();
+    ctx2.req = new Request("http://localhost/pay", { method: "POST", headers: { "Idempotency-Key": "disturbed" } });
+    const r2 = mw(ctx2, () => {});
+    expect(r2).toBeUndefined(); // Not stuck at 409
+  });
+
+  test("25. staticFile + cors + compress preserves both Accept-Encoding and Origin in Vary", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bare-vary-"));
+    try {
+      writeFileSync(join(dir, "hello.txt"), "A".repeat(200));
+      const app = new BareJS();
+      app.use(cors({ origin: "https://example.com" }));
+      app.use(compress({ minSize: 10 }));
+      app.use(staticFile(dir));
+
+      const res = await app.request("/hello.txt", {
+        headers: { Origin: "https://example.com", "Accept-Encoding": "gzip" }
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-encoding")).toBe("gzip");
+      const vary = (res.headers.get("vary") || "").toLowerCase();
+      expect(vary).toContain("accept-encoding");
+      expect(vary).toContain("origin");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("26. validate() handles plain JSON Schema and createResponseFilter ignores Object.prototype properties", async () => {
+    const { validate } = await import("../src/index");
+    const app = new BareJS();
+    app.post("/plain", validate({ type: "object", properties: { name: { type: "string" } } }), (ctx) => ctx.body);
+    const res = await app.request("/plain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "alice" })
+    });
+    expect(res.status).toBe(200);
+
+    const filter = createResponseFilter({
+      type: "object",
+      properties: { toString: { type: "string" }, a: { type: "string" } },
+      required: ["a"]
+    });
+    expect(filter({ a: "hi" })).toEqual({ a: "hi" });
+  });
+
+  test("27. bareClient substitutes :param before '?' and BareRouter.use(prefix, mw, router) applies mw", async () => {
+    let hitUrl = "";
+    const client = bareClient("http://localhost", {
+      fetch: (async (url: string) => {
+        hitUrl = url;
+        return Response.json({ ok: true });
+      }) as any
+    });
+    await client.get("/users/:id?foo=1", { params: { id: 42 } });
+    expect(hitUrl).toBe("http://localhost/users/42?foo=1");
+
+    const app = new BareJS();
+    const sub = new BareRouter().get("/item", (ctx) => ({ tag: ctx.get("tag") }));
+    app.use("/api", (ctx) => { ctx.set("tag", "v1"); }, sub);
+    const r = await app.request("/api/item");
+    expect(await r.json()).toEqual({ tag: "v1" });
+
+    const cfg = initConfig(["bad"] as any);
+    expect((cfg as any)[0]).toBeUndefined();
+  });
 });

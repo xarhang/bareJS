@@ -20,7 +20,7 @@ export const rateLimit = (options: RateLimitOptions = {}): Middleware => {
   const windowMs = options.windowMs ?? 60_000;
   const max = options.max ?? 100;
   const message = options.message ?? 'Too many requests, please try again later.';
-  const maxEntries = options.maxEntries ?? 10_000;
+  const maxEntries = Math.max(1, options.maxEntries ?? 10_000);
   const keyGenerator = options.keyGenerator ?? ((ctx: Context) => ctx.ip);
   const store = options.store;
 

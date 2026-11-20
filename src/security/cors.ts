@@ -8,6 +8,15 @@ export interface CorsOptions {
   exposedHeaders?: string | string[];
 }
 
+const appendVaryOrigin = (headers: Headers) => {
+  const existing = headers.get('Vary');
+  if (!existing) {
+    headers.set('Vary', 'Origin');
+  } else if (!existing.toLowerCase().split(',').some((v) => v.trim() === 'origin')) {
+    headers.set('Vary', `${existing}, Origin`);
+  }
+};
+
 export const cors = (options: CorsOptions = {}) => {
   const originOpt = options.origin ?? '*';
   const methods = options.methods || 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
@@ -57,7 +66,7 @@ export const cors = (options: CorsOptions = {}) => {
           if (r instanceof Response) {
             r.headers.set('Access-Control-Allow-Origin', originOpt);
             r.headers.set('Access-Control-Allow-Methods', methods);
-            if (originOpt !== '*') r.headers.set('Vary', 'Origin');
+            if (originOpt !== '*') appendVaryOrigin(r.headers);
             if (allowCreds) r.headers.set('Access-Control-Allow-Credentials', 'true');
             if (exposeHeaders) r.headers.set('Access-Control-Expose-Headers', exposeHeaders);
           }
@@ -67,7 +76,7 @@ export const cors = (options: CorsOptions = {}) => {
       if (res instanceof Response) {
         res.headers.set('Access-Control-Allow-Origin', originOpt);
         res.headers.set('Access-Control-Allow-Methods', methods);
-        if (originOpt !== '*') res.headers.set('Vary', 'Origin');
+        if (originOpt !== '*') appendVaryOrigin(res.headers);
         if (allowCreds) res.headers.set('Access-Control-Allow-Credentials', 'true');
         if (exposeHeaders) res.headers.set('Access-Control-Expose-Headers', exposeHeaders);
       }
@@ -109,7 +118,7 @@ export const cors = (options: CorsOptions = {}) => {
     if (res && typeof (res as any).then === 'function') {
       return (res as Promise<any>).then((r) => {
         if (r instanceof Response) {
-          r.headers.set('Vary', 'Origin');
+          appendVaryOrigin(r.headers);
           r.headers.set('Access-Control-Allow-Methods', methods);
           if (matched) {
             r.headers.set('Access-Control-Allow-Origin', matched);
@@ -121,7 +130,7 @@ export const cors = (options: CorsOptions = {}) => {
       });
     }
     if (res instanceof Response) {
-      res.headers.set('Vary', 'Origin');
+      appendVaryOrigin(res.headers);
       res.headers.set('Access-Control-Allow-Methods', methods);
       if (matched) {
         res.headers.set('Access-Control-Allow-Origin', matched);

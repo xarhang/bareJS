@@ -30,13 +30,13 @@ All benchmark numbers below are **automatically generated on every push to `main
 
 | Scenario | **BareJS** 🏆 | **ElysiaJS** | **Hono** |
 | :--- | :---: | :---: | :---: |
-| **1. 100 Routes + Dynamic Params** | **`532 ns`**<br><sub>`p99: 2.99 µs`</sub> | `899 ns`<br><sub>`p99: 4.41 µs`</sub> | `2.13 µs`<br><sub>`p99: 9.98 µs`</sub> |
-| **2. 10 Middlewares + Deep Path** | **`529 ns`**<br><sub>`p99: 3.01 µs`</sub> | `887 ns`<br><sub>`p99: 4.20 µs`</sub> | `2.51 µs`<br><sub>`p99: 10.51 µs`</sub> |
-| **3. POST JSON + Schema Validation** | **`1.71 µs`**<br><sub>`p99: 7.36 µs`</sub> | `2.25 µs`<br><sub>`p99: 9.77 µs`</sub> | `2.29 µs`<br><sub>`p99: 11.39 µs`</sub> |
-| **4. Async Handler + Query Parsing** | **`970 ns`**<br><sub>`p99: 3.94 µs`</sub> | `1.11 µs`<br><sub>`p99: 4.30 µs`</sub> | `1.59 µs`<br><sub>`p99: 7.08 µs`</sub> |
-| **5. Response Schema Secret Stripping** | **`485 ns`**<br><sub>`p99: 2.92 µs`</sub> | `799 ns`<br><sub>`p99: 3.63 µs`</sub> | — |
-| **6. SQLite Report (`SUM`/`AVG`/`GROUP BY`)** | **`14.96 µs`**<br><sub>`p99: 23.58 µs`</sub> | `15.11 µs`<br><sub>`p99: 24.29 µs`</sub> | `18.11 µs`<br><sub>`p99: 35.08 µs`</sub> |
-| **7. SQLite Write (`POST` + Validate + `INSERT`)** | **`5.27 µs`**<br><sub>`p99: 14.31 µs`</sub> | `6.39 µs`<br><sub>`p99: 17.90 µs`</sub> | `8.32 µs`<br><sub>`p99: 26.56 µs`</sub> |
+| **1. 100 Routes + Dynamic Params** | **`1.50 µs`**<br><sub>`p99: 8.76 µs`</sub> | `2.07 µs`<br><sub>`p99: 9.54 µs`</sub> | `3.85 µs`<br><sub>`p99: 14.19 µs`</sub> |
+| **2. 10 Middlewares + Deep Path** | **`1.12 µs`**<br><sub>`p99: 6.46 µs`</sub> | `1.92 µs`<br><sub>`p99: 8.46 µs`</sub> | `4.08 µs`<br><sub>`p99: 14.23 µs`</sub> |
+| **3. POST JSON + Schema Validation** | `3.77 µs`<br><sub>`p99: 12.95 µs`</sub> | `4.88 µs`<br><sub>`p99: 15.50 µs`</sub> | **`3.37 µs`**<br><sub>`p99: 3.61 µs`</sub> |
+| **4. Async Handler + Query Parsing** | **`1.96 µs`**<br><sub>`p99: 8.90 µs`</sub> | `2.33 µs`<br><sub>`p99: 10.08 µs`</sub> | `3.13 µs`<br><sub>`p99: 12.37 µs`</sub> |
+| **5. Response Schema Secret Stripping** | **`973 ns`**<br><sub>`p99: 5.93 µs`</sub> | `1.60 µs`<br><sub>`p99: 7.16 µs`</sub> | — |
+| **6. SQLite Report (`SUM`/`AVG`/`GROUP BY`)** | `22.53 µs`<br><sub>`p99: 42.45 µs`</sub> | **`22.14 µs`**<br><sub>`p99: 38.95 µs`</sub> | `28.40 µs`<br><sub>`p99: 58.69 µs`</sub> |
+| **7. SQLite Write (`POST` + Validate + `INSERT`)** | **`12.93 µs`**<br><sub>`p99: 29.28 µs`</sub> | `18.51 µs`<br><sub>`p99: 45.03 µs`</sub> | `13.69 µs`<br><sub>`p99: 13.87 µs`</sub> |
 
 > Last Updated: 2026-11-20 (github action)
 
@@ -48,9 +48,9 @@ All benchmark numbers below are **automatically generated on every push to `main
 
 | Framework | Latency | Speed |
 | :--- | :--- | :--- |
-| **BareJS** | **0.52 µs** | **Baseline** |
-| Elysia | 0.85 µs | 1.64x slower |
-| Hono | 3.30 µs | 6.32x slower |
+| **BareJS** | **1.10 µs** | **Baseline** |
+| Elysia | 1.71 µs | 1.55x slower |
+| Hono | 5.40 µs | 4.89x slower |
 
 > Last Updated: 2026-11-20 (github action)
 

@@ -7,6 +7,8 @@ export interface CachedIdempotentEntry {
   body?: any;
   rawBody?: ArrayBuffer;
   contentType?: string;
+  /** Replayed safe headers (Location, Content-Location, ETag) */
+  headers?: Record<string, string>;
   expiresAt: number;
 }
 
@@ -114,6 +116,7 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
             status: parsed.status,
             rawBody: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
             contentType: parsed.contentType,
+            headers: parsed.headers,
             expiresAt: parsed.expiresAt
           };
         }
@@ -131,6 +134,7 @@ export const redisStore = (client: any, options: RedisStoreOptions = {}): BareSt
       if (entry.rawBody !== undefined) {
         serializable.rawBodyBase64 = Buffer.from(entry.rawBody).toString('base64');
         serializable.contentType = entry.contentType;
+        if (entry.headers) serializable.headers = entry.headers;
       } else {
         serializable.body = entry.body;
       }

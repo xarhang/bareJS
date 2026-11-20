@@ -73,14 +73,21 @@ export const rateLimit = (options: RateLimitOptions = {}): Middleware => {
           if (now >= v.resetAt) buckets.delete(k);
           if (buckets.size < maxEntries) break;
         }
-        if (buckets.size >= maxEntries) {
-          const firstKey = buckets.keys().next().value;
-          if (firstKey !== undefined) buckets.delete(firstKey);
+      }
+      let storeKey = key;
+      if (buckets.size >= maxEntries && !buckets.has(key)) {
+        // Table is full of live buckets: never evict them (would let a flooder reset a victim's counter).
+        // Fold overflow keys into one shared bucket instead.
+        storeKey = '\0__overflow__';
+        const ob = buckets.get(storeKey);
+        if (ob && now < ob.resetAt) {
+          ob.count++;
+          return finalizeBucket(ctx, ob.count, ob.resetAt, now, next);
         }
       }
       bucket = { count: 1, resetAt: now + windowMs };
-      buckets.delete(key);
-      buckets.set(key, bucket);
+      buckets.delete(storeKey);
+      buckets.set(storeKey, bucket);
     } else {
       bucket.count++;
       buckets.delete(key);

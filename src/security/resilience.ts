@@ -27,6 +27,8 @@ export const circuitBreaker = (options: CircuitBreakerOptions = {}): Middleware 
   let openedAt = 0;
   let halfOpenInFlight = false;
   let epoch = 0;
+  let probeSeq = 0;
+  let activeProbe = 0;
 
   const setState = (nextState: CircuitState) => {
     if (state !== nextState) {
@@ -67,6 +69,20 @@ export const circuitBreaker = (options: CircuitBreakerOptions = {}): Middleware 
     }
 
     const entryEpoch = epoch;
+    let probeTimer: ReturnType<typeof setTimeout> | undefined;
+    const myProbe = isHalfOpenProbe ? ++probeSeq : 0;
+    if (isHalfOpenProbe) {
+      activeProbe = myProbe;
+      // A probe that never settles must not wedge the breaker forever.
+      probeTimer = setTimeout(() => {
+        if (activeProbe === myProbe && entryEpoch === epoch) {
+          halfOpenInFlight = false;
+          activeProbe = 0;
+          openedAt = Date.now();
+          setState('OPEN');
+        }
+      }, Math.min(Math.max(resetTimeoutMs, 1), 2 ** 31 - 1));
+    }
     try {
       const res = await exec();
       if (entryEpoch !== epoch) return res;
@@ -91,7 +107,8 @@ export const circuitBreaker = (options: CircuitBreakerOptions = {}): Middleware 
       }
       throw err;
     } finally {
-      if (isHalfOpenProbe) halfOpenInFlight = false;
+      if (probeTimer !== undefined) clearTimeout(probeTimer);
+      if (isHalfOpenProbe && activeProbe === myProbe) { halfOpenInFlight = false; activeProbe = 0; }
     }
   };
 

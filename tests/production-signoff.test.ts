@@ -18,6 +18,7 @@ import {
   redisStore,
   staticFile,
   compress,
+  native,
   schemaValidator,
   createResponseFilter,
   renderDocsHTML,
@@ -1453,5 +1454,76 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     const r2 = await app.request("/x");
     expect((await r2.json()).ok).toBe(2);
     expect([200, 404]).toContain(r.status);
+  });
+});
+
+describe("Round 8 regressions", () => {
+  test("56. idempotency does not replay across different Authorization identities and replays Location", async () => {
+    const app = new BareJS();
+    app.post("/pay", idempotency(), (ctx: any) =>
+      new Response(JSON.stringify({ u: ctx.req.headers.get("authorization") }), { status: 201, headers: { "content-type": "application/json", Location: "/o/1" } }));
+    const mk = (a: string) => app.request("/pay", { method: "POST", headers: { "Idempotency-Key": "k", Authorization: a } });
+    const a1 = await mk("userA");
+    expect((await a1.json()).u).toBe("userA");
+    const b = await mk("userB");
+    expect((await b.json()).u).toBe("userB");
+    expect(b.headers.get("x-idempotent-replayed")).toBeNull();
+    const a2 = await mk("userA");
+    expect(a2.headers.get("x-idempotent-replayed")).toBe("true");
+    expect(a2.headers.get("location")).toBe("/o/1");
+  });
+
+  test("57. rateLimit does not let key flooding reset a live victim bucket", async () => {
+    const app = new BareJS();
+    app.use(rateLimit({ max: 2, maxEntries: 3, keyGenerator: (c: any) => c.req.headers.get("x-k") || "" } as any));
+    app.get("/", () => "ok");
+    const hit = (k: string) => app.request("/", { headers: { "x-k": k } });
+    await hit("victim"); await hit("victim");
+    expect((await hit("victim")).status).toBe(429);
+    for (const k of ["a", "b", "c", "d"]) await hit(k);
+    expect((await hit("victim")).status).toBe(429);
+  });
+
+  test("58. timeout() with huge/Infinity ms does not fire immediately", async () => {
+    for (const ms of [3_000_000_000, Infinity]) {
+      const app = new BareJS();
+      app.get("/", timeout(ms), async () => { await Bun.sleep(20); return "ok"; });
+      expect((await app.request("/")).status).toBe(200);
+    }
+  });
+
+  test("59. circuitBreaker recovers when a half-open probe never settles", async () => {
+    const { circuitBreaker } = await import("../src/index");
+    let mode = "fail";
+    const app = new BareJS();
+    app.get("/", circuitBreaker({ failureThreshold: 1, resetTimeoutMs: 30 } as any), () => {
+      if (mode === "fail") return new Response("x", { status: 500 });
+      if (mode === "hang") return new Promise(() => {});
+      return "ok";
+    });
+    await app.request("/");
+    await Bun.sleep(40);
+    mode = "hang";
+    void app.request("/");
+    await Bun.sleep(60);
+    mode = "ok";
+    await Bun.sleep(40);
+    expect((await app.request("/")).status).toBe(200);
+  });
+
+  test("60. native() deep-compares const/enum and enforces multipleOf/uniqueItems/not/minProperties", async () => {
+    const mk = (schema: any) => { const a = new BareJS(); a.post("/", native(schema), () => "ok"); return (b: any) => a.request("/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }).then(r => r.status); };
+    const e = mk({ type: "object", properties: { a: { enum: [[1], { x: 1 }] } }, required: ["a"] });
+    expect(await e({ a: [1] })).toBe(200);
+    expect(await e({ a: { x: 1 } })).toBe(200);
+    expect(await e({ a: [2] })).toBe(400);
+    const m = mk({ type: "object", properties: { a: { type: "integer", multipleOf: 2 }, t: { type: "array", uniqueItems: true } }, required: ["a"] });
+    expect(await m({ a: 2 })).toBe(200);
+    expect(await m({ a: 3 })).toBe(400);
+    expect(await m({ a: 2, t: [1, 1] })).toBe(400);
+    const n = mk({ type: "object", not: { required: ["x"] }, minProperties: 1 });
+    expect(await n({ y: 1 })).toBe(200);
+    expect(await n({ x: 1 })).toBe(400);
+    expect(await n({})).toBe(400);
   });
 });

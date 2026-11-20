@@ -175,6 +175,24 @@ const matchesJsonType = (val: any, expected: string | string[] | undefined): boo
   return typeof val === expected;
 };
 
+const jsonDeepEqual = (a: any, b: any): boolean => {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!jsonDeepEqual(a[i], b[i])) return false;
+    return true;
+  }
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  for (let i = 0; i < ka.length; i++) {
+    const k = ka[i]!;
+    if (!Object.hasOwn(b, k) || !jsonDeepEqual(a[k], b[k])) return false;
+  }
+  return true;
+};
+
 const validateJsonSchemaNode = (
   val: any,
   schema: any,
@@ -183,11 +201,14 @@ const validateJsonSchemaNode = (
 ): { ok: boolean; error?: any } => {
   if (!schema || typeof schema !== 'object') return { ok: true };
 
-  if (Object.hasOwn(schema, 'const') && val !== schema.const) {
+  if (Object.hasOwn(schema, 'const') && !jsonDeepEqual(val, schema.const)) {
     return { ok: false, error: { message: `Value at '${path || 'root'}' must equal ${JSON.stringify(schema.const)}`, path } };
   }
-  if (Array.isArray(schema.enum) && !schema.enum.some((e: any) => e === val)) {
+  if (Array.isArray(schema.enum) && !schema.enum.some((e: any) => jsonDeepEqual(e, val))) {
     return { ok: false, error: { message: `Value at '${path || 'root'}' must be one of enum values`, path } };
+  }
+  if (schema.not && typeof schema.not === 'object' && validateJsonSchemaNode(val, schema.not, path, false).ok) {
+    return { ok: false, error: { message: `Value at '${path || 'root'}' must not match the 'not' schema`, path } };
   }
   if (Array.isArray(schema.allOf)) {
     for (let i = 0; i < schema.allOf.length; i++) {
@@ -228,6 +249,12 @@ const validateJsonSchemaNode = (
     if (typeof schema.maximum === 'number' && val > schema.maximum) {
       return { ok: false, error: { message: `Field '${path}' must be <= ${schema.maximum}`, path } };
     }
+    if (typeof schema.multipleOf === 'number' && schema.multipleOf > 0) {
+      const q = val / schema.multipleOf;
+      if (Math.abs(q - Math.round(q)) > 1e-9 * Math.max(1, Math.abs(q))) {
+        return { ok: false, error: { message: `Field '${path}' must be a multiple of ${schema.multipleOf}`, path } };
+      }
+    }
     if (typeof schema.exclusiveMinimum === 'number' && val <= schema.exclusiveMinimum) {
       return { ok: false, error: { message: `Field '${path}' must be > ${schema.exclusiveMinimum}`, path } };
     }
@@ -259,6 +286,15 @@ const validateJsonSchemaNode = (
     if (typeof schema.maxItems === 'number' && val.length > schema.maxItems) {
       return { ok: false, error: { message: `Field '${path}' must have at most ${schema.maxItems} items`, path } };
     }
+    if (schema.uniqueItems === true) {
+      for (let i = 1; i < val.length; i++) {
+        for (let j = 0; j < i; j++) {
+          if (jsonDeepEqual(val[i], val[j])) {
+            return { ok: false, error: { message: `Field '${path}' must have unique items`, path } };
+          }
+        }
+      }
+    }
     if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
       for (let i = 0; i < val.length; i++) {
         const r = validateJsonSchemaNode(val[i], schema.items, path ? `${path}[${i}]` : `[${i}]`, false);
@@ -271,6 +307,16 @@ const validateJsonSchemaNode = (
     const props = schema.properties && typeof schema.properties === 'object' ? schema.properties : null;
     const reqList = Array.isArray(schema.required) ? schema.required : null;
     const reqSet = reqList ? new Set<string>(reqList) : null;
+
+    if (typeof schema.minProperties === 'number' || typeof schema.maxProperties === 'number') {
+      const n = Object.keys(val).length;
+      if (typeof schema.minProperties === 'number' && n < schema.minProperties) {
+        return { ok: false, error: { message: `Object at '${path || 'root'}' must have at least ${schema.minProperties} properties`, path } };
+      }
+      if (typeof schema.maxProperties === 'number' && n > schema.maxProperties) {
+        return { ok: false, error: { message: `Object at '${path || 'root'}' must have at most ${schema.maxProperties} properties`, path } };
+      }
+    }
 
     if (reqList) {
       for (let i = 0; i < reqList.length; i++) {
@@ -454,6 +500,7 @@ const schemaNeedsFallbackProjector = (schema: any): boolean => {
   if (Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf) || Array.isArray(schema.allOf)) return true;
   if (schema.additionalProperties && typeof schema.additionalProperties === 'object') return true;
   if (schema.patternProperties && typeof schema.patternProperties === 'object') return true;
+  if (Array.isArray(schema.items)) return true;
   if (schema.type === 'array' && schema.items) return schemaNeedsFallbackProjector(schema.items);
   if (schema.properties && typeof schema.properties === 'object') {
     for (const sub of Object.values<any>(schema.properties)) {
@@ -481,6 +528,9 @@ const projectWithSchema = (val: any, schema: any): any => {
   if (!schema || typeof schema !== 'object' || val === null || typeof val !== 'object') return val;
 
   if (Array.isArray(val)) {
+    if (Array.isArray(schema.items)) {
+      return val.map((item, i) => (schema.items[i] ? projectWithSchema(item, schema.items[i]) : item));
+    }
     if (schema.items && typeof schema.items === 'object') {
       return val.map((item) => projectWithSchema(item, schema.items));
     }
@@ -657,7 +707,7 @@ const coerceFields = (obj: Record<string, any>, schema: any): Record<string, any
     if (typeof val !== 'string') continue;
     const tType = unwrapPropType(propSchema);
     if (tType === 'number' || tType === 'integer' || tType === 'ZodNumber') {
-      if (val.trim() !== '') {
+      if (/^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/.test(val)) {
         const n = Number(val);
         if (Number.isFinite(n)) out[k] = n;
       }

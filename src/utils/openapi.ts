@@ -27,11 +27,29 @@ const zodToJsonSchema = (schema: any): Record<string, any> => {
     }
     return { type: 'object', properties, ...(required.length ? { required } : {}) };
   }
-  if (typeName === 'ZodString') return { type: 'string' };
-  if (typeName === 'ZodNumber') return { type: 'number' };
+  if (typeName === 'ZodString') {
+    const out: Record<string, any> = { type: 'string' };
+    for (const c of def.checks || []) {
+      if (c.kind === 'min') out.minLength = c.value;
+      else if (c.kind === 'max') out.maxLength = c.value;
+      else if (c.kind === 'email') out.format = 'email';
+      else if (c.kind === 'uuid') out.format = 'uuid';
+    }
+    return out;
+  }
+  if (typeName === 'ZodNumber') {
+    const out: Record<string, any> = { type: 'number' };
+    for (const c of def.checks || []) {
+      if (c.kind === 'int') out.type = 'integer';
+      else if (c.kind === 'min') out[c.inclusive === false ? 'exclusiveMinimum' : 'minimum'] = c.value;
+      else if (c.kind === 'max') out[c.inclusive === false ? 'exclusiveMaximum' : 'maximum'] = c.value;
+    }
+    return out;
+  }
+  if (typeName === 'ZodNullable') return { anyOf: [zodToJsonSchema(def.innerType), { type: 'null' }] };
   if (typeName === 'ZodBoolean') return { type: 'boolean' };
   if (typeName === 'ZodArray') return { type: 'array', items: zodToJsonSchema(def.type) };
-  if (typeName === 'ZodOptional' || typeName === 'ZodDefault' || typeName === 'ZodNullable') return zodToJsonSchema(def.innerType);
+  if (typeName === 'ZodOptional' || typeName === 'ZodDefault') return zodToJsonSchema(def.innerType);
   if (typeName === 'ZodEffects') return zodToJsonSchema(def.schema);
   if (typeName === 'ZodLiteral') return { const: def.value };
   if (typeName === 'ZodDate') return { type: 'string', format: 'date-time' };
@@ -57,7 +75,8 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
 
     const openApiPath = ('/' + route.path)
       .replace(/\/+/g, '/')
-      .replace(/:([a-zA-Z0-9_]+)/g, '{$1}');
+      .replace(/:([a-zA-Z0-9_]+)/g, '{$1}')
+      .replace(/\/\*$/, '/{wildcard}');
 
     if (!paths[openApiPath]) paths[openApiPath] = {};
 
@@ -115,6 +134,9 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
         required: true,
         schema: pProp
       });
+    }
+    if (/\/\*$/.test(route.path)) {
+      pathParams.push({ name: 'wildcard', in: 'path', required: true, schema: { type: 'string' } });
     }
     const allParams = [...pathParams, ...params];
 

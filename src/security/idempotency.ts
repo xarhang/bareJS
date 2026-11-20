@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Context, Middleware } from '../core/context';
 import type { CachedIdempotentEntry, IdempotencyStore } from './store';
 
@@ -10,13 +11,36 @@ export interface IdempotencyOptions {
   maxKeys?: number;
   /** Optional external store (e.g. redisStore(client)). Uses in-memory Map fast path when omitted. */
   store?: IdempotencyStore;
+  /**
+   * Scope string mixed into the cache key so one caller can never replay another caller's response.
+   * Default: SHA-256 of the Authorization and Cookie headers.
+   */
+  keyScope?: (ctx: Context) => string | undefined;
 }
+
+const REPLAY_HEADERS = ['location', 'content-location', 'etag'];
+const pickReplayHeaders = (res: Response): Record<string, string> | undefined => {
+  let out: Record<string, string> | undefined;
+  for (const h of REPLAY_HEADERS) {
+    const v = res.headers.get(h);
+    if (v !== null) (out ??= {})[h] = v;
+  }
+  return out;
+};
+
+const defaultKeyScope = (ctx: Context): string => {
+  const a = ctx.req.headers.get('authorization') || '';
+  const c = ctx.req.headers.get('cookie') || '';
+  if (!a && !c) return '';
+  return createHash('sha256').update(a).update('\0').update(c).digest('hex');
+};
 
 const buildReplayResponse = (existing: CachedIdempotentEntry): Response => {
   if (existing.rawBody !== undefined) {
     return new Response(existing.rawBody, {
       status: existing.status,
       headers: {
+        ...(existing.headers || {}),
         'content-type': existing.contentType || 'application/json',
         'X-Idempotent-Replayed': 'true'
       }
@@ -28,14 +52,14 @@ const buildReplayResponse = (existing: CachedIdempotentEntry): Response => {
   });
 };
 
-const extractIdemKey = (ctx: Context, headerName: string): string | undefined => {
+const extractIdemKey = (ctx: Context, headerName: string, keyScope: (ctx: Context) => string | undefined): string | undefined => {
   const rawKey = ctx.req.headers.get(headerName)?.trim();
   if (!rawKey) return undefined;
   const rawUrl = ctx.req.url;
   const s = rawUrl.indexOf('/', 8);
   const q = s === -1 ? -1 : rawUrl.indexOf('?', s);
   const path = s === -1 ? '/' : (q === -1 ? rawUrl.slice(s) : rawUrl.slice(s, q));
-  return `${ctx.req.method}:${path}:${rawKey}`;
+  return `${ctx.req.method}:${path}:${keyScope(ctx) || ''}:${rawKey}`;
 };
 
 /**
@@ -45,6 +69,7 @@ const extractIdemKey = (ctx: Context, headerName: string): string | undefined =>
 export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
   const headerName = (options.headerName || 'idempotency-key').toLowerCase();
   const ttlMs = options.ttlMs ?? 300_000;
+  const keyScope = options.keyScope ?? defaultKeyScope;
   const maxKeys = options.maxKeys ?? 10_000;
   const externalStore = options.store;
 
@@ -52,7 +77,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     const hasAcquireToken = typeof externalStore.acquireToken === 'function';
     const storeLockShim = { delete: (k: string) => { void externalStore.release(k); } };
     const mw: Middleware = async (ctx: Context) => {
-      const key = extractIdemKey(ctx, headerName);
+      const key = extractIdemKey(ctx, headerName, keyScope);
       if (!key) {
         (ctx as any)._idempotencyKey = undefined;
         return undefined;
@@ -142,7 +167,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
               if (clonedRes) {
                 const buf = await clonedRes.arrayBuffer();
                 if (!(ctx as any)._detached) {
-                  await externalStore.set(key, { status, rawBody: buf, contentType: ct, expiresAt: Date.now() + ttlMs }, ttlMs);
+                  await externalStore.set(key, { status, rawBody: buf, contentType: ct, headers: pickReplayHeaders(clonedRes), expiresAt: Date.now() + ttlMs }, ttlMs);
                 }
               }
             } else {
@@ -189,7 +214,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
   };
 
   const mw: Middleware = (ctx: Context) => {
-    const key = extractIdemKey(ctx, headerName);
+    const key = extractIdemKey(ctx, headerName, keyScope);
     if (!key) {
       (ctx as any)._idempotencyKey = undefined;
       return undefined;
@@ -259,6 +284,7 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
               status,
               rawBody: buf,
               contentType: ct,
+              headers: pickReplayHeaders(cloned),
               expiresAt: Date.now() + ttlMs
             });
           }).catch(() => {}).finally(() => {

@@ -1071,7 +1071,7 @@ export class BareJS<
     }
 
     const wsRoutes = this.wsRoutes;
-    const baseFetch = this.fetch;
+    const self = this;
     const hasWs = wsRoutes.size > 0;
 
     const server = hasWs
@@ -1121,7 +1121,7 @@ export class BareJS<
                 return undefined as any;
               }
             }
-            return baseFetch(req, srv?.requestIP?.(req)?.address);
+            return self.fetch(req, srv?.requestIP?.(req)?.address);
           },
           websocket: this.wsAdapter
         })
@@ -1131,7 +1131,7 @@ export class BareJS<
           reusePort,
           maxRequestBodySize,
           fetch(req: Request, srv: any) {
-            return baseFetch(req, srv?.requestIP?.(req)?.address);
+            return self.fetch(req, srv?.requestIP?.(req)?.address);
           }
         });
 

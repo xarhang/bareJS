@@ -1742,5 +1742,29 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     const oldGenRes = await inFlightOldGen;
     expect(await oldGenRes.text()).toBe("old-gen");
     expect(getPoolStats(overlapApp).free).toBe(2);
+
+    // 3) Live HTTP server via app.listen(0) delegates dynamically to this.fetch on hot recompilation
+    const liveApp = new BareJS(2);
+    liveApp.get("/live-a", () => "LIVE_A");
+    const srv = liveApp.listen(0);
+    try {
+      const baseUrl = `http://127.0.0.1:${srv.port}`;
+      const r1 = await fetch(`${baseUrl}/live-a`);
+      expect(await r1.text()).toBe("LIVE_A");
+      expect(getPoolStats(liveApp).free).toBe(1);
+
+      // Register a new route while the server is already listening
+      liveApp.get("/live-b", () => "LIVE_B");
+      const [ra, rb] = await Promise.all([
+        fetch(`${baseUrl}/live-a`),
+        fetch(`${baseUrl}/live-b`),
+      ]);
+      expect(await ra.text()).toBe("LIVE_A");
+      expect(await rb.text()).toBe("LIVE_B");
+      expect(getPoolStats(liveApp).free).toBeGreaterThan(0);
+      expect(getPoolStats(liveApp).free).toBeLessThanOrEqual(2);
+    } finally {
+      await liveApp.stop(true);
+    }
   });
 });

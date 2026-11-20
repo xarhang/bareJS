@@ -1611,6 +1611,8 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
   test("67. clears acquired LIFO slot to undefined, respects maxPool & BareJS(0), retires detached contexts, and isolates concurrent state", async () => {
     // 1) Acquired slot is cleared to undefined while in-flight
     const slotApp = new BareJS(2);
+    let markHoldEntered!: () => void;
+    const holdEntered = new Promise<void>((r) => { markHoldEntered = r; });
     let releaseInFlight!: () => void;
     const inFlightGate = new Promise<void>((r) => { releaseInFlight = r; });
     let inFlightPoolFree = -1;
@@ -1619,6 +1621,7 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     slotApp.get("/hold", async () => {
       inFlightPoolFree = getPoolStats(slotApp).free;
       inFlightSlot0 = (slotApp as any).pool[0];
+      markHoldEntered();
       await inFlightGate;
       return { ok: true };
     });
@@ -1627,7 +1630,7 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     expect((slotApp as any).pool[0]).toBeDefined();
 
     const holdPromise = slotApp.request("/hold");
-    await Bun.sleep(5);
+    await holdEntered;
     expect(inFlightPoolFree).toBe(0);
     expect(inFlightSlot0).toBeUndefined();
     releaseInFlight();
@@ -1701,11 +1704,16 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
 
     // Also verify recompile while an earlier handler generation has an in-flight request
     const overlapApp = new BareJS(2);
+    let markEntered!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
     let releaseSlow!: () => void;
     const slowGate = new Promise<void>((r) => { releaseSlow = r; });
     overlapApp.get("/warm", () => "warm");
     overlapApp.get("/slow", async (ctx: Context) => {
       ctx.set("tag", "old-gen");
+      markEntered();
       await slowGate;
       return ctx.get("tag");
     });
@@ -1715,7 +1723,7 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
 
     // Acquire the pooled context on generation 1 and keep it in-flight
     const inFlightOldGen = overlapApp.request("/slow");
-    await Bun.sleep(5);
+    await entered;
     expect(getPoolStats(overlapApp).free).toBe(0);
     expect((overlapApp as any).pool[0]).toBeUndefined();
 

@@ -74,7 +74,7 @@ export class BareJS<
   declare readonly __routes: Routes;
   private tree = new RadixNode();
   private pool: Array<Context | undefined> = [];
-  private _poolState = { top: 0 };
+  private readonly _poolState = { top: 0 };
   private readonly maxPool: number;
   // private poolIdx = 0;
   private hotFetch?: (req: Request, peerIp?: string) => any;

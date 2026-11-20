@@ -326,6 +326,15 @@ const validateJsonSchemaNode = (
           };
         }
       }
+    } else if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+      const valKeys = Object.keys(val);
+      for (let i = 0; i < valKeys.length; i++) {
+        const vk = valKeys[i]!;
+        if (!props || !Object.hasOwn(props, vk)) {
+          const r = validateJsonSchemaNode(val[vk], schema.additionalProperties, path ? `${path}.${vk}` : vk, false);
+          if (!r.ok) return r;
+        }
+      }
     }
   }
 
@@ -480,12 +489,28 @@ const projectWithSchema = (val: any, schema: any): any => {
 
   const branches = schema.anyOf || schema.oneOf;
   if (Array.isArray(branches) && branches.length > 0) {
+    let matchedBranch: any = null;
     for (const b of branches) {
       if (b && typeof b === 'object' && compileSingleSchema(b)(val).ok) {
-        return projectWithSchema(val, b);
+        matchedBranch = b;
+        break;
       }
     }
-    return val;
+    if (matchedBranch) {
+      if (schema.properties && typeof schema.properties === 'object') {
+        const merged = { ...schema.properties, ...(matchedBranch.properties || {}) };
+        const out: Record<string, any> = {};
+        for (const [k, sub] of Object.entries<any>(merged)) {
+          if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+          if (Object.hasOwn(val, k) && val[k] !== undefined) {
+            out[k] = projectWithSchema(val[k], sub);
+          }
+        }
+        return out;
+      }
+      return projectWithSchema(val, matchedBranch);
+    }
+    if (!schema.properties) return val;
   }
 
   if (Array.isArray(schema.allOf)) {
@@ -508,6 +533,25 @@ const projectWithSchema = (val: any, schema: any): any => {
       if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
       if (Object.hasOwn(val, k) && val[k] !== undefined) {
         out[k] = projectWithSchema(val[k], sub);
+      }
+    }
+    return out;
+  }
+
+  if (schema.patternProperties && typeof schema.patternProperties === 'object') {
+    const patterns = Object.entries<any>(schema.patternProperties).map(([pat, sub]) => ({
+      re: new RegExp(pat),
+      sub
+    }));
+    const out: Record<string, any> = {};
+    for (const k of Object.keys(val)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      if (val[k] === undefined) continue;
+      for (let i = 0; i < patterns.length; i++) {
+        if (patterns[i]!.re.test(k)) {
+          out[k] = projectWithSchema(val[k], patterns[i]!.sub);
+          break;
+        }
       }
     }
     return out;

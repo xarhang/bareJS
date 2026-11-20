@@ -668,10 +668,19 @@ export class BareJS<
     }
     for (const route of this.routes) {
       if (route.method === 'OPTIONS' || explicitOptionsPaths.has(route.path)) continue;
-      const corsIdx = route.handlers.findIndex((h: any) => h?.__isCors);
-      if (corsIdx !== -1 && !this.groupMiddleware.includes(route.handlers[corsIdx])) {
+      let lastCorsIdx = -1;
+      for (let i = route.handlers.length - 1; i >= 0; i--) {
+        if ((route.handlers[i] as any)?.__isCors && !this.groupMiddleware.includes(route.handlers[i])) {
+          lastCorsIdx = i;
+          break;
+        }
+      }
+      if (lastCorsIdx !== -1) {
         explicitOptionsPaths.add(route.path);
-        const preflightPipeline = [...route.handlers.slice(0, corsIdx + 1), () => new Response(null, { status: 204 })];
+        const preflightPipeline = [
+          ...route.handlers.slice(0, lastCorsIdx + 1).filter((h: any, idx: number) => idx === lastCorsIdx || !h?.__isCors),
+          () => new Response(null, { status: 204 })
+        ];
         this.tree.insert(route.path, 'OPTIONS', this.compileHandler(preflightPipeline, isLog));
       }
     }
@@ -885,9 +894,19 @@ export class BareJS<
         }`
       : '';
 
+    const globalCorsMws = this.groupMiddleware.filter((m: any) => m?.__isCors);
+    const apply404Cors = globalCorsMws.length > 0
+      ? (res: Response, ctx: Context): Response => {
+          for (let i = 0; i < globalCorsMws.length; i++) {
+            try { globalCorsMws[i](ctx, () => res); } catch {}
+          }
+          return applyCtxHeaders(res, ctx);
+        }
+      : undefined;
+
     const trustProxyBox = this._trustProxyBox;
-    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyBox', ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...hNames];
-    const values = [pool, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyBox, ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...hoistedHandlers];
+    const args = ['pool', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyBox', ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...(apply404Cors ? ['apply404Cors'] : []), ...hNames];
+    const values = [pool, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyBox, ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...(apply404Cors ? [apply404Cors] : []), ...hoistedHandlers];
 
     const logInit = isLog ? `
     const start = performance.now();
@@ -929,7 +948,7 @@ export class BareJS<
 
       const errorBody = hNotFound();
       const status = errorBody.status || 404;
-      const nfRes = applyCtxHeaders(Response.json(errorBody, { status }), ctx);
+      const nfRes = ${apply404Cors ? 'apply404Cors(Response.json(errorBody, { status }), ctx)' : 'applyCtxHeaders(Response.json(errorBody, { status }), ctx)'};
       ${isLog ? 'doLog(status);' : ''}
       ${releaseCode}
       return nfRes;

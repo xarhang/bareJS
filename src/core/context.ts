@@ -205,6 +205,31 @@ export class Context {
     });
   }
 
+  private async readBodyWithLimit(maxBytes: number): Promise<Uint8Array> {
+    const reader = this.req.body!.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        received += value.byteLength;
+        if (received > maxBytes) {
+          try { await reader.cancel(); } catch {}
+          throw Object.assign(new Error("Payload Too Large"), { status: 413 });
+        }
+        chunks.push(value);
+      }
+    }
+    const combined = new Uint8Array(received);
+    let offset = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      combined.set(chunks[i]!, offset);
+      offset += chunks[i]!.byteLength;
+    }
+    return combined;
+  }
+
   public async jsonBody(maxBytes: number = 1048576): Promise<any> {
     if (this.body !== undefined) return this.body;
 
@@ -221,7 +246,9 @@ export class Context {
         }
       }
       try {
-        const text = await this.req.text();
+        const text = this.req.body
+          ? new TextDecoder().decode(await this.readBodyWithLimit(maxBytes))
+          : await this.req.text();
         if (Buffer.byteLength(text, 'utf-8') > maxBytes) {
           const err: any = new Error("Payload Too Large");
           err.status = 413;
@@ -317,7 +344,15 @@ export class Context {
   public setHeader(name: string, value: string): this {
     if (!this._headers) this._headers = {};
     else if (Object.isFrozen(this._headers)) this._headers = { ...this._headers };
-    this._headers[name.toLowerCase()] = value;
+    const lower = name.toLowerCase();
+    if (lower === 'vary' && this._headers['vary']) {
+      const existing = this._headers['vary'];
+      const parts = existing.toLowerCase().split(',').map((s) => s.trim());
+      const toAdd = value.split(',').map((s) => s.trim()).filter((s) => s && !parts.includes(s.toLowerCase()));
+      this._headers['vary'] = toAdd.length > 0 ? `${existing}, ${toAdd.join(', ')}` : existing;
+    } else {
+      this._headers[lower] = value;
+    }
     return this;
   }
 
@@ -437,8 +472,9 @@ export class Context {
 
   public get requestId(): string {
     if (this._requestId !== undefined) return this._requestId;
-    const hdr = this.req?.headers?.get('x-request-id');
-    this._requestId = hdr && hdr.length > 0 && hdr.length <= 128 ? hdr : crypto.randomUUID();
+    const raw = this.req?.headers?.get('x-request-id');
+    const hdr = raw ? raw.replace(/[\x00-\x1f\x7f]/g, '') : '';
+    this._requestId = hdr.length > 0 && hdr.length <= 128 ? hdr : crypto.randomUUID();
     return this._requestId;
   }
 
@@ -478,28 +514,8 @@ export class Context {
 
     let form: Awaited<ReturnType<Request['formData']>>;
     try {
-      if (!this.req.headers.has('content-length') && this.req.body) {
-        const reader = this.req.body.getReader();
-        const chunks: Uint8Array[] = [];
-        let received = 0;
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) {
-            received += value.byteLength;
-            if (received > maxRawBytes) {
-              try { await reader.cancel(); } catch {}
-              throw Object.assign(new Error('Payload Too Large'), { status: 413 });
-            }
-            chunks.push(value);
-          }
-        }
-        const combined = new Uint8Array(received);
-        let offset = 0;
-        for (let i = 0; i < chunks.length; i++) {
-          combined.set(chunks[i]!, offset);
-          offset += chunks[i]!.byteLength;
-        }
+      if (this.req.body) {
+        const combined = await this.readBodyWithLimit(maxRawBytes);
         form = await new Response(combined, { headers: this.req.headers }).formData();
       } else {
         form = await this.req.formData();

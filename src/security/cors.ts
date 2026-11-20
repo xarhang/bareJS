@@ -28,6 +28,15 @@ export const cors = (options: CorsOptions = {}) => {
     : options.exposedHeaders;
   const credentials = options.credentials === true;
 
+  const ensureCtxVaryOrigin = (ctx: any) => {
+    const existing = ctx._headers?.['vary'];
+    if (!existing) {
+      ctx.setHeader('Vary', 'Origin');
+    } else if (!existing.toLowerCase().split(',').map((s: string) => s.trim()).includes('origin')) {
+      ctx.setHeader('Vary', `${existing}, Origin`);
+    }
+  };
+
   // Fast-path for static string origin
   if (typeof originOpt === 'string') {
     if (originOpt === '') {
@@ -36,8 +45,19 @@ export const cors = (options: CorsOptions = {}) => {
           return new Response(null, { status: 204, headers: { 'Vary': 'Origin' } });
         }
         ctx.setHeader('Vary', 'Origin');
-        return next?.();
+        const res = next?.();
+        if (res && typeof (res as any).then === 'function') {
+          return (res as Promise<any>).then((r) => {
+            if (r instanceof Response) appendVaryOrigin(r.headers);
+            else ensureCtxVaryOrigin(ctx);
+            return r;
+          });
+        }
+        if (res instanceof Response) appendVaryOrigin(res.headers);
+        else ensureCtxVaryOrigin(ctx);
+        return res;
       };
+      (mw as any).__isCors = true;
       return mw;
     }
     const allowCreds = credentials && originOpt !== '*';
@@ -69,6 +89,8 @@ export const cors = (options: CorsOptions = {}) => {
             if (originOpt !== '*') appendVaryOrigin(r.headers);
             if (allowCreds) r.headers.set('Access-Control-Allow-Credentials', 'true');
             if (exposeHeaders) r.headers.set('Access-Control-Expose-Headers', exposeHeaders);
+          } else if (originOpt !== '*') {
+            ensureCtxVaryOrigin(ctx);
           }
           return r;
         });
@@ -79,6 +101,8 @@ export const cors = (options: CorsOptions = {}) => {
         if (originOpt !== '*') appendVaryOrigin(res.headers);
         if (allowCreds) res.headers.set('Access-Control-Allow-Credentials', 'true');
         if (exposeHeaders) res.headers.set('Access-Control-Expose-Headers', exposeHeaders);
+      } else if (originOpt !== '*') {
+        ensureCtxVaryOrigin(ctx);
       }
       return res;
     };
@@ -126,6 +150,8 @@ export const cors = (options: CorsOptions = {}) => {
             if (credentials) r.headers.set('Access-Control-Allow-Credentials', 'true');
           }
           if (exposeHeaders) r.headers.set('Access-Control-Expose-Headers', exposeHeaders);
+        } else {
+          ensureCtxVaryOrigin(ctx);
         }
         return r;
       });
@@ -138,6 +164,8 @@ export const cors = (options: CorsOptions = {}) => {
         if (credentials) res.headers.set('Access-Control-Allow-Credentials', 'true');
       }
       if (exposeHeaders) res.headers.set('Access-Control-Expose-Headers', exposeHeaders);
+    } else {
+      ensureCtxVaryOrigin(ctx);
     }
     return res;
   };

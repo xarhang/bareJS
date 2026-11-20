@@ -153,10 +153,13 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
           // Best-effort cache write
         } finally {
           const extToken = (ctx as any)._idemExtToken;
+          const alreadyReleased = Boolean((ctx as any)._detached) || !(ctx as any)._idempotencyKey;
           (ctx as any)._idempotencyKey = undefined;
           (ctx as any)._idemExtToken = undefined;
           (ctx as any)._idemInFlight = undefined;
-          await externalStore.release(key, extToken);
+          if (!alreadyReleased) {
+            await externalStore.release(key, extToken);
+          }
         }
       })();
     };

@@ -79,6 +79,33 @@ export const createToken = async (payload: object, secret: string): Promise<stri
   return `${data}.${encodedSig}`;
 };
 
+const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+
+const getEs256TwinToken = (token: string): string | null => {
+  const d1 = token.indexOf('.');
+  if (d1 <= 0) return null;
+  const d2 = token.indexOf('.', d1 + 1);
+  if (d2 <= d1 + 1) return null;
+  const sigB64 = token.slice(d2 + 1);
+  if (!/^[A-Za-z0-9_-]+$/.test(sigB64)) return null;
+  const sigBuf = Buffer.from(sigB64, 'base64url');
+  if (sigBuf.length !== 64) return null;
+  try {
+    const hdr = JSON.parse(fromBase64Url(token.slice(0, d1)));
+    if (hdr?.alg !== 'ES256') return null;
+  } catch {
+    return null;
+  }
+  const s = BigInt('0x' + sigBuf.subarray(32, 64).toString('hex'));
+  if (s <= 0n || s >= P256_N) return null;
+  const sTwin = P256_N - s;
+  const twinHex = sTwin.toString(16).padStart(64, '0');
+  const twinBuf = Buffer.allocUnsafe(64);
+  sigBuf.copy(twinBuf, 0, 0, 32);
+  Buffer.from(twinHex, 'hex').copy(twinBuf, 32);
+  return token.slice(0, d2 + 1) + twinBuf.toString('base64url');
+};
+
 const revokedTokens = new Map<string, number>();
 
 /**
@@ -88,7 +115,11 @@ const revokedTokens = new Map<string, number>();
 export function revokeToken(tokenOrJti: string, ttlMs?: number): void;
 export function revokeToken(tokenOrJti: string, ttlMs: number, store: RevocationStore): Promise<void>;
 export function revokeToken(tokenOrJti: string, ttlMs: number = 3600_000, store?: RevocationStore): void | Promise<void> {
+  const twin = getEs256TwinToken(tokenOrJti);
   if (store) {
+    if (twin) {
+      return Promise.all([store.revoke(tokenOrJti, ttlMs), store.revoke(twin, ttlMs)]).then(() => {});
+    }
     return store.revoke(tokenOrJti, ttlMs);
   }
   if (revokedTokens.size >= 10_000) {
@@ -101,7 +132,9 @@ export function revokeToken(tokenOrJti: string, ttlMs: number = 3600_000, store?
       if (oldest !== undefined) revokedTokens.delete(oldest);
     }
   }
-  revokedTokens.set(tokenOrJti, Date.now() + ttlMs);
+  const exp = Date.now() + ttlMs;
+  revokedTokens.set(tokenOrJti, exp);
+  if (twin) revokedTokens.set(twin, exp);
 }
 
 export function isTokenRevoked(tokenOrJti: string): boolean;
@@ -226,13 +259,15 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
       }
     }
 
-    if (isTokenRevoked(token) || (decoded?.jti && isTokenRevoked(String(decoded.jti)))) {
+    const twin = getEs256TwinToken(token);
+    if (isTokenRevoked(token) || (twin && isTokenRevoked(twin)) || (decoded?.jti && isTokenRevoked(String(decoded.jti)))) {
       return ctx.status(401).send("Token revoked");
     }
 
     if (revocationStore) {
       const checkStore = async () => {
         if (await revocationStore.isRevoked(token)) return ctx.status(401).send("Token revoked");
+        if (twin && await revocationStore.isRevoked(twin)) return ctx.status(401).send("Token revoked");
         if (decoded?.jti && await revocationStore.isRevoked(String(decoded.jti))) {
           return ctx.status(401).send("Token revoked");
         }

@@ -1106,7 +1106,7 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     };
 
     const app = new BareJS();
-    app.use(timeout({ ms: 15 }));
+    app.use(timeout(15));
     app.use(idempotency({ store }));
     app.use(() => Response.json({ denied: true }, { status: 401 }));
     app.post("/x", () => ({ ok: true }));
@@ -1252,5 +1252,188 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     // When param is undefined, :id stays :id (not "undefined")
     const uRes = await client.get("/users/:id", { params: { id: undefined as any } });
     expect(uRes).toEqual({ id: ":id" });
+  });
+
+  test("48. bareAuth revokes both ES256 (r, s) and (r, n-s) twin signatures", async () => {
+    const { subtle } = globalThis.crypto;
+    const kp = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+    const spki = await subtle.exportKey("spki", kp.publicKey);
+    const b64Pem = Buffer.from(spki).toString("base64").match(/.{1,64}/g)!.join("\n");
+    const pubPem = `-----BEGIN PUBLIC KEY-----\n${b64Pem}\n-----END PUBLIC KEY-----`;
+
+    const hdr = Buffer.from(JSON.stringify({ alg: "ES256", typ: "JWT" })).toString("base64url");
+    const pld = Buffer.from(JSON.stringify({ sub: "u1", role: "admin" })).toString("base64url");
+    const input = `${hdr}.${pld}`;
+    const sigBuf = Buffer.from(
+      await subtle.sign({ name: "ECDSA", hash: "SHA-256" }, kp.privateKey, new TextEncoder().encode(input))
+    );
+    const token = `${input}.${sigBuf.toString("base64url")}`;
+
+    const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+    const s = BigInt("0x" + sigBuf.subarray(32, 64).toString("hex"));
+    const twinBuf = Buffer.allocUnsafe(64);
+    sigBuf.copy(twinBuf, 0, 0, 32);
+    Buffer.from((P256_N - s).toString(16).padStart(64, "0"), "hex").copy(twinBuf, 32);
+    const malleatedToken = `${input}.${twinBuf.toString("base64url")}`;
+
+    const { revokeToken } = await import("../src/index");
+    revokeToken(token, 60_000);
+
+    const app = new BareJS();
+    app.use(bareAuth({ publicKey: pubPem, algorithms: ["ES256"] }));
+    app.get("/admin", (ctx) => ({ user: ctx.get("user") }));
+
+    const r1 = await app.request("/admin", { headers: { Authorization: `Bearer ${token}` } });
+    expect(r1.status).toBe(401);
+    const r2 = await app.request("/admin", { headers: { Authorization: `Bearer ${malleatedToken}` } });
+    expect(r2.status).toBe(401);
+  });
+
+  test("49. jsonBody() and upload() abort streaming bodies mid-stream and requestId strips control chars", async () => {
+    let chunksRead = 0;
+    const bigStream = new ReadableStream({
+      pull(controller) {
+        chunksRead++;
+        if (chunksRead > 50) { controller.close(); return; }
+        controller.enqueue(new TextEncoder().encode('{"a":"' + "x".repeat(500) + '"}'));
+      }
+    });
+    const ctx = new Context();
+    ctx.reset(
+      new Request("http://localhost/j", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: bigStream
+      })
+    );
+    await expect(ctx.jsonBody(100)).rejects.toMatchObject({ status: 413 });
+    expect(chunksRead).toBeLessThan(10);
+
+    const ctxId = new Context();
+    ctxId.reset(new Request("http://localhost/id", { headers: { "x-request-id": "abc\x1b[31m\x08def" } }));
+    expect(ctxId.requestId).toBe("abc[31mdef");
+  });
+
+  test("50. createResponseFilter and native() handle Type.Record, properties+anyOf, and schema-valued additionalProperties", async () => {
+    const { native } = await import("../src/index");
+    const recFilter = createResponseFilter(Type.Record(Type.String(), Type.Object({ name: Type.String() })));
+    expect(recFilter({ u1: { name: "Alice", secret: "LEAK" } })).toEqual({ u1: { name: "Alice" } });
+
+    const comboFilter = createResponseFilter({
+      type: "object",
+      properties: { id: { type: "string" }, email: { type: "string" } },
+      anyOf: [{ required: ["email"] }]
+    });
+    expect(comboFilter({ id: "1", email: "a@b.com", passwordHash: "LEAK" })).toEqual({ id: "1", email: "a@b.com" });
+
+    const app = new BareJS();
+    app.post(
+      "/extra",
+      native({
+        type: "object",
+        properties: { id: { type: "string" } },
+        additionalProperties: { type: "number" }
+      }),
+      (ctx) => ctx.body
+    );
+    const bad = await app.request("/extra", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "1", extra: "not-a-number" })
+    });
+    expect(bad.status).toBe(400);
+  });
+
+  test("51. cors() preserves Vary: Origin with non-Response returns and origin:'' auto-registers OPTIONS; RadixNode handles multi-method :__proto__", async () => {
+    const app = new BareJS();
+    app.use(cors({ origin: ["https://a.com"] }));
+    app.get("/v", (ctx) => {
+      ctx.setHeader("Vary", "Accept-Encoding");
+      return { ok: true };
+    });
+    const rv = await app.request("/v", { headers: { Origin: "https://a.com" } });
+    expect(rv.status).toBe(200);
+    const vary = (rv.headers.get("vary") || "").toLowerCase();
+    expect(vary).toContain("accept-encoding");
+    expect(vary).toContain("origin");
+
+    const appEmpty = new BareJS();
+    appEmpty.get("/e", cors({ origin: "" }), () => ({ ok: true }));
+    expect((await appEmpty.request("/e", { method: "OPTIONS" })).status).toBe(204);
+
+    const appProto = new BareJS();
+    appProto.get("/x/:__proto__", (ctx) => ({ m: "GET", v: ctx.params["__proto__"] }));
+    appProto.post("/x/:__proto__", (ctx) => ({ m: "POST", v: ctx.params["__proto__"] }));
+    expect(await (await appProto.request("/x/hello")).json()).toEqual({ m: "GET", v: "hello" });
+    expect(await (await appProto.request("/x/world", { method: "POST" })).json()).toEqual({ m: "POST", v: "world" });
+  });
+
+  test("52. idempotency does not double-release externalStore without acquireToken when timeout fires during body buffering", async () => {
+    const { idempotency, timeout } = await import("../src/index");
+    const locks = new Set<string>();
+    const store: any = {
+      async get() { return undefined; },
+      async set() {},
+      async acquire(k: string) {
+        if (locks.has(k)) return false;
+        locks.add(k);
+        return true;
+      },
+      async release(k: string) {
+        locks.delete(k);
+      }
+    };
+
+    const app = new BareJS();
+    app.use(timeout(40));
+    app.use(idempotency({ store }));
+    let calls = 0;
+    app.post("/slow-res", async () => {
+      const idx = ++calls;
+      if (idx === 1) {
+        const stream = new ReadableStream({
+          async start(controller) {
+            await Bun.sleep(70);
+            controller.enqueue(new TextEncoder().encode("ok"));
+            controller.close();
+          }
+        });
+        return new Response(stream);
+      }
+      await Bun.sleep(30); // r2 completes within 40ms timeout, still in-flight when r1 finishes at 70ms
+      return { ok: true };
+    });
+
+    const r1 = await app.request("/slow-res", { method: "POST", headers: { "Idempotency-Key": "k-dbl" } });
+    expect(r1.status).toBe(408);
+    expect(locks.size).toBe(0);
+
+    // Wait 10ms (t=50ms), start r2 (runs t=50..80ms); r1's arrayBuffer() finishes at t=70ms
+    await Bun.sleep(10);
+    const p2 = app.request("/slow-res", { method: "POST", headers: { "Idempotency-Key": "k-dbl" } });
+    await Bun.sleep(25); // t=75ms: r1's commit finally has run at t=70ms, r2 is still in-flight until t=80ms!
+    const r3 = await app.request("/slow-res", { method: "POST", headers: { "Idempotency-Key": "k-dbl" } });
+    expect(r3.status).toBe(409);
+    expect((await p2).status).toBe(200);
+  });
+
+  test("53. Global cors() does not shadow sub-app cors() on OPTIONS and applies CORS headers to 404 responses", async () => {
+    const { BareRouter } = await import("../src/index");
+    const app = new BareJS();
+    app.use(cors({ origin: "https://global.com" }));
+    const sub = new BareRouter();
+    sub.get("/items", () => ({ ok: true }));
+    app.use("/sub", cors({ origin: "https://sub.com" }), sub);
+
+    const opt = await app.request("/sub/items", {
+      method: "OPTIONS",
+      headers: { Origin: "https://sub.com" }
+    });
+    expect(opt.status).toBe(204);
+    expect(opt.headers.get("access-control-allow-origin")).toBe("https://sub.com");
+
+    const nf = await app.request("/nonexistent", { headers: { Origin: "https://global.com" } });
+    expect(nf.status).toBe(404);
+    expect(nf.headers.get("access-control-allow-origin")).toBe("https://global.com");
   });
 });

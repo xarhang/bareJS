@@ -123,11 +123,11 @@ export class RadixNode {
   private emitParamsAssign(indent: string, names: string[], vars: string[]): string {
     if (names.length === 0) return '';
     if (names.includes('__proto__')) {
-      let s = `${indent}const _p = Object.create(null);\n`;
+      let s = `${indent}{ const _p = Object.create(null);\n`;
       for (let i = 0; i < names.length; i++) {
         s += `${indent}_p[${JSON.stringify(names[i])}] = ${vars[i]};\n`;
       }
-      return s + `${indent}ctx.params = _p;\n`;
+      return s + `${indent}ctx.params = _p; }\n`;
     }
     const props = names.map((n, i) => `${JSON.stringify(n)}: ${vars[i]}`).join(', ');
     return `${indent}ctx.params = { ${props} };\n`;

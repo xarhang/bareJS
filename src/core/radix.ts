@@ -34,7 +34,8 @@ export class RadixNode {
   public lookup(method: string, url: string, start: number, ctx: Context) {
     let node: RadixNode = this;
     let i = start === -1 ? 0 : start;
-    const len = url.length;
+    const q = url.indexOf('?', i);
+    const len = q === -1 ? url.length : q;
     if (url[i] === '/') i++;
 
     for (const k in ctx.params) delete ctx.params[k];

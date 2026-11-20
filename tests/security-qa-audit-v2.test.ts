@@ -335,4 +335,51 @@ describe("Security & QA Deep Audit v2 Fixes", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
+
+  test("19. BareJS.cron rejects non-positive or non-finite intervalMs", () => {
+    const app = new BareJS();
+    expect(() => app.cron("bad-zero", 0, () => {})).toThrow(RangeError);
+    expect(() => app.cron("bad-neg", -100, () => {})).toThrow(RangeError);
+    expect(() => app.cron("bad-nan", Number.NaN, () => {})).toThrow(RangeError);
+  });
+
+  test("20. timeout() releases idempotency in-flight lock so retries are not stuck with 409", async () => {
+    const { timeout } = await import("../src/index");
+    const app = new BareJS();
+    let attempt = 0;
+    app.use(timeout(15));
+    app.use(idempotency({ ttlMs: 5000 }));
+    app.post("/pay", async () => {
+      attempt++;
+      if (attempt === 1) {
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      return { ok: true, attempt };
+    });
+
+    const r1 = await app.request("/pay", {
+      method: "POST",
+      headers: { "Idempotency-Key": "retry-after-timeout" }
+    });
+    expect(r1.status).toBe(408);
+
+    const r2 = await app.request("/pay", {
+      method: "POST",
+      headers: { "Idempotency-Key": "retry-after-timeout" }
+    });
+    expect(r2.status).toBe(200);
+    expect(await r2.json()).toEqual({ ok: true, attempt: 2 });
+  });
+
+  test("21. RadixNode.lookup() ignores query string when matching path segments", async () => {
+    const { RadixNode } = await import("../src/core/radix");
+    const tree = new RadixNode();
+    const fn = () => "matched";
+    tree.insert("/users/:id", "GET", fn);
+
+    const ctx = new Context();
+    const hit = tree.lookup("GET", "/users/42?tab=profile", 0, ctx);
+    expect(hit).toBe(fn);
+    expect(ctx.params.id).toBe("42");
+  });
 });

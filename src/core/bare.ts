@@ -109,6 +109,9 @@ export class BareJS<
     fn: () => void | Promise<void>,
     options: CronOptions = {}
   ): this {
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+      throw new RangeError(`cron("${name}") intervalMs must be a positive finite number`);
+    }
     let running = false;
     const tick = async () => {
       if (running) return;
@@ -349,6 +352,11 @@ export class BareJS<
           const timeoutPromise = new Promise<Response>((resolve) => {
             timer = setTimeout(() => {
               ctx._detached = true;
+              if ((ctx as any)._idempotencyKey && (ctx as any)._idemInFlight) {
+                (ctx as any)._idemInFlight.delete((ctx as any)._idempotencyKey);
+                (ctx as any)._idempotencyKey = undefined;
+                (ctx as any)._idemInFlight = undefined;
+              }
               if (typeof res.catch === 'function') res.catch(() => {});
               resolve(applyCtxHeadersToRes(Response.json({ status: 'error', code: 'REQUEST_TIMEOUT', message }, { status }), ctx));
             }, ms);

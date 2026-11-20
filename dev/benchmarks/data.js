@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795156098369,
+  "lastUpdate": 1795157409691,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3469,6 +3469,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 4185.460735952826,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "c27b768dffbb6850fe0886d083570a5f299b8f54",
+          "message": "perf(core,radix,validators): sync-peek jsonBody fast path and radix subtree coalescing (beat Elysia across all 7 scenarios)",
+          "timestamp": "2026-11-20T06:49:13Z",
+          "tree_id": "1e6cd9d7cc37da65e1ae94a269701257495c630f",
+          "url": "https://github.com/xarhang/bareJS/commit/c27b768dffbb6850fe0886d083570a5f299b8f54"
+        },
+        "date": 1795157409202,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 521.5539550496205,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 853.0110686498671,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3295.241557008534,
             "unit": "undefined"
           }
         ]

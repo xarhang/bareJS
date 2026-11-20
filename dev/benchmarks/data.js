@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795157409691,
+  "lastUpdate": 1795160903087,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3508,6 +3508,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3295.241557008534,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "efc01ee0d5f801c80af3c5b1315f3c4578b6bdf8",
+          "message": "perf(core): clear acquired LIFO pool slots",
+          "timestamp": "2026-11-20T07:47:29Z",
+          "tree_id": "8e7bc720f5eaedbd204ca52023cedd8419375294",
+          "url": "https://github.com/xarhang/bareJS/commit/efc01ee0d5f801c80af3c5b1315f3c4578b6bdf8"
+        },
+        "date": 1795160902529,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1103.6409433659553,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1709.5907338034376,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5395.809050660719,
             "unit": "undefined"
           }
         ]

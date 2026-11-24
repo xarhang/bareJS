@@ -40,3 +40,16 @@ bun test
 
 # Run benchmarks to ensure no performance regression
 bun run bench
+```
+
+## 🚀 Release & Publish Workflow
+1. Run `bun test` and `bun run build`.
+2. Update `package.json` version, `CHANGELOG.md`, `README.md`, and `llms.txt`.
+3. Commit and push to `main` (use `git pull --rebase origin main` if `bench.yml` pushed a benchmark update).
+4. Tag and create a GitHub Release:
+   ```bash
+   git tag v<version> && git push origin v<version>
+   gh release create v<version> --title "BareJS v<version>" --notes "..."
+   ```
+5. Publish to npm using `bun publish --access public` (if not logged in, run `npm login` first to authenticate via `npmjs.com/login/cli/...`). Note: `bun publish` handles web-based 2FA cleanly without `npm publish`'s non-TTY `EOTP` exit.
+

@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795509943153,
+  "lastUpdate": 1795510517617,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4327,6 +4327,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 2844.62025726679,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "cf994b74929244507219fe0dece3e7d5cfc7bbc0",
+          "message": "test: expand Node.js and Deno CI suites to cover all core features",
+          "timestamp": "2026-11-24T08:54:19Z",
+          "tree_id": "293081812c33af36feb5dc750629bcd335101d0e",
+          "url": "https://github.com/xarhang/bareJS/commit/cf994b74929244507219fe0dece3e7d5cfc7bbc0"
+        },
+        "date": 1795510517178,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 677.0779854504757,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 731.7575089729866,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 2549.3892298213186,
             "unit": "undefined"
           }
         ]

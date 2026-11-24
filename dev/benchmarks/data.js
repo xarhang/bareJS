@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795511788570,
+  "lastUpdate": 1795511945597,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4483,6 +4483,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5252.824757543103,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "4e8950f7d9c82af01fcaf5c5863b77880d82bb6e",
+          "message": "test: fix Node 20 GC/zstd, node-smoke WS, and Deno npm import map",
+          "timestamp": "2026-11-24T09:18:10Z",
+          "tree_id": "7b822bc40136d483b79c9b727ef0f29a777fbf60",
+          "url": "https://github.com/xarhang/bareJS/commit/4e8950f7d9c82af01fcaf5c5863b77880d82bb6e"
+        },
+        "date": 1795511945387,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 661.8942741504864,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 846.5761797067976,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3236.913765088208,
             "unit": "undefined"
           }
         ]

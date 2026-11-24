@@ -4,7 +4,11 @@
     "bun:sqlite": "./tests/shims/bun-sqlite-deno.ts",
     "@std/testing/bdd": "jsr:@std/testing@^1.0.0/bdd",
     "@std/testing/mock": "jsr:@std/testing@^1.0.0/mock",
-    "@std/expect": "jsr:@std/expect@^1.0.0"
+    "@std/expect": "jsr:@std/expect@^1.0.0",
+    "@sinclair/typebox": "npm:@sinclair/typebox@^0.34.47",
+    "zod": "npm:zod@^3.25.76",
+    "bcryptjs": "npm:bcryptjs@^2.4.3",
+    "ws": "npm:ws@^8.0.0"
   },
   "nodeModulesDir": "auto"
 }

@@ -289,62 +289,27 @@ try {
   assert.equal(await Hash.verify('node-secret-pass', hashed), true);
   assert.equal(await Hash.verify('wrong-pass', hashed), false);
 
-  // 8. Native RFC 6455 WebSocket handshake + masked text echo (works on Node 20 & 22 without flags)
+  // 8. WebSocket handshake + echo (works on Node 20 & 22)
+  const WS = globalThis.WebSocket ?? (await import('ws')).WebSocket;
   await new Promise((resolve, reject) => {
-    const key = Buffer.from('barejs-node-ws-16').toString('base64');
-    const req = http.request({
-      host: '127.0.0.1',
-      port,
-      path: '/ws/vientiane',
-      headers: {
-        Upgrade: 'websocket',
-        Connection: 'Upgrade',
-        'Sec-WebSocket-Key': key,
-        'Sec-WebSocket-Version': '13'
-      }
-    });
     const timer = setTimeout(() => reject(new Error('Node WS timeout')), 3000);
-    req.on('upgrade', (res, socket, head) => {
-      const expectedAccept = createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
-      assert.equal(res.headers['sec-websocket-accept'], expectedAccept);
-      let buf = head && head.length ? Buffer.from(head) : Buffer.alloc(0);
-      const msgs = [];
-      const parse = () => {
-        while (buf.length >= 2) {
-          const len = buf[1] & 0x7f;
-          if (buf.length < 2 + len) return;
-          const op = buf[0] & 0x0f;
-          const txt = buf.subarray(2, 2 + len).toString('utf8');
-          buf = buf.subarray(2 + len);
-          if (op === 1) msgs.push(txt);
-          if (msgs.length === 1) {
-            const msgBuf = Buffer.from('sabai', 'utf8');
-            const mask = Buffer.from([1, 2, 3, 4]);
-            const frame = Buffer.alloc(6 + msgBuf.length);
-            frame[0] = 0x81;
-            frame[1] = 0x80 | msgBuf.length;
-            mask.copy(frame, 2);
-            for (let i = 0; i < msgBuf.length; i++) frame[6 + i] = msgBuf[i] ^ mask[i & 3];
-            socket.write(frame);
-          } else if (msgs.length === 2) {
-            clearTimeout(timer);
-            assert.deepEqual(msgs, ['joined:vientiane', 'echo:sabai']);
-            socket.destroy();
-            resolve();
-          }
-        }
-      };
-      parse();
-      socket.on('data', (c) => {
-        buf = Buffer.concat([buf, c]);
-        parse();
-      });
-    });
-    req.on('error', (e) => {
+    const client = new WS(`ws://127.0.0.1:${port}/ws/vientiane`);
+    const msgs = [];
+    client.onmessage = (ev) => {
+      msgs.push(String(ev.data));
+      if (msgs.length === 1) {
+        client.send('sabai');
+      } else if (msgs.length === 2) {
+        clearTimeout(timer);
+        assert.deepEqual(msgs, ['joined:vientiane', 'echo:sabai']);
+        client.close();
+        resolve();
+      }
+    };
+    client.onerror = (e) => {
       clearTimeout(timer);
-      reject(e);
-    });
-    req.end();
+      reject(e instanceof Error ? e : new Error('Node WS error'));
+    };
   });
 
   console.log('✅ Real Node.js full feature suite passed all assertions!');

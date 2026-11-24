@@ -471,13 +471,17 @@ describe("Enhancements v2", () => {
       app.use(compress({ threshold: 100 }));
       app.get("/data", () => payload);
 
-      // zstd preferred by default
+      // zstd preferred by default when runtime supports zstd (falls back to br on Node 20)
       const rZstd = await app.request("/data", {
         headers: { "accept-encoding": "gzip, br, zstd" },
       });
-      expect(rZstd.headers.get("content-encoding")).toBe("zstd");
-      const zstdBuf = new Uint8Array(await rZstd.arrayBuffer());
-      expect(new TextDecoder().decode(Bun.zstdDecompressSync(zstdBuf))).toBe(payload);
+      const enc = rZstd.headers.get("content-encoding");
+      if (enc === "zstd") {
+        const zstdBuf = new Uint8Array(await rZstd.arrayBuffer());
+        expect(new TextDecoder().decode(Bun.zstdDecompressSync(zstdBuf))).toBe(payload);
+      } else {
+        expect(enc).toBe("br");
+      }
 
       // br when zstd not accepted
       const rBr = await app.request("/data", {

@@ -1,430 +1,154 @@
 <div align="center">
 <br />
 <h1>Bare<span style="color: #F7DF1E;">JS</span></h1>
-<p><strong>The batteries-included Bun web framework engineered for zero-overhead speed.</strong></p>
-<p><i>BareJS delivers everything you need for production APIs out of the box—built-in <strong>TypeBox &amp; Zod validation</strong>, <strong>end-to-end type safety</strong> (<code>bareClient</code>), <strong>auto-generated OpenAPI 3.1</strong>, <strong>native WebSockets</strong>, <strong>JSON-RPC 2.0</strong>, <strong>resilience primitives</strong>, and <strong>zero-trust security</strong>—powered by a JIT-compiled O(1) router and LIFO object pooling.</i></p>
+<p><strong>The batteries-included web framework for Bun, Node.js, and Deno, engineered for minimal overhead.</strong></p>
+<p><i>Built-in TypeBox &amp; Zod validation, end-to-end RPC client inference, OpenAPI 3.1, WebSockets, JSON-RPC 2.0, and zero-trust security — powered by a JIT-compiled O(1) radix router and LIFO context pooling.</i></p>
 
 <p>
-<a href="https://www.npmjs.com/package/barejs">
-<img src="https://img.shields.io/npm/v/barejs?style=for-the-badge&logo=npm&color=CB3837" alt="NPM Version">
-</a>
-<a href="https://github.com/xarhang/barejs/actions/workflows/bench.yml">
-<img src="https://img.shields.io/github/actions/workflow/status/xarhang/barejs/bench.yml?branch=main&label=Performance&style=for-the-badge&logo=github" alt="Performance">
-</a>
-<a href="https://bun.sh">
-<img src="https://img.shields.io/badge/Bun-%3E%3D1.1.0-black?style=for-the-badge&logo=bun" alt="Bun Version">
-</a>
-<a href="https://github.com/xarhang/barejs/blob/main/LICENSE">
-<img src="https://img.shields.io/github/license/xarhang/barejs?style=for-the-badge&color=blue" alt="License">
-</a>
+<a href="https://www.npmjs.com/package/barejs"><img src="https://img.shields.io/npm/v/barejs?style=for-the-badge&logo=npm&color=CB3837" alt="NPM Version"></a>
+<a href="https://github.com/xarhang/bareJS/actions/workflows/bench.yml"><img src="https://img.shields.io/github/actions/workflow/status/xarhang/bareJS/bench.yml?branch=main&label=CI%20%26%20Bench&style=for-the-badge&logo=github" alt="CI & Benchmarks"></a>
+<a href="https://bun.sh"><img src="https://img.shields.io/badge/Bun-%3E%3D1.1.0-black?style=for-the-badge&logo=bun" alt="Bun"></a>
+<a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-%3E%3D20.0.0-339933?style=for-the-badge&logo=nodedotjs" alt="Node.js"></a>
+<a href="https://deno.com"><img src="https://img.shields.io/badge/Deno-%3E%3D2.0-000000?style=for-the-badge&logo=deno" alt="Deno"></a>
+<a href="https://github.com/xarhang/bareJS/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xarhang/bareJS?style=for-the-badge&color=blue" alt="License"></a>
 </p>
 </div>
 
-> [!TIP]
-> **Using AI Coding Assistants (Cursor, Copilot, Claude, Windsurf)?** Point them to [`llms.txt`](./llms.txt) for a complete, token-efficient reference of every BareJS API.
-
 ---
-
-## 🚀 Batteries Included, Zero Overhead
-
-* **Core Performance**: $O(1)$ Radix Jump-Table Router (inline `switch` dispatch for static, `:params`, and `/*` wildcards), JIT-compiled route/middleware pipelines (`AsyncFunction` fast paths), and concurrency-safe lazy LIFO `Context` object pooling (`0..65536`) with dev-mode Use-After-Free Proxy guard.
-* **Type Safety & Validation**: Unified declarative schema validation for `body`, `query`, `params`, `headers`, and `response` with **TypeBox**, **Zod**, or **Native JSON Schema**—featuring automatic `number`/`boolean` coercion, `maxBodySize` (`413`) DoS guard, `stripUnknown` Mass-Assignment protection, and **end-to-end type inference** (`bareClient(app)`) with zero runtime overhead.
-* **API Documentation & RPC**: Automatic **OpenAPI 3.1** (`app.docs`) generation with `securitySchemes`, `servers`, and `tags` directly from route schemas, plus built-in **JSON-RPC 2.0** (`app.rpc`).
-* **Real-Time & Streaming**: Native parameterized **WebSockets** (`app.ws('/ws/:room')`), **Server-Sent Events** (`ctx.sse`), and native zero-dependency Gzip compression (`compress` via `Bun.gzipSync`).
-* **Built-In Resilience & Jobs**: Production `circuitBreaker` (`503 Retry-After`), `idempotency` (`409 IDEMPOTENT_IN_FLIGHT`), `createSingleflight` cache-stampede protection, and overlap-safe `app.cron` background jobs.
-* **Zero-Trust Security & Utilities**: Built-in `securityHeaders()`, `cors()`, `csrf()`, `timeout()`, `rateLimit()`, `trustProxy(false)` anti-spoofing, `bareAuth()` (constant-time HS256 JWT + `revokeToken()`/`isRevoked`), `Hash` (Argon2id), HMAC-signed cookies, `ctx.upload()` / streaming `ctx.uploadStream()`, and symlink-safe `staticFile()`.
-* **Ergonomics & Observability**: Dual response style (return plain objects/strings Elysia-style OR `ctx.json()`/`ctx.html()`/`ctx.text()`/`ctx.redirect()`/`ctx.send()`), `logger()` (`pretty`/`json` + `X-Request-Id`), `healthcheck()` (`/health` + `/ready`), and `app.onDrain()` + IPC `DRAIN_REQUEST` graceful draining.
-
-> Verified with **423 Automated Tests (6,249 assertions)** and **100.00% Function & 100.00% Line Coverage**.
-
----
-
-## 📊 Benchmarks: Multi-Scenario & Real-World Performance
-
-All benchmark numbers below are **automatically generated on every push to `main`** by GitHub Actions running `benchmarks/fair-suite.ts`, `benchmarks/production-bench.ts`, and `benchmarks/head-to-head.ts` on real `mitata` runs.
-
-<!-- MARKER: MULTI_BENCH_START -->
-
-| Scenario | **BareJS** | **ElysiaJS** | **Hono** |
-| :--- | :---: | :---: | :---: |
-| **1. 100 Routes + Dynamic Params** | **`978 ns`**<br><sub>`p99: 5.93 µs`</sub> | `1.43 µs`<br><sub>`p99: 7.07 µs`</sub> | `3.33 µs`<br><sub>`p99: 15.33 µs`</sub> |
-| **2. 10 Middlewares + Deep Path** | **`926 ns`**<br><sub>`p99: 5.27 µs`</sub> | `1.37 µs`<br><sub>`p99: 6.07 µs`</sub> | `3.50 µs`<br><sub>`p99: 12.23 µs`</sub> |
-| **3. POST JSON + Schema Validation** | **`3.22 µs`**<br><sub>`p99: 14.21 µs`</sub> | `3.44 µs`<br><sub>`p99: 12.46 µs`</sub> | `3.65 µs`<br><sub>`p99: 13.74 µs`</sub> |
-| **4. Async Handler + Query Parsing** | `1.77 µs`<br><sub>`p99: 6.97 µs`</sub> | **`1.66 µs`**<br><sub>`p99: 6.88 µs`</sub> | `2.48 µs`<br><sub>`p99: 10.03 µs`</sub> |
-| **5. Response Schema Secret Stripping** | **`832 ns`**<br><sub>`p99: 4.67 µs`</sub> | `1.21 µs`<br><sub>`p99: 5.47 µs`</sub> | — |
-| **6. SQLite Report (`SUM`/`AVG`/`GROUP BY`)** | `20.45 µs`<br><sub>`p99: 31.15 µs`</sub> | **`20.05 µs`**<br><sub>`p99: 32.79 µs`</sub> | `25.60 µs`<br><sub>`p99: 48.66 µs`</sub> |
-| **7. SQLite Write (`POST` + Validate + `INSERT`)** | **`9.09 µs`**<br><sub>`p99: 22.20 µs`</sub> | `12.48 µs`<br><sub>`p99: 34.96 µs`</sub> | `14.92 µs`<br><sub>`p99: 38.25 µs`</sub> |
-
-> Last Updated: 2026-11-24 (github action)
-
-<!-- MARKER: MULTI_BENCH_END -->
-
-### Head-to-Head Stress Test (10 Middlewares + Deep Path)
-
-<!-- MARKER: PERFORMANCE_TABLE_START -->
-
-| Framework | Latency | Speed |
-| :--- | :--- | :--- |
-| **BareJS** | **0.94 µs** | **Baseline** |
-| Elysia | 1.20 µs | 1.27x slower |
-| Hono | 4.73 µs | 5.02x slower |
-
-> Last Updated: 2026-11-24 (github action)
-
-<!-- MARKER: PERFORMANCE_TABLE_END -->
-
-> [!TIP]
-> **View our [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/)** for historical data and detailed performance trends.
-
----
-
-## 🛠️ Installation & Quick Start
-
-```bash
-bun add barejs
-```
 
 ```typescript
 import { BareJS, Type, type Context } from 'barejs';
 
 const app = new BareJS();
 
-// 1. Direct return (Elysia style)
 app.get('/', () => ({ hello: 'world' }));
-app.get('/ping', () => 'pong');
 
-// 2. Context helpers (Hono / Express style)
-app.get('/welcome', (ctx: Context) => ctx.html('<h1>ສະບາຍດີ BareJS</h1>'));
-app.get('/old', (ctx: Context) => ctx.redirect('/', 301));
-
-// 3. Wildcard catch-all route
-app.get('/assets/*', (ctx: Context) => ({ path: ctx.params['*'] }));
+app.post('/orders/:id', {
+  params: Type.Object({ id: Type.Integer() }),
+  body: Type.Object({ item: Type.String({ minLength: 1 }), qty: Type.Integer({ minimum: 1 }) }),
+  response: Type.Object({ id: Type.Number(), item: Type.String(), qty: Type.Number() })
+}, (ctx: Context) => ({ id: ctx.params.id, ...ctx.body, internal_cost: 9999 })); // internal_cost is stripped
 
 app.listen(3000);
 ```
 
-### 🌐 Multi-Runtime (Bun, Node.js, Deno)
+---
 
-BareJS selects its runtime driver **once at startup**—preserving 100% zero-overhead native speed on Bun while running the exact same app on Node.js (`>=20`) and Deno:
+## Why BareJS?
+
+- **O(1) JIT Router & Pooling:** Compiles static routes into an inline `switch` fast-path and dynamic routes into a radix jump-table with a lazy LIFO `Context` pool (`0..65536`) and dev-mode Use-After-Free Proxy guard.
+- **Unified Schema Validation:** Declarative `body`, `query`, `params`, `headers`, and `response` schemas with **TypeBox**, **Zod**, or **Native JSON Schema** — including auto-coercion, `413` `maxBodySize` guards, and automatic secret-field stripping.
+- **End-to-End Type Safety:** `bareClient(app)` provides compile-time route, param, query, body, and response inference over HTTP or zero-network in-memory calls.
+- **Batteries Included:** Auto-generated **OpenAPI 3.1** + Scalar UI (`app.docs`), **JSON-RPC 2.0** (`app.rpc`), **WebSockets** (`app.ws`), **SSE** (`ctx.sse`), **Compression** (`compress`), and **Static Files** (`staticFile`).
+- **Zero-Trust Security & Resilience:** Built-in `bareAuth` (HS256/RS256/ES256/JWKS), `Hash` (Argon2id/bcrypt), HMAC-signed cookies, `cors`, `csrf`, `rateLimit`, `idempotency`, `circuitBreaker`, `createSingleflight`, and `app.onDrain`.
+- **Multi-Runtime:** Startup driver selection (`bunDriver` / `nodeDriver`) keeps Bun native performance untouched while running the same app on Node.js (`>=20`) and Deno (`>=2.0`).
+
+---
+
+## Installation & Quick Start
+
+<details open>
+<summary><strong>Bun (&gt;= 1.1.0)</strong></summary>
+
+```bash
+bun add barejs
+```
 
 ```typescript
-// Bun (Native Mode — default)
 import { BareJS } from 'barejs';
-app.listen(3000);
 
-// Node.js (>= 20)
+const app = new BareJS();
+app.get('/', () => ({ runtime: 'bun' }));
+app.listen(3000);
+```
+
+</details>
+
+<details>
+<summary><strong>Node.js (&gt;= 20.0.0)</strong></summary>
+
+```bash
+npm install barejs
+# Optional peer dependencies if using WebSockets or password hashing:
+npm install ws @node-rs/argon2
+```
+
+```typescript
 import { BareJS } from 'barejs/node';
-app.listen(3000);
 
-// Deno / Web-Standard fetch hosts
+const app = new BareJS();
+app.get('/', () => ({ runtime: 'node' }));
+app.listen(3000);
+```
+
+</details>
+
+<details>
+<summary><strong>Deno (&gt;= 2.0)</strong></summary>
+
+```bash
+deno add npm:barejs
+```
+
+```typescript
+import { BareJS } from 'barejs';
+
+const app = new BareJS();
+app.get('/', () => ({ runtime: 'deno' }));
 Deno.serve({ port: 3000 }, (req, info) => app.fetch(req, info.remoteAddr.hostname));
 ```
 
-> Optional peer dependencies on Node.js: install `ws` if using `app.ws()`, and `@node-rs/argon2` (or `bcryptjs`) if using `Hash`.
+</details>
 
 ---
 
-## 📘 Comprehensive Guide
+## Runtime Support
 
-### 1. ✅ Unified Route Validation & Auto-Coercion (`body`, `query`, `params`, `headers`)
-
-Pass a schema object directly before your handler. BareJS automatically coerces numeric and boolean strings in `params` and `query`, enforces `maxBodySize` (`413 Payload Too Large`), and registers the route in OpenAPI `/docs`.
-
-```typescript
-import { BareJS, Type, Z, native, type Context } from 'barejs';
-
-const app = new BareJS();
-
-// Declarative RouteSchemas (works with TypeBox, Zod, or Native JSON Schema)
-app.post('/orders/:orderId', {
-  detail: { summary: 'Create Order', tags: ['Orders'] },
-  params: Type.Object({ orderId: Type.Integer() }),        // "42" -> 42
-  query:  Type.Object({ notify: Type.Optional(Type.Boolean()) }), // "true" -> true
-  headers: Type.Object({ 'x-api-version': Type.Optional(Type.String()) }),
-  body: Type.Object({
-    item: Type.String({ minLength: 1 }),
-    qty: Type.Integer({ minimum: 1 })
-  }),
-  // Response schema automatically strips undeclared secret fields (e.g. internal_cost)!
-  response: Type.Object({
-    orderId: Type.Number(),
-    notify: Type.Optional(Type.Boolean()),
-    body: Type.Object({ item: Type.String(), qty: Type.Number() })
-  }),
-  maxBodySize: 512 * 1024 // 512 KB limit (returns 413 if exceeded)
-}, (ctx: Context) => ({
-  orderId: ctx.params.orderId, // number
-  notify: ctx.query.notify,    // boolean | undefined
-  body: ctx.body,              // validated body
-  internal_cost: 9999          // automatically stripped before sending to client!
-}));
-
-// Standalone middleware validators are also supported:
-app.post('/zod', Z.object({ email: Z.string().email() }), (ctx) => ctx.body);
-app.post('/native', native({
-  properties: { title: { type: 'string' }, priority: { type: 'number' } },
-  required: ['title'] // 'priority' is optional
-}), (ctx) => ctx.body);
-```
+| Feature | Bun (`barejs`) | Node.js >= 20 (`barejs/node`) | Deno (`app.fetch`) |
+| :--- | :---: | :---: | :---: |
+| **Router, Validation, OpenAPI, JSON-RPC, `bareClient`** | ✅ | ✅ | ✅ |
+| **Security Middlewares (`cors`, `csrf`, `rateLimit`, `bareAuth`, `idempotency`)** | ✅ | ✅ | ✅ |
+| **Streaming (`ctx.sse`, `ctx.upload`, `ctx.uploadStream`)** | ✅ | ✅ | ✅ |
+| **Static Files (`staticFile`)** | ✅ | ✅ | ✅ |
+| **Compression (`compress` — `gzip` / `br` / `zstd`)** | ✅ | ✅ (`gzip` / `br`) | ✅ (`gzip` / `br`) |
+| **WebSockets (`app.ws`)** | ✅ (Native) | ⚠️ Requires `ws` | ❌ Use `Deno.upgradeWebSocket` |
+| **Password Hashing (`Hash` — Argon2id / bcrypt)** | ✅ (Native) | ⚠️ Requires `@node-rs/argon2` or `bcryptjs` | ⚠️ Requires npm peer dep |
 
 ---
 
-### 2. 🍪 Cookies, HMAC Signed Cookies & Safe File Uploads
+## Benchmarks (Bun)
 
-```typescript
-// HMAC-SHA256 Signed Cookies (HttpOnly & SameSite=Lax by default)
-app.post('/session', async (ctx) => {
-  await ctx.setCookie('session_id', 'user_42', {
-    secret: process.env.COOKIE_SECRET!,
-    httpOnly: true,
-    secure: true,
-    sameSite: 'Strict',
-    maxAge: 3600
-  });
-  return { loggedIn: true };
-});
+Measured in-process on **Bun** with [`mitata`](https://github.com/evanwash/mitata) (`benchmarks/fair-suite.ts`). Bold values indicate the fastest **mean** latency. These micro-benchmarks measure framework overhead rather than end-to-end network HTTP throughput, and do not represent Node.js or Deno latency.
 
-app.get('/session', async (ctx) => {
-  const userId = await ctx.getSignedCookie('session_id', process.env.COOKIE_SECRET!);
-  if (!userId) return ctx.status(401).json({ error: 'Invalid or tampered cookie' });
-  return { userId };
-});
+<!-- MARKER: MULTI_BENCH_SUMMARY_START -->
 
-// Safe Multipart File Upload (enforces size, file count, MIME allowlist & filename sanitization)
-app.post('/upload', async (ctx) => {
-  const { fields, files } = await ctx.upload({
-    maxFileSize: 5 * 1024 * 1024, // 5 MB -> 413 if exceeded
-    maxFiles: 3,                  // -> 413 if exceeded
-    allowedTypes: ['image/png', 'image/jpeg', 'application/pdf'] // -> 415 if unsupported
-  });
-  return {
-    fields,
-    uploaded: files.map((f) => ({ safeName: f.safeName, size: f.size, type: f.type }))
-  };
-});
+| Scenario | **BareJS** | **ElysiaJS** | **Hono** |
+| :--- | :---: | :---: | :---: |
+| **1. 100 Routes + Dynamic Params** | **`840 ns`**<br><sub>`p99: 5.14 µs`</sub> | `1.08 µs`<br><sub>`p99: 5.68 µs`</sub> | `2.22 µs`<br><sub>`p99: 10.76 µs`</sub> |
+| **2. 10 Middlewares + Deep Path** | **`769 ns`**<br><sub>`p99: 4.30 µs`</sub> | `1.10 µs`<br><sub>`p99: 5.48 µs`</sub> | `2.46 µs`<br><sub>`p99: 11.15 µs`</sub> |
+| **3. POST JSON + Schema Validation** | **`2.09 µs`**<br><sub>`p99: 8.99 µs`</sub> | `2.52 µs`<br><sub>`p99: 9.64 µs`</sub> | `2.65 µs`<br><sub>`p99: 10.97 µs`</sub> |
+| **4. Async Handler + Query Parsing** | **`1.32 µs`**<br><sub>`p99: 6.52 µs`</sub> | `1.40 µs`<br><sub>`p99: 6.71 µs`</sub> | `1.83 µs`<br><sub>`p99: 8.79 µs`</sub> |
 
-// True Streaming Multipart Upload (constant O(chunk) memory for large files)
-app.post('/upload-stream', async (ctx) => {
-  const uploaded: string[] = [];
-  for await (const part of ctx.uploadStream({ maxFileSize: 500 * 1024 * 1024 })) {
-    if (part.type === 'file' && part.stream) {
-      await Bun.write(`./uploads/${part.safeName}`, new Response(part.stream));
-      uploaded.push(part.safeName!);
-    }
-  }
-  return { uploaded };
-});
-```
+> Last Updated: 2026-11-24 (github action — `ubuntu-latest`, Bun `1.3.x`, Elysia `latest`, Hono `latest`)
+
+<!-- MARKER: MULTI_BENCH_SUMMARY_END -->
+
+See **[BENCHMARKS.md](./BENCHMARKS.md)** for all 7 scenarios (including SQLite read/write and response secret stripping), methodology, notes, and local reproduction steps, or view the [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/).
 
 ---
 
-### 3. 🛡️ Production Security Suite, Idempotency & Singleflight
+## Documentation
 
-```typescript
-import {
-  BareJS, BareRouter, securityHeaders, cors, csrf, timeout, rateLimit,
-  idempotency, createSingleflight, redisStore, compress,
-  bareAuth, createToken, basicAuth, hasRole, Hash, staticFile
-} from 'barejs';
-
-const app = new BareJS();
-const SECRET = process.env.JWT_SECRET || 'super-secret-key';
-const store = redisStore(Bun.redis, { prefix: 'myapp:' }); // Optional: omit for zero-overhead in-memory Map
-
-app.use(securityHeaders());
-app.use(cors({ origin: ['https://app.example.com'], credentials: true }));
-app.use(csrf({ allowedOrigins: ['https://app.example.com'] }));
-app.use(timeout(10_000)); // Returns 408 if handler exceeds 10s
-app.use(compress({ minSize: 1024, encodings: ['zstd', 'br', 'gzip'] })); // Negotiates zstd / br / gzip
-app.use(rateLimit({ windowMs: 60_000, max: 100, store }));
-app.use(staticFile('public', { maxAge: 3600, etag: true, cacheMetadata: { maxEntries: 1024, ttlMs: 30_000 } }));
-
-// Payment/Order Double-Charge Protection (Idempotency-Key header)
-// - Returns 409 Conflict if duplicate request is currently in-flight
-// - Replays cached response with X-Idempotent-Replayed: true on retry
-app.post('/payments', idempotency({ ttlMs: 86_400_000, store }), async (ctx) => {
-  const body = await ctx.jsonBody();
-  return { chargeId: 'ch_101', amount: body.amount, status: 'paid' };
-});
-
-// Cache-Stampede / Thundering-Herd Request Coalescing
-const singleflight = createSingleflight();
-app.get('/reports/daily', async () => {
-  // 100 concurrent requests coalesce into a SINGLE database query execution
-  return singleflight.do('daily-report', async () => ({ revenue: 125_000, generatedAt: Date.now() }));
-});
-
-// Argon2id Password Hashing & JWT Creation
-app.post('/login', async (ctx) => {
-  const { password } = await ctx.jsonBody();
-  const hash = await Hash.make(password);
-  const valid = await Hash.verify(password, hash);
-  if (!valid) return ctx.status(401).send('Invalid credentials');
-
-  const token = await createToken({ id: 1, role: 'admin', exp: Math.floor(Date.now() / 1000) + 3600 }, SECRET);
-  return { token };
-});
-
-// Protect routes with constant-time HS256 JWT or asymmetric RS256/ES256/JWKS (`ctx.user`)
-app.get('/admin', bareAuth({ secret: SECRET, revocationStore: store }), hasRole('admin'), (ctx) => ({
-  user: ctx.user,
-  requestId: ctx.requestId
-}));
-app.get('/sso', bareAuth({ algorithms: ['RS256', 'ES256'], jwksUri: 'https://auth.example.com/.well-known/jwks.json' }), (ctx) => ctx.user);
-```
+- **[Comprehensive Guide](./docs/guide.md)** — Validation & auto-coercion, cookies & uploads, security suite, `app.derive()`, WebSockets, SSE, JSON-RPC 2.0, OpenAPI 3.1, and `bareClient`.
+- **[API & Configuration Reference](./docs/reference.md)** — Complete `Context` (`ctx`) API table, `poolSize`, `bare.config.ts`, and `NODE_ENV` settings.
+- **[Benchmarks](./BENCHMARKS.md)** — Full 7-scenario results and reproduction instructions.
+- **[Changelog](./CHANGELOG.md)** — Release history and migration notes.
+- **[`llms.txt`](./llms.txt)** — Token-efficient API reference for AI coding assistants (Cursor, Copilot, Claude, Windsurf).
 
 ---
 
-### 4. 🧩 Type-Safe Context Derivation (`app.derive`), Plugins & Lifecycle Hooks
+## Status, Contributing & License
 
-```typescript
-// Enrich ctx with full TypeScript inference (auto-cleaned on pool release)
-const appWithContext = app.derive((ctx) => ({
-  requestTime: Date.now(),
-  traceId: ctx.requestId
-}));
-
-appWithContext.get('/trace', (ctx) => ({
-  traceId: ctx.traceId,         // typed as string
-  requestTime: ctx.requestTime  // typed as number
-}));
-
-// Register a modular plugin
-app.use({
-  name: 'health-plugin',
-  install(instance) {
-    instance.get('/healthz', (ctx: any) => ({ ok: true, traceId: ctx.traceId }));
-  }
-});
-
-// Server Lifecycle & Error Masking
-app.onStart(() => console.log('Database ready'));
-app.onDrain(async () => console.log('Draining in-flight requests...')); // Triggered on app.drain() or IPC DRAIN_REQUEST
-app.onStop(async () => console.log('Cleaned up resources'));
-app.onError((err, ctx) => ctx.status(err.status || 500).json({
-  status: 'error',
-  message: err.message,
-  requestId: ctx.requestId
-}));
-```
-
----
-
-### 5. 📡 Real-Time (WebSocket, SSE), OpenAPI 3.1, JSON-RPC 2.0 & Client
-
-```typescript
-import { BareJS, BareRouter, bareClient, Type } from 'barejs';
-
-const usersRouter = new BareRouter().get('/users/:id', {
-  params: Type.Object({ id: Type.Integer() }),
-  query: Type.Object({ full: Type.Optional(Type.Boolean()) }),
-}, (ctx) => ({ id: ctx.params.id, full: ctx.query.full }));
-
-const app = new BareJS().route('/api', usersRouter); // Preserves full route type inference!
-
-// Native Bun WebSocket
-app.ws('/ws/chat', {
-  open: (ws) => ws.send('connected'),
-  message: (ws, msg) => ws.send(`echo: ${msg}`)
-});
-
-// Server-Sent Events (SSE)
-app.get('/events', (ctx) => ctx.sse(async (send) => {
-  send({ step: 1, msg: 'streaming...' }, 'progress', '1');
-}));
-
-// JSON-RPC 2.0 Endpoint (single, batch & notifications)
-app.rpc('/rpc', {
-  add: ({ a, b }: { a: number; b: number }) => a + b
-});
-
-// Auto OpenAPI 3.1 Spec (/docs/json) + Scalar UI (/docs)
-app.docs('/docs', { title: 'My BareJS API', version: '1.0.0' });
-
-// Ergonomic in-memory test helper
-const res = await app.request('/api/users/42?full=true');
-
-// Type-Safe Client (Zero-Network In-Memory for tests/SSR OR Network URL)
-const inMemoryClient = bareClient(app);
-const localRes = await inMemoryClient.get('/api/users/:id', { params: { id: 42 }, query: { full: true } });
-
-const httpClient = bareClient('http://localhost:3000');
-const remoteRes = await httpClient.get('/api/users/:id', { params: { id: 42 }, query: { full: true } });
-```
-
----
-
-### 6. 🛡️ Production Observability & Zero-Trust Hardening
-
-```typescript
-import { BareJS, logger, healthcheck, bareAuth, revokeToken } from 'barejs';
-
-const app = new BareJS()
-  .trustProxy(false) // Ignore spoofed X-Forwarded-For when directly exposed
-  .use(logger({ format: 'json' })) // Structured JSON logs + X-Request-Id
-  .use(healthcheck({
-    path: '/health',
-    readyPath: '/ready',
-    version: '1.0.0',
-    checks: { db: async () => true }
-  }))
-  .use(bareAuth({
-    secret: process.env.JWT_SECRET!,
-    isRevoked: async (payload) => isBlockedInRedis(payload.jti)
-  }));
-
-// Revoke a compromised token or jti immediately
-revokeToken('compromised-jti-123', 3600_000);
-
-// OpenAPI 3.1 with Bearer JWT securitySchemes
-app.docs('/docs', {
-  title: 'Production API',
-  securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
-  security: [{ bearerAuth: [] }]
-});
-
-// Enforce server-level maxRequestBodySize (default: 10MB)
-app.listen(3000, '0.0.0.0', true, { maxRequestBodySize: 2 * 1024 * 1024 });
-```
-
----
-
-## 🧠 Complete `Context` (`ctx`) Reference
-
-| Method / Property | Description |
-| :--- | :--- |
-| `ctx.req` | Raw incoming Bun `Request` object. |
-| `ctx.params` | Route parameters (`:id` or `ctx.params['*']` for wildcard routes). |
-| `ctx.query` / `ctx.getQuery(k)` | Lazy, prototype-pollution-safe parsed query parameters. |
-| `await ctx.jsonBody(maxBytes?)` | Parses & caches JSON body (enforces `413` limit, default 1MB). |
-| `await ctx.upload(options?)` | Safe `multipart/form-data` upload parser (`maxFileSize`, `maxFiles`, `allowedTypes`). |
-| `ctx.uploadStream(options?)` | True streaming `multipart/form-data` async generator (`ReadableStream` per file part, $O(\text{chunk})$ memory). |
-| `ctx.cookies` | Lazy parsed request cookies (`Record<string, string>`). |
-| `await ctx.setCookie(k, v, opts?)` | Sets a cookie (`HttpOnly; SameSite=Lax` default, optional HMAC `secret`). |
-| `await ctx.getSignedCookie(k, s)` | Verifies HMAC-SHA256 signed cookie in constant time. |
-| `ctx.deleteCookie(k, opts?)` | Expires a cookie immediately. |
-| `ctx.user` | Authenticated user payload from `bareAuth` or `basicAuth`. |
-| `ctx.requestId` | Incoming `x-request-id` header or generated UUIDv4. |
-| `ctx.status(code)` | Sets HTTP response status code (chainable). |
-| `ctx.setHeader(name, value)` | Sets response header (chainable, copy-on-write safe). |
-| `ctx.json(data)` | Returns `application/json` response. |
-| `ctx.send(msg, extra?)` | Returns standardized `{ status, msg, ...extra }` JSON response. |
-| `ctx.html(html, status?)` | Returns `text/html; charset=utf-8` response. |
-| `ctx.text(text, status?)` | Returns `text/plain; charset=utf-8` response. |
-| `ctx.redirect(url, status?)` | Returns HTTP redirect response (default `302`). |
-| `ctx.sse(source)` | Streams Server-Sent Events (`text/event-stream`). |
-| `ctx.set(k, v)` / `ctx.get(k)` | Per-request key-value storage (cleared on pool release). |
-
----
-
-## ⚙️ Performance & Environment Configuration
-
-| Variable / File | Default | Description |
-| :--- | :--- | :--- |
-| `bare.config.ts` | Optional | Centralized config for `port` and Argon2/bcrypt `hash` parameters. |
-| `poolSize` | `1024` | `new BareJS(poolSize)` — defines the maximum number of released `Context` instances retained in the lazy bounded LIFO stack (`0..65536`; `0` disables retention). Push and pop operations are $O(1)$ with acquired slots cleared while in-flight and shared pool state across JIT recompilations. |
-| `NODE_ENV` | `development` | Set to `production` to mask 500 stack traces and disable startup banner. |
-
----
-
-**Maintained by [xarhang](https://github.com/xarhang) | License: MIT**
+- **Status:** Active `0.1.x` development. Core HTTP routing, validation, security middlewares, and Bun runtime APIs are stable and verified in CI (`bun test`); the Node.js and Deno runtime drivers (`barejs/node`) are newly introduced in `v0.1.59`.
+- **Contributing:** See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and release workflows.
+- **License:** [MIT](./LICENSE) — Maintained by [xarhang](https://github.com/xarhang).

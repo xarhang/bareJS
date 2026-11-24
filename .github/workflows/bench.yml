@@ -44,7 +44,7 @@ jobs:
           bun run scripts/update-readme.ts
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
+          git add README.md BENCHMARKS.md
           git commit -m "docs: update benchmark results [skip ci]" || echo "No changes to commit"
           git stash
           git pull origin main --rebase

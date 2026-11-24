@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795485705658,
+  "lastUpdate": 1795488986780,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3859,6 +3859,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3552.858590674422,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "11c711658892269ccb1689fbeef315db79fcc393",
+          "message": "docs: add release & publish workflow to CONTRIBUTING.md",
+          "timestamp": "2026-11-24T02:55:33Z",
+          "tree_id": "49276da415de1808978523edfb9a603fd4dd76c7",
+          "url": "https://github.com/xarhang/bareJS/commit/11c711658892269ccb1689fbeef315db79fcc393"
+        },
+        "date": 1795488986374,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 735.2492250741476,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 894.7087689979901,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3088.379659349762,
             "unit": "undefined"
           }
         ]

@@ -95,6 +95,13 @@ try {
   assert.ok(sseText.includes('data: hello'));
   assert.ok(sseText.includes('event: done'));
 
+  // 8. Native scrypt Password Hashing (zero peer deps)
+  const { Hash } = await import('../dist/node.js');
+  const hashed = await Hash.make('node-secret-pass');
+  assert.ok(hashed.startsWith('$scrypt$'));
+  assert.equal(await Hash.verify('node-secret-pass', hashed), true);
+  assert.equal(await Hash.verify('wrong-pass', hashed), false);
+
   console.log('✅ Real Node.js smoke test passed all assertions!');
 } finally {
   await app.stop(true);

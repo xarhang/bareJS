@@ -133,7 +133,7 @@ Measured in-process on **Bun** with [`mitata`](https://github.com/evanwash/mitat
 
 <!-- MARKER: MULTI_BENCH_SUMMARY_END -->
 
-See **[BENCHMARKS.md](./BENCHMARKS.md)** for all 7 scenarios (including SQLite read/write and response secret stripping), methodology, notes, and local reproduction steps, or view the [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/).
+See **[BENCHMARKS.md](./BENCHMARKS.md)** for all 7 scenarios (including the SQLite Report scenario where Elysia is slightly faster, plus SQLite Write and response secret stripping), methodology, notes, and local reproduction steps, or view the [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/).
 
 ---
 
@@ -159,6 +159,7 @@ BareJS is a complete, zero-boilerplate backend platform—every module below shi
 - **[External Integrations](./docs/integrations.md)** — Ready-to-use recipes for Better-Auth, GraphQL Yoga, Auth0, Clerk, Sentry, and OpenTelemetry.
 - **[API & Configuration Reference](./docs/reference.md)** — Complete `Context` (`ctx`) API table, `poolSize`, `bare.config.ts`, and `NODE_ENV` settings.
 - **[Benchmarks](./BENCHMARKS.md)** — Full 7-scenario results and reproduction instructions.
+- **[Security Policy](./SECURITY.md)** — Vulnerability reporting and security hardening guidelines.
 - **[Changelog](./CHANGELOG.md)** — Release history and migration notes.
 - **[`llms.txt`](./llms.txt)** — Token-efficient API reference for AI coding assistants (Cursor, Copilot, Claude, Windsurf).
 
@@ -166,6 +167,7 @@ BareJS is a complete, zero-boilerplate backend platform—every module below shi
 
 ## Status, Contributing & License
 
-- **Status:** Active `0.1.x` development. Core HTTP routing, validation, security middlewares, and Bun runtime APIs are stable and verified in CI (`bun test`); the Node.js and Deno runtime drivers (`barejs/node`) are newly introduced in `v0.1.59`.
+- **Status:** Active `0.1.x` development. Verified in [CI](./.github/workflows/ci.yml) across **Bun** (`bun test`), **Node.js 20 & 22** (`tests/node-smoke.mjs`), and **Deno 2** (`tests/deno-smoke.ts`); Node.js and Deno runtime drivers were introduced in `v0.1.59` and are under active hardening.
+- **Security:** See [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 - **Contributing:** See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and release workflows.
 - **License:** [MIT](./LICENSE) — Maintained by [xarhang](https://github.com/xarhang).

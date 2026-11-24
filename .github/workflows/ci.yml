@@ -8,6 +8,7 @@ on:
 
 jobs:
   test-and-build:
+    name: Bun (Tests & Build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,3 +19,37 @@ jobs:
       - run: bunx playwright-core install chromium
       - run: bun test
       - run: bun run build
+
+  test-node:
+    name: Node.js (${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: bun install
+      - run: bun run build
+      - run: node tests/node-smoke.mjs
+
+  test-deno:
+    name: Deno (2.x)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: bun install
+      - run: bun run build
+      - run: deno run --allow-net --allow-read --allow-env tests/deno-smoke.ts

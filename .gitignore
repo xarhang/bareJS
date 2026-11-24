@@ -5,6 +5,9 @@ node_modules
 out
 dist
 *.tgz
+result.json
+fair-suite-result.json
+production-result.json
 
 # code coverage
 coverage

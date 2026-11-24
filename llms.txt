@@ -1,10 +1,10 @@
 # BareJS (`barejs`) — AI Quick Reference (`llms.txt`)
 
-> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`) with built-in security (Argon2id, HS256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip `compress`, `app.cron`, Security Headers, DoS limits) and **100% Function & Line Test Coverage (413 tests / 6,205 assertions)**.
+> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`), **Node.js** (`>= 20` via `barejs/node`), and **Deno** with built-in security (Argon2id, HS256/RS256/ES256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip/Brotli/Zstd `compress`, `app.cron`, Security Headers, DoS limits) and **100% Function & Line Test Coverage (423 tests / 6,249 assertions)**.
 
-## 1. Installation & Minimal App
+## 1. Installation & Minimal App (Bun, Node.js, Deno)
 ```ts
-import { BareJS, Context, Type } from 'barejs';
+import { BareJS, Context, Type } from 'barejs'; // Use 'barejs/node' on Node.js (>= 20)
 
 // Optional poolSize (0..65536, default 1024): lazy bounded LIFO Context pool with in-flight slot clearing, shared state across JIT recompiles, & dev-mode UAF guard (0 overhead in prod)
 const app = new BareJS();
@@ -16,7 +16,7 @@ app.get('/ping', () => 'pong');
 // Wildcard catch-all route (`ctx.params['*']`)
 app.get('/files/*', (ctx: Context) => ({ filePath: ctx.params['*'] }));
 
-app.listen(3000);
+app.listen(3000); // Or on Deno: Deno.serve({ port: 3000 }, (req, info) => app.fetch(req, info.remoteAddr.hostname));
 ```
 
 ## 2. Routing, Plugins & Unified Schema Validation

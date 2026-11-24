@@ -1,6 +1,6 @@
 {
   "name": "barejs",
-  "version": "0.1.58",
+  "version": "0.1.59",
   "author": "xarhang",
   "description": "Full-featured, batteries-included Bun web framework combining O(1) JIT routing and object pooling with built-in TypeBox/Zod validation, OpenAPI 3.1, WebSockets, JSON-RPC 2.0, and zero-trust security.",
   "main": "./dist/index.js",

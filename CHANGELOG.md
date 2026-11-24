@@ -2,6 +2,19 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.59] - 2026-11-23
+
+### Added
+- **Multi-Runtime Architecture (`Bun`, `Node.js >= 20`, `Deno`) & `barejs/node` Entrypoint** (`src/runtime/`, `src/node.ts`, `package.json`, `scripts/build.ts`):
+  - Introduced pluggable startup runtime drivers (`src/runtime/bun.ts`, `src/runtime/node.ts`, `src/runtime/index.ts`, `src/runtime/types.ts`) selected once at boot so Bun retains 100% native zero-overhead performance while the same application runs on Node.js (`import { BareJS } from 'barejs/node'`) and Deno (`Deno.serve`).
+  - Added conditional package exports (`"."` with `"bun"` / `"node"` conditions and `"./node"`) and dual-target build support in `scripts/build.ts`.
+  - Implemented `nodeDriver` using `node:http`, `node:zlib` (`gzipSync`), streaming `fs.createReadStream` static file range handles, optional `ws` WebSocket upgrade bridging (`src/core/ws-match.ts`), and `@node-rs/argon2` / `bcryptjs` / `node:crypto` scrypt fallback for `Hash`.
+- **Tests**: Added `tests/runtime-node.test.ts` and `tests/node-smoke.mjs` verifying Node.js HTTP, streaming, static files, compression, WebSocket routing, and password hashing (**423 tests / 6,249 assertions**).
+
+### Performance
+- **Exact Static Route `switch (rawPath)` Fast-Path** (`src/core/bare.ts`):
+  - Emitted a top-level `switch (rawPath)` dispatch table for non-parameterized static routes ahead of radix traversal in `compile()`, accelerating exact static route lookups to a single V8/JSC string-switch jump.
+
 ## [0.1.58] - 2026-11-23
 
 ### Added

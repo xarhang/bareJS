@@ -35,7 +35,7 @@
 * **Zero-Trust Security & Utilities**: Built-in `securityHeaders()`, `cors()`, `csrf()`, `timeout()`, `rateLimit()`, `trustProxy(false)` anti-spoofing, `bareAuth()` (constant-time HS256 JWT + `revokeToken()`/`isRevoked`), `Hash` (Argon2id), HMAC-signed cookies, `ctx.upload()` / streaming `ctx.uploadStream()`, and symlink-safe `staticFile()`.
 * **Ergonomics & Observability**: Dual response style (return plain objects/strings Elysia-style OR `ctx.json()`/`ctx.html()`/`ctx.text()`/`ctx.redirect()`/`ctx.send()`), `logger()` (`pretty`/`json` + `X-Request-Id`), `healthcheck()` (`/health` + `/ready`), and `app.onDrain()` + IPC `DRAIN_REQUEST` graceful draining.
 
-> Verified with **419 Automated Tests (6,231 assertions)** and **100.00% Function & 100.00% Line Coverage**.
+> Verified with **423 Automated Tests (6,249 assertions)** and **100.00% Function & 100.00% Line Coverage**.
 
 ---
 

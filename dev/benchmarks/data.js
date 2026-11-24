@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795512260772,
+  "lastUpdate": 1795512325136,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4561,6 +4561,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 4685.046846188638,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "61c0e17730934ae8ffb8f2eb6c9c51c3f1255994",
+          "message": "test: back Deno spyOn with @std/testing/mock spy for toHaveBeenCalledWith",
+          "timestamp": "2026-11-24T09:24:32Z",
+          "tree_id": "ced557363fdbe44dea3d14562b1dc5c9cabf4df8",
+          "url": "https://github.com/xarhang/bareJS/commit/61c0e17730934ae8ffb8f2eb6c9c51c3f1255994"
+        },
+        "date": 1795512324715,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 627.990583764383,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 743.7937046106193,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 2537.9743711213227,
             "unit": "undefined"
           }
         ]

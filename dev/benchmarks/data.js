@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795492518531,
+  "lastUpdate": 1795496082569,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3937,6 +3937,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5422.343541631764,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "b7385acd76de3fe536eb2204a82643558798b265",
+          "message": "feat: add Node.js/Deno runtime driver, barejs/node export, static route fast-path, and stringify research",
+          "timestamp": "2026-11-24T04:53:48Z",
+          "tree_id": "d2b9fac0e2a62aa9c8077010ddea9cbd733e58c7",
+          "url": "https://github.com/xarhang/bareJS/commit/b7385acd76de3fe536eb2204a82643558798b265"
+        },
+        "date": 1795496082139,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 752.4997012181108,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 916.7165514817851,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3157.4917257065176,
             "unit": "undefined"
           }
         ]

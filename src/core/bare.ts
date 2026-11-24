@@ -10,7 +10,7 @@ import { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from "../uti
 import type { RouteSchemas } from "../security/validators";
 import type { RouteSchema } from "../client/index";
 import { runtime, type ServerHandle } from "../runtime";
-import { type WebSocketRouteHandler } from "./ws-match";
+import { matchWsRoute, type WebSocketRouteHandler } from "./ws-match";
 
 export type { WebSocketRouteHandler };
 
@@ -1119,7 +1119,36 @@ export class BareJS<
   };
 `;
 
-    this.hotFetch = new Function(...args, fnBody)(...values);
+    const compiledFetch = new Function(...args, fnBody)(...values);
+    const denoUpgrade = (globalThis as any).Deno?.upgradeWebSocket;
+    if (this.wsRoutes.size > 0 && typeof denoUpgrade === 'function') {
+      const wsRoutes = this.wsRoutes;
+      this.hotFetch = (req: Request, peerIp?: string) => {
+        if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+          const matched = matchWsRoute(wsRoutes, req.url);
+          if (matched) {
+            const { socket, response } = denoUpgrade(req);
+            (socket as any).data = matched.params
+              ? { ...matched.handler, params: matched.params }
+              : matched.handler;
+            if (matched.handler.open) socket.onopen = () => matched.handler.open!(socket);
+            if (matched.handler.message) {
+              socket.onmessage = (ev: MessageEvent) => {
+                const payload = ev.data instanceof ArrayBuffer ? new Uint8Array(ev.data) : ev.data;
+                matched.handler.message!(socket, payload as any);
+              };
+            }
+            if (matched.handler.close) {
+              socket.onclose = (ev: CloseEvent) => matched.handler.close!(socket, ev.code, ev.reason);
+            }
+            return response;
+          }
+        }
+        return compiledFetch(req, peerIp);
+      };
+    } else {
+      this.hotFetch = compiledFetch;
+    }
     this.compiled = true;
     this.fetch = this.hotFetch!;
   }

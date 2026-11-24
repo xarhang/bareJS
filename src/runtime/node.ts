@@ -1,3 +1,4 @@
+import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { extname } from 'node:path';
@@ -5,6 +6,45 @@ import { Readable } from 'node:stream';
 import { gzipSync } from 'node:zlib';
 import type { RuntimeDriver, RuntimeFileHandle, RuntimePasswordConfig, ServeOptions, ServerHandle } from './types';
 import { matchWsRoute } from '../core/ws-match';
+
+const SCRYPT_N = 16384;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+const SCRYPT_KEYLEN = 64;
+
+function scryptAsync(password: string, salt: Buffer, keylen: number, opts: { N: number; r: number; p: number }): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, opts, (err, derived) => {
+      if (err) reject(err);
+      else resolve(derived);
+    });
+  });
+}
+
+async function hashScrypt(data: string): Promise<string> {
+  const salt = randomBytes(16);
+  const derived = await scryptAsync(data, salt, SCRYPT_KEYLEN, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P });
+  return `$scrypt$N=${SCRYPT_N},r=${SCRYPT_R},p=${SCRYPT_P}$${salt.toString('base64url')}$${derived.toString('base64url')}`;
+}
+
+async function verifyScrypt(data: string, hash: string): Promise<boolean> {
+  const parts = hash.split('$');
+  if (parts.length !== 5 || parts[1] !== 'scrypt') return false;
+  const params: Record<string, number> = {};
+  for (const kv of parts[2]!.split(',')) {
+    const [k, v] = kv.split('=');
+    if (k && v) params[k] = Number(v);
+  }
+  const N = params.N || SCRYPT_N;
+  const r = params.r || SCRYPT_R;
+  const p = params.p || SCRYPT_P;
+  if (!Number.isFinite(N) || !Number.isFinite(r) || !Number.isFinite(p)) return false;
+  const salt = Buffer.from(parts[3]!, 'base64url');
+  const expected = Buffer.from(parts[4]!, 'base64url');
+  if (salt.length === 0 || expected.length === 0) return false;
+  const derived = await scryptAsync(data, salt, expected.length, { N, r, p });
+  return derived.length === expected.length && timingSafeEqual(derived, expected);
+}
 
 const MIME_MAP: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -291,9 +331,7 @@ export const nodeDriver: RuntimeDriver = {
         const pkg = '@node-rs/argon2';
         argon2 = await import(pkg);
       } catch {
-        throw new Error(
-          '[BareJS] Argon2id hashing on Node.js requires optional peer dependency "@node-rs/argon2". Install it with: npm install @node-rs/argon2'
-        );
+        return hashScrypt(data);
       }
       const fn = argon2.hash ?? argon2.default?.hash;
       return fn(data, {
@@ -305,6 +343,9 @@ export const nodeDriver: RuntimeDriver = {
 
     async verify(data: string, hash: string): Promise<boolean> {
       if (!hash || typeof hash !== 'string') return false;
+      if (hash.startsWith('$scrypt$')) {
+        return verifyScrypt(data, hash);
+      }
       if (/^\$2[aby]\$/.test(hash)) {
         let bcrypt: any;
         try {

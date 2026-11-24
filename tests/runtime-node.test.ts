@@ -111,12 +111,47 @@ describe('Node Runtime Driver (nodeDriver)', () => {
   });
 
   it('throws clear error when nodeDriver password peer dependencies are missing', async () => {
-    await expect(
-      nodeDriver.password.hash('secret', { algorithm: 'argon2id', memoryCost: 65536, timeCost: 2 })
-    ).rejects.toThrow('@node-rs/argon2');
+    const scryptHash = await nodeDriver.password.hash('secret', { algorithm: 'argon2id', memoryCost: 65536, timeCost: 2 });
+    expect(scryptHash.startsWith('$scrypt$')).toBe(true);
+    expect(await nodeDriver.password.verify('secret', scryptHash)).toBe(true);
+    expect(await nodeDriver.password.verify('wrong', scryptHash)).toBe(false);
     await expect(
       nodeDriver.password.hash('secret', { algorithm: 'bcrypt', memoryCost: 65536, timeCost: 10 })
     ).rejects.toThrow('bcryptjs');
+  });
+
+  it('upgrades WebSocket natively via Deno.upgradeWebSocket when running on Deno', async () => {
+    const events: string[] = [];
+    const mockSocket: any = { send: (m: any) => events.push(`send:${m}`) };
+    const origDeno = (globalThis as any).Deno;
+    (globalThis as any).Deno = {
+      upgradeWebSocket: () => ({
+        socket: mockSocket,
+        response: new Response(null, { status: 200, headers: { 'x-deno-ws': '1' } })
+      })
+    };
+
+    try {
+      const app = new BareJS();
+      app.ws('/ws/:room', {
+        open: (ws) => events.push(`open:${ws.data.params.room}`),
+        message: (ws, msg) => ws.send(`echo:${msg}`),
+        close: (_ws, code) => events.push(`close:${code}`)
+      });
+      app.compile();
+
+      const res = await app.fetch(
+        new Request('http://localhost/ws/general', { headers: { upgrade: 'websocket' } })
+      );
+      expect(res.headers.get('x-deno-ws')).toBe('1');
+      mockSocket.onopen?.();
+      mockSocket.onmessage?.({ data: 'hello' });
+      mockSocket.onclose?.({ code: 1000, reason: 'bye' });
+      expect(events).toEqual(['open:general', 'send:echo:hello', 'close:1000']);
+    } finally {
+      if (origDeno === undefined) delete (globalThis as any).Deno;
+      else (globalThis as any).Deno = origDeno;
+    }
   });
 
   it('works with rateLimit and bareAuth on nodeDriver', async () => {

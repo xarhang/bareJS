@@ -137,9 +137,26 @@ See **[BENCHMARKS.md](./BENCHMARKS.md)** for all 7 scenarios (including SQLite r
 
 ---
 
+## Full Capabilities & Built-In Modules
+
+BareJS is a complete, zero-boilerplate backend platform—every module below ships in the core package with TypeScript types:
+
+| Category | Built-In Capabilities |
+| :--- | :--- |
+| **Core & Routing** | $O(1)$ static `switch` fast-path + radix jump-table (`:params`, `*` wildcards), `BareRouter` sub-app mounting (`app.route()`, `app.use(prefix, router)`), lazy bounded LIFO `Context` pool (`0..65536`), dev-mode Use-After-Free Proxy guard, `app.request()` in-memory test helper |
+| **Validation & Serialization** | Unified `RouteSchemas` (`body`, `query`, `params`, `headers`, `response`, `maxBodySize`) supporting **TypeBox** (`Type`/`t`), **Zod** (`Z`/`z`), and **Native JSON Schema** (`native()`), automatic `number`/`integer`/`boolean`/repeated-array coercion, `413` streaming body limit, `stripUnknown` Mass-Assignment protection, recursive response secret-field stripping |
+| **Type-Safe RPC & Docs** | End-to-end compile-time type inference via `bareClient(app \| url)`, automatic **OpenAPI 3.1** spec (`/docs/json`) + Scalar UI (`/docs`) with `securitySchemes` & `tags`, **JSON-RPC 2.0** (`app.rpc()` with single, batch & notifications) |
+| **Zero-Trust Security** | `bareAuth()` (constant-time HS256 JWT + asymmetric RS256/ES256/JWKS + `revokeToken()`/`isRevoked`), `basicAuth()`, `hasRole()`, `Hash` (Argon2id/bcrypt on Bun; zero-dep `scrypt` fallback on Node/Deno), HMAC-SHA256 signed `HttpOnly` cookies, `cors()`, `csrf()`, `securityHeaders()`, `rateLimit()` (flood-resistant), `trustProxy(false)` |
+| **Resilience & State** | `idempotency()` (`409 IDEMPOTENT_IN_FLIGHT` + `X-Idempotent-Replayed`, caller-scoped), `createSingleflight()` cache-stampede coalescing, `circuitBreaker()` (`503 Retry-After`), `timeout()` (`408`), pluggable `redisStore()` (`Bun.redis` / `ioredis`), overlap-safe `app.cron()` |
+| **Real-Time, Files & Ops** | Parameterized WebSockets (`app.ws('/ws/:room')`), Server-Sent Events (`ctx.sse()`), `ctx.upload()` & $O(\text{chunk})$ streaming `ctx.uploadStream()`, `staticFile()` (ETag, `304`, Range `206`, LRU metadata cache), `compress()` (`zstd`/`br`/`gzip`), `logger()` (`pretty`/`json` + `X-Request-Id`), `healthcheck()` (`/health` + `/ready`), `app.onDrain()` + IPC `DRAIN_REQUEST` |
+| **External Integrations** | Web Standard `ctx.req`/`Response` works out of the box with **Better-Auth**, **GraphQL Yoga**, **Auth0** (JWKS), **Clerk**, **Sentry**, and **OpenTelemetry** — see [docs/integrations.md](./docs/integrations.md) |
+
+---
+
 ## Documentation
 
 - **[Comprehensive Guide](./docs/guide.md)** — Validation & auto-coercion, cookies & uploads, security suite, `app.derive()`, WebSockets, SSE, JSON-RPC 2.0, OpenAPI 3.1, and `bareClient`.
+- **[External Integrations](./docs/integrations.md)** — Ready-to-use recipes for Better-Auth, GraphQL Yoga, Auth0, Clerk, Sentry, and OpenTelemetry.
 - **[API & Configuration Reference](./docs/reference.md)** — Complete `Context` (`ctx`) API table, `poolSize`, `bare.config.ts`, and `NODE_ENV` settings.
 - **[Benchmarks](./BENCHMARKS.md)** — Full 7-scenario results and reproduction instructions.
 - **[Changelog](./CHANGELOG.md)** — Release history and migration notes.

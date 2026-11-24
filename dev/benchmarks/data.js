@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795512325136,
+  "lastUpdate": 1795512385457,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4600,6 +4600,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 2537.9743711213227,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "5a82af2a4555d7c0ac9c7c71a3d8d52fbb1e162e",
+          "message": "test: support spy matchers in Deno bun:test expect shim",
+          "timestamp": "2026-11-24T09:25:34Z",
+          "tree_id": "a973d560d6de6de6da8da720cfdae95cc3d61a49",
+          "url": "https://github.com/xarhang/bareJS/commit/5a82af2a4555d7c0ac9c7c71a3d8d52fbb1e162e"
+        },
+        "date": 1795512385216,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1531.2439325495918,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1775.1816809546865,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5392.941079202241,
             "unit": "undefined"
           }
         ]

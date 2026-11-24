@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795502669036,
+  "lastUpdate": 1795503598710,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4054,6 +4054,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3268.904854211162,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "0c04f05c02fb1639150441670e49df22a472b446",
+          "message": "feat: add native Deno.upgradeWebSocket and zero-dep Node/Deno scrypt fallback",
+          "timestamp": "2026-11-24T06:59:06Z",
+          "tree_id": "4f62f84438dbcc4db5bbe9326aea588ad581f17f",
+          "url": "https://github.com/xarhang/bareJS/commit/0c04f05c02fb1639150441670e49df22a472b446"
+        },
+        "date": 1795503598435,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1757.8360917248256,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1974.4370539618064,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5846.126185140493,
             "unit": "undefined"
           }
         ]

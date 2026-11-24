@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795503719642,
+  "lastUpdate": 1795504119482,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4132,6 +4132,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5010.275408109532,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "8272e6018cdd30b5e22463a77b8c5c950fa33a81",
+          "message": "feat(node): add built-in RFC 6455 WebSocket fallback when ws is not installed",
+          "timestamp": "2026-11-24T07:07:46Z",
+          "tree_id": "5d881141ba8dedafff541ea9bc974667d56c95c4",
+          "url": "https://github.com/xarhang/bareJS/commit/8272e6018cdd30b5e22463a77b8c5c950fa33a81"
+        },
+        "date": 1795504119068,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1276.0363537117903,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1576.0975867144325,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5068.365229827712,
             "unit": "undefined"
           }
         ]

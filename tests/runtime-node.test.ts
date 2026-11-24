@@ -179,4 +179,42 @@ describe('Node Runtime Driver (nodeDriver)', () => {
       await app.stop(true);
     }
   });
+
+  it('serves live WebSockets via built-in RFC 6455 fallback on nodeDriver without ws', async () => {
+    setRuntime(nodeDriver);
+    const app = new BareJS();
+    app.ws('/ws/:room', {
+      open: (ws) => ws.send(`joined:${ws.data.params.room}`),
+      message: (ws, msg) => ws.send(`echo:${msg}`)
+    });
+
+    const server = app.listen(0, '127.0.0.1', false);
+    if (!server.listening) await new Promise((r) => server.once('listening', r));
+    const port = (server.address() as any).port;
+
+    try {
+      const received: string[] = [];
+      await new Promise<void>((resolve, reject) => {
+        const client = new WebSocket(`ws://127.0.0.1:${port}/ws/vientiane`);
+        const timer = setTimeout(() => reject(new Error('WS timeout')), 3000);
+        client.onmessage = (ev) => {
+          received.push(String(ev.data));
+          if (received.length === 1) {
+            client.send('sabai');
+          } else if (received.length === 2) {
+            clearTimeout(timer);
+            client.close(1000, 'done');
+            resolve();
+          }
+        };
+        client.onerror = (err) => {
+          clearTimeout(timer);
+          reject(err);
+        };
+      });
+      expect(received).toEqual(['joined:vientiane', 'echo:sabai']);
+    } finally {
+      await app.stop(true);
+    }
+  });
 });

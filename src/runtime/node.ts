@@ -1,4 +1,4 @@
-import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { extname } from 'node:path';
@@ -228,14 +228,187 @@ export const nodeDriver: RuntimeDriver = {
           const wsPkg = 'ws';
           wssPromise = import(wsPkg).then(
             (m: any) => new m.WebSocketServer({ noServer: true }),
-            () => {
-              throw new Error(
-                '[BareJS] WebSocket on Node.js requires the optional peer dependency "ws". Install it with: npm install ws'
-              );
-            }
+            () => null
           );
         }
         return wssPromise;
+      };
+
+      const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+      const MAX_WS_FRAME = 16 * 1024 * 1024;
+
+      const buildWsFrame = (opcode: number, payload: Buffer): Buffer => {
+        const len = payload.length;
+        let header: Buffer;
+        if (len < 126) {
+          header = Buffer.allocUnsafe(2);
+          header[0] = 0x80 | opcode;
+          header[1] = len;
+        } else if (len < 65536) {
+          header = Buffer.allocUnsafe(4);
+          header[0] = 0x80 | opcode;
+          header[1] = 126;
+          header.writeUInt16BE(len, 2);
+        } else {
+          header = Buffer.allocUnsafe(10);
+          header[0] = 0x80 | opcode;
+          header[1] = 127;
+          header.writeBigUInt64BE(BigInt(len), 2);
+        }
+        return Buffer.concat([header, payload]);
+      };
+
+      const handleNativeWsUpgrade = (req: IncomingMessage, socket: any, head: Buffer, data: any) => {
+        const key = req.headers['sec-websocket-key'];
+        if (!key || Array.isArray(key)) {
+          socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        const accept = createHash('sha1').update(key.trim() + WS_GUID).digest('base64');
+        socket.write(
+          'HTTP/1.1 101 Switching Protocols\r\n' +
+          'Upgrade: websocket\r\n' +
+          'Connection: Upgrade\r\n' +
+          `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
+        );
+
+        let closed = false;
+        const wsWrapper: any = {
+          data,
+          send(msg: string | Uint8Array | Buffer) {
+            if (closed || socket.destroyed) return;
+            if (typeof msg === 'string') {
+              socket.write(buildWsFrame(0x1, Buffer.from(msg, 'utf8')));
+            } else {
+              const buf = Buffer.isBuffer(msg) ? msg : Buffer.from(msg.buffer, msg.byteOffset, msg.byteLength);
+              socket.write(buildWsFrame(0x2, buf));
+            }
+          },
+          close(code = 1000, reason = '') {
+            if (closed || socket.destroyed) return;
+            closed = true;
+            const reasonBuf = Buffer.from(reason, 'utf8');
+            const payload = Buffer.allocUnsafe(2 + reasonBuf.length);
+            payload.writeUInt16BE(code, 0);
+            reasonBuf.copy(payload, 2);
+            socket.end(buildWsFrame(0x8, payload));
+            wsCfg.adapter.close(wsWrapper, code, reason);
+          }
+        };
+
+        wsCfg.adapter.open(wsWrapper);
+
+        let buf: Buffer = head && head.length > 0 ? Buffer.from(head) : Buffer.alloc(0);
+        let fragOpcode = 0;
+        let fragChunks: Buffer[] = [];
+        let fragTotal = 0;
+
+        const processFrames = () => {
+          while (buf.length >= 2) {
+            const b0 = buf[0]!;
+            const b1 = buf[1]!;
+            const fin = (b0 & 0x80) !== 0;
+            const opcode = b0 & 0x0f;
+            const masked = (b1 & 0x80) !== 0;
+            let payloadLen = b1 & 0x7f;
+            let offset = 2;
+
+            if (payloadLen === 126) {
+              if (buf.length < 4) return;
+              payloadLen = buf.readUInt16BE(2);
+              offset = 4;
+            } else if (payloadLen === 127) {
+              if (buf.length < 10) return;
+              const bigLen = buf.readBigUInt64BE(2);
+              if (bigLen > BigInt(MAX_WS_FRAME)) {
+                wsWrapper.close(1009, 'Message too big');
+                socket.destroy();
+                return;
+              }
+              payloadLen = Number(bigLen);
+              offset = 10;
+            }
+
+            if (payloadLen > MAX_WS_FRAME) {
+              wsWrapper.close(1009, 'Message too big');
+              socket.destroy();
+              return;
+            }
+
+            const maskLen = masked ? 4 : 0;
+            if (buf.length < offset + maskLen + payloadLen) return;
+
+            let payload = buf.subarray(offset + maskLen, offset + maskLen + payloadLen);
+            if (masked) {
+              const mask = buf.subarray(offset, offset + 4);
+              const unmasked = Buffer.allocUnsafe(payloadLen);
+              for (let i = 0; i < payloadLen; i++) {
+                unmasked[i] = payload[i]! ^ mask[i & 3]!;
+              }
+              payload = unmasked;
+            } else {
+              payload = Buffer.from(payload);
+            }
+
+            buf = buf.subarray(offset + maskLen + payloadLen);
+
+            if (opcode === 0x8) {
+              const code = payload.length >= 2 ? payload.readUInt16BE(0) : 1000;
+              const reason = payload.length > 2 ? payload.subarray(2).toString('utf8') : '';
+              wsWrapper.close(code, reason);
+              return;
+            }
+            if (opcode === 0x9) {
+              if (!closed && !socket.destroyed) socket.write(buildWsFrame(0xA, payload));
+              continue;
+            }
+            if (opcode === 0xA) continue;
+
+            if (opcode !== 0x0) {
+              if (fin) {
+                wsCfg.adapter.message(wsWrapper, opcode === 0x1 ? payload.toString('utf8') : payload);
+              } else {
+                fragOpcode = opcode;
+                fragChunks = [payload];
+                fragTotal = payload.length;
+              }
+            } else {
+              fragTotal += payload.length;
+              if (fragTotal > MAX_WS_FRAME) {
+                wsWrapper.close(1009, 'Message too big');
+                socket.destroy();
+                return;
+              }
+              fragChunks.push(payload);
+              if (fin) {
+                const full = Buffer.concat(fragChunks);
+                fragChunks = [];
+                fragTotal = 0;
+                wsCfg.adapter.message(wsWrapper, fragOpcode === 0x1 ? full.toString('utf8') : full);
+              }
+            }
+          }
+        };
+
+        if (buf.length > 0) processFrames();
+
+        socket.on('data', (chunk: Buffer) => {
+          buf = buf.length === 0 ? chunk : Buffer.concat([buf, chunk]);
+          processFrames();
+        });
+        socket.on('close', () => {
+          if (!closed) {
+            closed = true;
+            wsCfg.adapter.close(wsWrapper, 1006, '');
+          }
+        });
+        socket.on('error', () => {
+          if (!closed) {
+            closed = true;
+            wsCfg.adapter.close(wsWrapper, 1006, '');
+          }
+        });
       };
 
       server.on('upgrade', async (req, socket, head) => {
@@ -246,8 +419,12 @@ export const nodeDriver: RuntimeDriver = {
         }
         try {
           const wss = await getWss();
+          const data = matched.params ? { ...matched.handler, params: matched.params } : matched.handler;
+          if (!wss) {
+            handleNativeWsUpgrade(req, socket, head, data);
+            return;
+          }
           wss.handleUpgrade(req, socket, head, (rawWs: any) => {
-            const data = matched.params ? { ...matched.handler, params: matched.params } : matched.handler;
             rawWs.data = data;
             wsCfg.adapter.open(rawWs);
             rawWs.on('message', (msg: any, isBinary: boolean) => {

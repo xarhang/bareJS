@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795514116631,
+  "lastUpdate": 1795514586001,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4717,6 +4717,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5823.188530973452,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "e1a6864da8367fcb84824e267d8e663af4aef1e2",
+          "message": "docs: surface full feature set and zero-dep Node/Deno support at top of README",
+          "timestamp": "2026-11-24T10:02:14Z",
+          "tree_id": "f2c5de39811ffd9dd4a85fd1a0d497a574f879f1",
+          "url": "https://github.com/xarhang/bareJS/commit/e1a6864da8367fcb84824e267d8e663af4aef1e2"
+        },
+        "date": 1795514585753,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 912.8654539952983,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1179.327870243536,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 4359.778140788144,
             "unit": "undefined"
           }
         ]

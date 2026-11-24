@@ -38,35 +38,30 @@ export function spyOn(obj: any, method: string) {
   const original = obj[method];
   let impl: (...args: any[]) => any = (...args: any[]) =>
     typeof original === "function" ? original.apply(obj, args) : undefined;
-  const calls: any[][] = [];
-  const wrapper: any = function (this: any, ...args: any[]) {
-    calls.push(args);
+  const sp: any = spy(function (this: any, ...args: any[]) {
     return impl.apply(this, args);
-  };
-  obj[method] = wrapper;
+  });
+  obj[method] = sp;
 
-  const handle: any = {
-    calls,
-    mockImplementation(fn: (...args: any[]) => any) {
-      impl = fn;
-      return handle;
-    },
-    mockReturnValue(val: any) {
-      impl = () => val;
-      return handle;
-    },
-    mockResolvedValue(val: any) {
-      impl = () => Promise.resolve(val);
-      return handle;
-    },
-    mockRestore() {
-      obj[method] = original;
-    },
-    mockClear() {
-      calls.length = 0;
-    },
+  sp.mockImplementation = (fn: (...args: any[]) => any) => {
+    impl = fn;
+    return sp;
   };
-  return handle;
+  sp.mockReturnValue = (val: any) => {
+    impl = () => val;
+    return sp;
+  };
+  sp.mockResolvedValue = (val: any) => {
+    impl = () => Promise.resolve(val);
+    return sp;
+  };
+  sp.mockRestore = () => {
+    obj[method] = original;
+  };
+  sp.mockClear = () => {
+    if (Array.isArray(sp.calls)) sp.calls.length = 0;
+  };
+  return sp;
 }
 
 export const mock = Object.assign(

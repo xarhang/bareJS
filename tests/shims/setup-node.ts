@@ -1,7 +1,13 @@
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import zlib from "node:zlib";
 import { BareJS } from "../../src/core/bare";
+
+if (typeof (globalThis as any).WebSocket === "undefined") {
+  const req = createRequire(import.meta.url);
+  (globalThis as any).WebSocket = req("ws").WebSocket;
+}
 
 if (!(globalThis as any).Bun) {
   (globalThis as any).Bun = {

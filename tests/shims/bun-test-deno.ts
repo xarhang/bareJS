@@ -6,9 +6,9 @@ export {
   afterAll,
   beforeEach,
   afterEach,
-} from "jsr:@std/testing/bdd@^1.0.0";
+} from "jsr:@std/testing@^1.0.0/bdd";
 export { expect } from "jsr:@std/expect@^1.0.0";
-import { spy, stub } from "jsr:@std/testing/mock@^1.0.0";
+import { spy, stub } from "jsr:@std/testing@^1.0.0/mock";
 import * as zlib from "node:zlib";
 import * as path from "node:path";
 import { BareJS } from "../../src/core/bare.ts";

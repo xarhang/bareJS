@@ -1,19 +1,16 @@
 // src/security/hash.ts
 import { BARE_CONFIG } from '../core/config';
+import { runtime } from '../runtime';
 
 export const Hash = {
   make: (data: string): Promise<string> => {
-    if (BARE_CONFIG.hash.algorithm === 'bcrypt') {
-      const cost = Math.max(4, Math.min(31, BARE_CONFIG.hash.timeCost));
-      return Bun.password.hash(data, { algorithm: 'bcrypt', cost });
-    }
-    return Bun.password.hash(data, BARE_CONFIG.hash);
+    return runtime.password.hash(data, BARE_CONFIG.hash);
   },
 
   verify: async (data: string, hash: string): Promise<boolean> => {
     if (!hash || typeof hash !== 'string') return false;
     try {
-      return await Bun.password.verify(data, hash);
+      return await runtime.password.verify(data, hash);
     } catch {
       return false;
     }

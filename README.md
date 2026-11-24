@@ -103,6 +103,25 @@ app.get('/assets/*', (ctx: Context) => ({ path: ctx.params['*'] }));
 app.listen(3000);
 ```
 
+### 🌐 Multi-Runtime (Bun, Node.js, Deno)
+
+BareJS selects its runtime driver **once at startup**—preserving 100% zero-overhead native speed on Bun while running the exact same app on Node.js (`>=20`) and Deno:
+
+```typescript
+// Bun (Native Mode — default)
+import { BareJS } from 'barejs';
+app.listen(3000);
+
+// Node.js (>= 20)
+import { BareJS } from 'barejs/node';
+app.listen(3000);
+
+// Deno / Web-Standard fetch hosts
+Deno.serve({ port: 3000 }, (req, info) => app.fetch(req, info.remoteAddr.hostname));
+```
+
+> Optional peer dependencies on Node.js: install `ws` if using `app.ws()`, and `@node-rs/argon2` (or `bcryptjs`) if using `Hash`.
+
 ---
 
 ## 📘 Comprehensive Guide

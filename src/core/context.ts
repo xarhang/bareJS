@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+const _peek: ((p: any) => any) | undefined = (globalThis as any).Bun?.peek;
+
 let _userStreamsCreated = 0;
 const _userStreams = new WeakSet<ReadableStream>();
 if (typeof globalThis.ReadableStream === 'function' && !(globalThis.ReadableStream as any).__bareTracked) {
@@ -354,7 +356,7 @@ export class Context {
         );
       }
       const tp = this.req.text();
-      const peeked = Bun.peek(tp);
+      const peeked = _peek !== undefined ? _peek(tp) : tp;
       if (typeof peeked === "string") {
         try {
           return this._parseAndSanitizeJson(peeked, maxBytes);

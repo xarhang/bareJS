@@ -9,9 +9,19 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/types/index.d.ts"
+      "types": "./dist/types/index.d.ts",
+      "bun": "./dist/index.js",
+      "node": "./dist/node.js",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/types/node.d.ts",
+      "import": "./dist/node.js"
     }
+  },
+  "engines": {
+    "bun": ">=1.1.0",
+    "node": ">=20.0.0"
   },
   "sideEffects": false,
   "repository": {
@@ -29,6 +39,8 @@
   },
   "keywords": [
     "bun",
+    "nodejs",
+    "deno",
     "web-framework",
     "framework",
     "typescript",
@@ -52,13 +64,25 @@
   "license": "MIT",
   "peerDependencies": {
     "@sinclair/typebox": "^0.34.46",
-    "zod": "^3.0.0"
+    "zod": "^3.0.0",
+    "ws": "^8.0.0",
+    "@node-rs/argon2": "^2.0.0",
+    "bcryptjs": "^2.4.3"
   },
   "peerDependenciesMeta": {
     "@sinclair/typebox": {
       "optional": true
     },
     "zod": {
+      "optional": true
+    },
+    "ws": {
+      "optional": true
+    },
+    "@node-rs/argon2": {
+      "optional": true
+    },
+    "bcryptjs": {
       "optional": true
     }
   },

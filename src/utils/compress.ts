@@ -1,5 +1,6 @@
 import type { Context, Middleware, Next } from '../core/context';
 import { brotliCompressSync, constants as zlibConstants } from 'node:zlib';
+import { runtime } from '../runtime';
 
 export type CompressionEncoding = 'zstd' | 'br' | 'gzip';
 
@@ -20,7 +21,7 @@ export const compress = (options: CompressOptions = {}): Middleware => {
   const minSize = options.minSize ?? 1024;
   const level = options.level ?? 6;
   const encodings: CompressionEncoding[] = options.encodings ?? ['zstd', 'br', 'gzip'];
-  const hasZstd = typeof (Bun as any).zstdCompressSync === 'function';
+  const hasZstd = typeof runtime.zstd === 'function';
 
   const negotiate = (accept: string): CompressionEncoding | null => {
     const lower = accept.toLowerCase();
@@ -78,13 +79,13 @@ export const compress = (options: CompressOptions = {}): Middleware => {
     const raw = new Uint8Array(buf);
     let compressed: Uint8Array;
     if (chosen === 'zstd') {
-      compressed = (Bun as any).zstdCompressSync(raw);
+      compressed = runtime.zstd!(raw);
     } else if (chosen === 'br') {
       compressed = brotliCompressSync(raw, {
         params: { [zlibConstants.BROTLI_PARAM_QUALITY]: Math.min(11, Math.max(1, level)) }
       });
     } else {
-      compressed = Bun.gzipSync(raw, { level });
+      compressed = runtime.gzip(raw, level);
     }
 
     const headers = new Headers(res.headers);

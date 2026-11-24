@@ -1,5 +1,6 @@
 import { resolve, sep } from 'node:path';
 import { stat, realpath } from 'node:fs/promises';
+import { runtime } from '../runtime';
 
 export interface StaticMetadataCacheOptions {
   /** Maximum cached file metadata entries (default: 1000) */
@@ -115,7 +116,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
       }
     }
 
-    const file = Bun.file(realFile);
+    const file = runtime.openFile(realFile);
 
     const headers: Record<string, string> = {
       'Cache-Control': `public, max-age=${maxAge}`,
@@ -181,7 +182,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
 
     if (file.type) headers['Content-Type'] = file.type;
     headers['Content-Length'] = String(fileSize);
-    return new Response(method === 'HEAD' ? null : file, { status: 200, headers });
+    return new Response(method === 'HEAD' ? null : file.full(), { status: 200, headers });
   };
   (mw as any).__isStatic = true;
   return mw;

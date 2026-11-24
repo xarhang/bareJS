@@ -9,6 +9,10 @@ import { BARE_CONFIG } from "./config";
 import { generateOpenAPISpec, renderDocsHTML, type OpenAPIOptions } from "../utils/openapi";
 import type { RouteSchemas } from "../security/validators";
 import type { RouteSchema } from "../client/index";
+import { runtime, type ServerHandle } from "../runtime";
+import { type WebSocketRouteHandler } from "./ws-match";
+
+export type { WebSocketRouteHandler };
 
 export function normalizePoolSize(
   poolSize: number,
@@ -24,13 +28,6 @@ export interface CronOptions {
   runOnStart?: boolean;
   /** Optional error handler when the cron callback throws or rejects */
   onError?: (err: any) => void;
-}
-
-export interface WebSocketRouteHandler {
-  open?: (ws: any) => void;
-  message?: (ws: any, message: string | Buffer) => void;
-  close?: (ws: any, code: number, reason: string) => void;
-  drain?: (ws: any) => void;
 }
 
 export interface NotFoundResponse {
@@ -94,7 +91,7 @@ export class BareJS<
   private stopHooks: (() => void | Promise<void>)[] = [];
   private drainHooks: (() => void | Promise<void>)[] = [];
   private crons: Array<{ name: string; timer: ReturnType<typeof setInterval> }> = [];
-  private server?: ReturnType<typeof Bun.serve>;
+  private server?: ServerHandle;
   private shutdownHandler?: () => Promise<void>;
   private ipcDrainHandler?: (msg: any) => void;
   private _draining = false;
@@ -716,9 +713,18 @@ export class BareJS<
     const isLog = this._useLog;
     this.tree = new RadixNode();
     const explicitOptionsPaths = new Set<string>();
+    const staticRoutesList: Array<{ path: string; method: string; fn: Function }> = [];
+    const normStatic = (p: string) => {
+      const c = p.replace(/\/+/g, '/');
+      return c.length > 1 && c.endsWith('/') ? c.slice(0, -1) : (c || '/');
+    };
     for (const route of this.routes) {
       if (route.method === 'OPTIONS') explicitOptionsPaths.add(route.path);
-      this.tree.insert(route.path, route.method, this.compileHandler(route.handlers, isLog));
+      const compiledFn = this.compileHandler(route.handlers, isLog);
+      this.tree.insert(route.path, route.method, compiledFn);
+      if (!route.path.includes(':') && !route.path.includes('*')) {
+        staticRoutesList.push({ path: normStatic(route.path), method: route.method, fn: compiledFn });
+      }
     }
     for (const route of this.routes) {
       if (route.method === 'OPTIONS' || explicitOptionsPaths.has(route.path)) continue;
@@ -735,7 +741,11 @@ export class BareJS<
           ...route.handlers.slice(0, lastCorsIdx + 1).filter((h: any, idx: number) => idx === lastCorsIdx || !h?.__isCors),
           () => new Response(null, { status: 204 })
         ];
-        this.tree.insert(route.path, 'OPTIONS', this.compileHandler(preflightPipeline, isLog));
+        const preflightFn = this.compileHandler(preflightPipeline, isLog);
+        this.tree.insert(route.path, 'OPTIONS', preflightFn);
+        if (!route.path.includes(':') && !route.path.includes('*')) {
+          staticRoutesList.push({ path: normStatic(route.path), method: 'OPTIONS', fn: preflightFn });
+        }
       }
     }
 
@@ -809,9 +819,13 @@ export class BareJS<
     };
 
     const hoistedHandlers: Function[] = [];
+    const handlerToName = new Map<Function, string>();
     const register = (h: Function) => {
+      const existing = handlerToName.get(h);
+      if (existing) return existing;
       const name = `h${hoistedHandlers.length}`;
       hoistedHandlers.push(h);
+      handlerToName.set(h, name);
       return name;
     };
 
@@ -890,7 +904,7 @@ export class BareJS<
     const useCompactEmit = this.routes.length > 16;
     const relArgs = isDevUaf ? 'rawCtx, _uaf' : 'ctx';
     const errArgs = isDevUaf ? `e, rawCtx, _uaf${isLog ? ', doLog' : ''}` : `e, ctx${isLog ? ', doLog' : ''}`;
-    const routerCode = tree.jitCompile(register, 0, 'url', 's', [], (hName: string) =>
+    const emitInvoke = (hName: string) =>
       useCompactEmit
         ? `out = ${hName}${callSuffix};
        if (out && out.then) return out.then((v) => { _rel(${relArgs}); return v; }, (e) => _onErr(${errArgs}));
@@ -899,8 +913,43 @@ export class BareJS<
         : `out = ${hName}${callSuffix};
        if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { ${handleErrCode} });
        ${releaseCode}
-       return out;`
-    );
+       return out;`;
+
+    const routerCode = tree.jitCompile(register, 0, 'url', 's', [], emitInvoke);
+
+    let staticFastPathCode = '';
+    if (staticRoutesList.length > 0) {
+      const grouped = new Map<string, Map<string, string>>();
+      for (const entry of staticRoutesList) {
+        const hName = handlerToName.get(entry.fn);
+        if (!hName) continue;
+        let mMap = grouped.get(entry.path);
+        if (!mMap) {
+          mMap = new Map<string, string>();
+          grouped.set(entry.path, mMap);
+        }
+        mMap.set(entry.method, hName);
+      }
+      if (grouped.size > 0) {
+        let cases = '';
+        for (const [p, mMap] of grouped) {
+          let mCases = '';
+          let allHandler: string | undefined;
+          for (const [m, hName] of mMap) {
+            if (m === 'ALL') {
+              allHandler = hName;
+            } else {
+              mCases += `case ${JSON.stringify(m)}: ${emitInvoke(hName)}\n`;
+            }
+          }
+          if (allHandler) {
+            mCases += `default: ${emitInvoke(allHandler)}\n`;
+          }
+          cases += `case ${JSON.stringify(p)}:\n  switch (method) {\n  ${mCases}  }\n  break;\n`;
+        }
+        staticFastPathCode = `switch (rawPath) {\n${cases}}`;
+      }
+    }
 
     const hNames = hoistedHandlers.map((_, i) => `h${i}`);
 
@@ -1028,6 +1077,7 @@ export class BareJS<
     let s = url.indexOf('/', 8);
     const q = s === -1 ? -1 : url.indexOf('?', s);
     const urlLen = q === -1 ? url.length : q;
+    ${staticFastPathCode ? "const rawPath = s === -1 ? '/' : url.slice(s, urlLen);" : ''}
     if (s !== -1) s++;
     else s = urlLen;
 
@@ -1047,6 +1097,8 @@ export class BareJS<
     try {
       ${ctxVar}.req = req;
       ${ctxVar}._peerIp = peerIp;
+
+      ${staticFastPathCode}
 
       ${routerCode}
 
@@ -1131,7 +1183,7 @@ export class BareJS<
   \x1b[33m |____/ \\__,_|_|  \\___| \\___/|_____|\x1b[0m
                                          
    \x1b[32m🚀 ${this.name} is running in development mode\x1b[0m
-   \x1b[90m⚙️  Pool Size: ${this.maxPool} | JIT: Enabled | Port: ${finalPort}\x1b[0m
+   \x1b[90m⚙️  Runtime: ${runtime.name} | Pool Size: ${this.maxPool} | JIT: Enabled | Port: ${finalPort}\x1b[0m
    \x1b[36m🛡️  Hash: ${BARE_CONFIG.hash.algorithm} (${BARE_CONFIG.hash.memoryCost / 1024}MB) | Iterations: ${BARE_CONFIG.hash.timeCost}\x1b[0m
       `);
     }
@@ -1140,66 +1192,16 @@ export class BareJS<
     const self = this;
     const hasWs = wsRoutes.size > 0;
 
-    const server = hasWs
-      ? Bun.serve<WebSocketRouteHandler>({
-          port: finalPort,
-          hostname,
-          reusePort,
-          maxRequestBodySize,
-          fetch(req: Request, srv: any) {
-            if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
-              const url = req.url;
-              const s = url.indexOf('/', 8);
-              const q = s === -1 ? -1 : url.indexOf('?', s);
-              const path = s === -1 ? '/' : (q === -1 ? url.slice(s) : url.slice(s, q));
-              const collapsed = path.replace(/\/+/g, '/');
-              const normalized = collapsed.length > 1 && collapsed.endsWith('/') ? collapsed.slice(0, -1) : collapsed;
-              let handler = wsRoutes.get(normalized);
-              let params: Record<string, string> | undefined;
-              if (!handler) {
-                const reqParts = normalized.split('/').filter(Boolean);
-                for (const [pattern, h] of wsRoutes) {
-                  if (!pattern.includes(':') && !pattern.includes('*')) continue;
-                  const patParts = pattern.split('/').filter(Boolean);
-                  const matched: Record<string, string> = {};
-                  let ok = true;
-                  for (let i = 0; i < patParts.length; i++) {
-                    const pp = patParts[i]!;
-                    if (pp === '*') {
-                      matched['*'] = reqParts.slice(i).join('/');
-                      break;
-                    }
-                    if (i >= reqParts.length) { ok = false; break; }
-                    if (pp.startsWith(':')) {
-                      matched[pp.slice(1)] = reqParts[i]!;
-                    } else if (pp !== reqParts[i]) {
-                      ok = false; break;
-                    }
-                  }
-                  if (ok && (patParts.includes('*') || patParts.length === reqParts.length)) {
-                    handler = h;
-                    params = matched;
-                    break;
-                  }
-                }
-              }
-              if (handler && srv.upgrade(req, { data: params ? { ...handler, params } : handler })) {
-                return undefined as any;
-              }
-            }
-            return self.fetch(req, srv?.requestIP?.(req)?.address);
-          },
-          websocket: this.wsAdapter
-        })
-      : Bun.serve({
-          port: finalPort,
-          hostname,
-          reusePort,
-          maxRequestBodySize,
-          fetch(req: Request, srv: any) {
-            return self.fetch(req, srv?.requestIP?.(req)?.address);
-          }
-        });
+    const server = runtime.serve({
+      port: finalPort,
+      hostname,
+      reusePort,
+      maxRequestBodySize,
+      fetch(req: Request, peerIp?: string) {
+        return self.fetch(req, peerIp);
+      },
+      ws: hasWs ? { routes: wsRoutes, adapter: this.wsAdapter } : undefined
+    });
 
     this.server = server;
     for (const hook of this.startHooks) {
@@ -1237,7 +1239,7 @@ export class BareJS<
     };
     this.ipcDrainHandler = onIpcMessage;
     process.on("message", onIpcMessage);
-    return server;
+    return server.raw;
   }
 }
 

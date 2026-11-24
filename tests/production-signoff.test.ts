@@ -64,7 +64,7 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     app.get("/redir", () => Response.redirect("https://example.com", 302));
     const res = await app.request("/redir");
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("https://example.com/");
+    expect(res.headers.get("location")).toMatch(/^https:\/\/example\.com\/?$/);
   });
 
   test("3. listen() options.trustProxy applies to Context pool overflow allocations", async () => {

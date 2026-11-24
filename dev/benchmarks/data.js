@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795508852682,
+  "lastUpdate": 1795509328070,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4249,6 +4249,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5885.392147919444,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "cc99bbf8ce24079cba75074a8a6072cec7e2c92f",
+          "message": "ci: add Node 20/22 and Deno 2 CI matrix, link SECURITY.md, ignore result.json",
+          "timestamp": "2026-11-24T08:34:34Z",
+          "tree_id": "ce064af68ed495a830f5dc581601322d589d0117",
+          "url": "https://github.com/xarhang/bareJS/commit/cc99bbf8ce24079cba75074a8a6072cec7e2c92f"
+        },
+        "date": 1795509327510,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1460.9185896201766,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1784.2952571810288,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5731.267166822966,
             "unit": "undefined"
           }
         ]

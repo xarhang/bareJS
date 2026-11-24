@@ -2,6 +2,18 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.60] - 2026-11-23
+
+### Added
+- **Deno Native WebSockets (`Deno.upgradeWebSocket`)** (`src/core/bare.ts`):
+  - `app.ws()` routes now upgrade natively on Deno via `Deno.upgradeWebSocket(req)` with zero extra dependencies and zero overhead on Bun and Node.js.
+- **Zero-Dependency Native `scrypt` Password Hashing on Node.js & Deno** (`src/runtime/node.ts`):
+  - `Hash.make()` and `Hash.verify()` automatically fall back to `node:crypto.scrypt` + `timingSafeEqual` (`$scrypt$...`) when `@node-rs/argon2` is not installed.
+- **Tests**: Added tests for native `scrypt` fallback and `Deno.upgradeWebSocket` (**424 tests / 6,253 assertions**).
+
+### Documentation
+- Restructured `README.md` for multi-runtime clarity (Bun, Node.js, Deno), moved deep guides to `docs/guide.md` and `docs/reference.md`, and created `BENCHMARKS.md` with full 7-scenario results and automated CI updates.
+
 ## [0.1.59] - 2026-11-23
 
 ### Added

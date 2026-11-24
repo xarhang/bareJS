@@ -1,6 +1,6 @@
 # BareJS (`barejs`) — AI Quick Reference (`llms.txt`)
 
-> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`), **Node.js** (`>= 20` via `barejs/node`), and **Deno** with built-in security (Argon2id, HS256/RS256/ES256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip/Brotli/Zstd `compress`, `app.cron`, Security Headers, DoS limits) and **100% Function & Line Test Coverage (423 tests / 6,249 assertions)**.
+> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`), **Node.js** (`>= 20` via `barejs/node`), and **Deno** with built-in security (Argon2id/scrypt, HS256/RS256/ES256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip/Brotli/Zstd `compress`, `app.cron`, Security Headers, DoS limits) and **100% Function & Line Test Coverage (424 tests / 6,253 assertions)**.
 
 ## 1. Installation & Minimal App (Bun, Node.js, Deno)
 ```ts

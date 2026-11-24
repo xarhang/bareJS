@@ -111,8 +111,8 @@ Deno.serve({ port: 3000 }, (req, info) => app.fetch(req, info.remoteAddr.hostnam
 | **Streaming (`ctx.sse`, `ctx.upload`, `ctx.uploadStream`)** | ✅ | ✅ | ✅ |
 | **Static Files (`staticFile`)** | ✅ | ✅ | ✅ |
 | **Compression (`compress` — `gzip` / `br` / `zstd`)** | ✅ | ✅ (`gzip` / `br`) | ✅ (`gzip` / `br`) |
-| **WebSockets (`app.ws`)** | ✅ (Native) | ⚠️ Requires `ws` | ✅ (Native `Deno.upgradeWebSocket`) |
-| **Password Hashing (`Hash`)** | ✅ (Native Argon2id / bcrypt) | ✅ (`scrypt`) / ⚠️ (`Argon2id`/`bcrypt`) | ✅ (`scrypt`) / ⚠️ (`Argon2id`/`bcrypt`) |
+| **WebSockets (`app.ws`)** | ✅ Native | ⚠️ Requires `ws` | ✅ Native (`Deno.upgradeWebSocket`) |
+| **Password Hashing (`Hash`)** | ✅ Native (`Argon2id` / `bcrypt`) | ✅ Native (`scrypt`) · Optional `Argon2id` | ✅ Native (`scrypt`) · Optional `Argon2id` |
 
 ---
 

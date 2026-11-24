@@ -1,8 +1,8 @@
 <div align="center">
 <br />
 <h1>Bare<span style="color: #F7DF1E;">JS</span></h1>
-<p><strong>The "Metal" of Web Frameworks</strong></p>
-<p><i>An ultra-high-performance JIT-compiled web engine built for Bun, architected strictly for Mechanical Sympathy, Zero-Trust Security, and Effortless Developer Experience.</i></p>
+<p><strong>The batteries-included Bun web framework engineered for zero-overhead speed.</strong></p>
+<p><i>BareJS delivers everything you need for production APIs out of the box—built-in <strong>TypeBox &amp; Zod validation</strong>, <strong>end-to-end type safety</strong> (<code>bareClient</code>), <strong>auto-generated OpenAPI 3.1</strong>, <strong>native WebSockets</strong>, <strong>JSON-RPC 2.0</strong>, <strong>resilience primitives</strong>, and <strong>zero-trust security</strong>—powered by a JIT-compiled O(1) router and LIFO object pooling.</i></p>
 
 <p>
 <a href="https://www.npmjs.com/package/barejs">
@@ -19,6 +19,23 @@
 </a>
 </p>
 </div>
+
+> [!TIP]
+> **Using AI Coding Assistants (Cursor, Copilot, Claude, Windsurf)?** Point them to [`llms.txt`](./llms.txt) for a complete, token-efficient reference of every BareJS API.
+
+---
+
+## 🚀 Batteries Included, Zero Overhead
+
+* **Core Performance**: $O(1)$ Radix Jump-Table Router (inline `switch` dispatch for static, `:params`, and `/*` wildcards), JIT-compiled route/middleware pipelines (`AsyncFunction` fast paths), and concurrency-safe lazy LIFO `Context` object pooling (`0..65536`) with dev-mode Use-After-Free Proxy guard.
+* **Type Safety & Validation**: Unified declarative schema validation for `body`, `query`, `params`, `headers`, and `response` with **TypeBox**, **Zod**, or **Native JSON Schema**—featuring automatic `number`/`boolean` coercion, `maxBodySize` (`413`) DoS guard, `stripUnknown` Mass-Assignment protection, and **end-to-end type inference** (`bareClient(app)`) with zero runtime overhead.
+* **API Documentation & RPC**: Automatic **OpenAPI 3.1** (`app.docs`) generation with `securitySchemes`, `servers`, and `tags` directly from route schemas, plus built-in **JSON-RPC 2.0** (`app.rpc`).
+* **Real-Time & Streaming**: Native parameterized **WebSockets** (`app.ws('/ws/:room')`), **Server-Sent Events** (`ctx.sse`), and native zero-dependency Gzip compression (`compress` via `Bun.gzipSync`).
+* **Built-In Resilience & Jobs**: Production `circuitBreaker` (`503 Retry-After`), `idempotency` (`409 IDEMPOTENT_IN_FLIGHT`), `createSingleflight` cache-stampede protection, and overlap-safe `app.cron` background jobs.
+* **Zero-Trust Security & Utilities**: Built-in `securityHeaders()`, `cors()`, `csrf()`, `timeout()`, `rateLimit()`, `trustProxy(false)` anti-spoofing, `bareAuth()` (constant-time HS256 JWT + `revokeToken()`/`isRevoked`), `Hash` (Argon2id), HMAC-signed cookies, `ctx.upload()` / streaming `ctx.uploadStream()`, and symlink-safe `staticFile()`.
+* **Ergonomics & Observability**: Dual response style (return plain objects/strings Elysia-style OR `ctx.json()`/`ctx.html()`/`ctx.text()`/`ctx.redirect()`/`ctx.send()`), `logger()` (`pretty`/`json` + `X-Request-Id`), `healthcheck()` (`/health` + `/ready`), and `app.onDrain()` + IPC `DRAIN_REQUEST` graceful draining.
+
+> Verified with **419 Automated Tests (6,231 assertions)** and **100.00% Function & 100.00% Line Coverage**.
 
 ---
 
@@ -56,29 +73,8 @@ All benchmark numbers below are **automatically generated on every push to `main
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 
-> Verified with **419 Automated Tests (6,231 assertions)** and **100.00% Function & 100.00% Line Coverage**.
->
 > [!TIP]
 > **View our [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/)** for historical data and detailed performance trends.
-
-> [!TIP]
-> **Using AI Coding Assistants (Cursor, Copilot, Claude, Windsurf)?** Point them to [`llms.txt`](./llms.txt) for a complete, token-efficient reference of every BareJS API.
-
----
-
-## 🚀 Key Features
-
-* **JIT Pipeline Compilation**: Flattens routes and middleware chains into direct JavaScript functions at startup, using `AsyncFunction` single-handler fast paths and conditional bytecode inlining.
-* **$O(1)$ Radix Jump-Table Router**: Compiles static branches, dynamic `:params`, and catch-all wildcards (`/*`) into inline `switch` jump-tables.
-* **Recursive JIT Response Projector & Mass-Assignment Guard**: Compiles `response` schemas into fixed-shape JS object literals to strip undeclared fields, and supports `stripUnknown: true` on `body` to prevent Mass-Assignment attacks.
-* **Built-In Resilience (`circuitBreaker`, `idempotency`, `createSingleflight`, `app.cron`)**: Prevent cascading failures (`503 Retry-After`), double-charges (`409 IDEMPOTENT_IN_FLIGHT`), cache stampedes (100 concurrent calls -> 1 DB hit), and overlapping background jobs.
-* **Native Zero-Dep Gzip (`compress`)**: Compresses responses via Bun's native C/Zig `Bun.gzipSync` with `minSize` threshold and automatic SSE/204/304 bypass.
-* **End-to-End Type Inference (`bareClient(app)`)**: Automatic compile-time inference of route paths (across all HTTP methods on shared paths), `params`, `query`, `headers`, `body`, and `response` types directly from your `BareJS` app or mounted `BareRouter`—with zero runtime overhead.
-* **Concurrency-Safe Object Pooling & Dev UAF Guard**: Recycles `Context` instances through a lazy bounded LIFO stack (`0..65536`) with acquired slot clearing (`pool[slot] = undefined` while in-flight), shared pool-state synchronization across JIT recompilations, and complete framework-managed state cleanup on release. Timed-out contexts are detached and retired from the pool, and in development mode (`NODE_ENV=development` or unset) a zero-prod-overhead Proxy guard warns if a released `ctx` is accessed after response completion.
-* **Dual Response Ergonomics & Full HTTP Methods**: Return plain objects/strings directly (Elysia style) OR use `ctx.json()`, `ctx.html()`, `ctx.text()`, `ctx.redirect()`, `ctx.send()`, with `get`, `post`, `put`, `patch`, `delete`, `options`, `head`, and `all`.
-* **Unified Schema Validation & Auto-Coercion**: Validate `body`, `query`, `params`, `headers`, `response`, and `maxBodySize` (`413` DoS guard) in one object with **TypeBox**, **Zod**, or **Native JSON Schema**—with automatic `number`/`boolean` coercion on `query` and `params`.
-* **Batteries-Included Zero-Trust Security Suite**: Built-in `securityHeaders()`, `cors()`, `csrf()`, `timeout()`, `rateLimit()`, `trustProxy(false)` anti-spoofing, `maxRequestBodySize` server cap, `bareAuth()` (constant-time HS256 JWT + `revokeToken()` / `isRevoked`), `Hash` (Argon2id), HMAC-signed cookies, `ctx.upload()` / streaming `ctx.uploadStream()`, and symlink-safe `staticFile()`.
-* **Observability, Graceful Drain, Real-Time, RPC & OpenAPI 3.1**: Built-in `logger()` (`pretty`/`json` + `X-Request-Id`), `healthcheck()` (`/health` + `/ready`), `app.onDrain()` + IPC `DRAIN_REQUEST` graceful draining, parameterized WebSockets (`app.ws('/ws/:room')`), SSE (`ctx.sse`), JSON-RPC 2.0 (`app.rpc`), and OpenAPI 3.1 (`app.docs`) with `securitySchemes`, `servers`, and `tags`.
 
 ---
 

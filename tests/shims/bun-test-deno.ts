@@ -7,11 +7,39 @@ import {
   afterEach,
 } from "jsr:@std/testing@^1.0.0/bdd";
 export { describe, beforeAll, afterAll, beforeEach, afterEach };
-export { expect } from "jsr:@std/expect@^1.0.0";
+import { expect as stdExpect } from "jsr:@std/expect@^1.0.0";
 import { spy } from "jsr:@std/testing@^1.0.0/mock";
 import * as zlib from "node:zlib";
 import * as path from "node:path";
 import { BareJS } from "../../src/core/bare.ts";
+
+export function expect(received: any): any {
+  const base = stdExpect(received);
+  if (received && received.__isBareSpy) {
+    const checkCalls = (negate: boolean) => ({
+      toHaveBeenCalled() {
+        const ok = received.calls.length > 0;
+        if (negate ? ok : !ok) throw new Error(`Expected spy ${negate ? "not " : ""}to have been called`);
+      },
+      toHaveBeenCalledTimes(n: number) {
+        const ok = received.calls.length === n;
+        if (negate ? ok : !ok) throw new Error(`Expected spy to be called ${n} times, got ${received.calls.length}`);
+      },
+      toHaveBeenCalledWith(...expected: any[]) {
+        const ok = received.calls.some((c: any[]) =>
+          c.length === expected.length && c.every((v: any, i: number) => {
+            try { stdExpect(v).toEqual(expected[i]); return true; } catch { return false; }
+          })
+        );
+        if (negate ? ok : !ok) throw new Error(`Expected spy ${negate ? "not " : ""}to have been called with ${JSON.stringify(expected)}`);
+      },
+    });
+    return Object.assign(base, checkCalls(false), {
+      not: Object.assign(base.not, checkCalls(true)),
+    });
+  }
+  return base;
+}
 
 function makeTestFn(base: any) {
   const fn: any = (...args: any[]) => base(...args);
@@ -38,11 +66,15 @@ export function spyOn(obj: any, method: string) {
   const original = obj[method];
   let impl: (...args: any[]) => any = (...args: any[]) =>
     typeof original === "function" ? original.apply(obj, args) : undefined;
-  const sp: any = spy(function (this: any, ...args: any[]) {
+  const calls: any[][] = [];
+  const sp: any = function (this: any, ...args: any[]) {
+    calls.push(args);
     return impl.apply(this, args);
-  });
+  };
   obj[method] = sp;
 
+  sp.__isBareSpy = true;
+  sp.calls = calls;
   sp.mockImplementation = (fn: (...args: any[]) => any) => {
     impl = fn;
     return sp;
@@ -59,7 +91,7 @@ export function spyOn(obj: any, method: string) {
     obj[method] = original;
   };
   sp.mockClear = () => {
-    if (Array.isArray(sp.calls)) sp.calls.length = 0;
+    calls.length = 0;
   };
   return sp;
 }

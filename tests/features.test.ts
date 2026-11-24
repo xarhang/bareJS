@@ -111,6 +111,7 @@ describe("Advanced Features (SSE, OpenAPI, RPC Client, onError)", () => {
     process.env.NODE_ENV = "production";
     const port = 18000 + Math.floor(Math.random() * 10000);
     const server = app.listen(port, "127.0.0.1", false);
+    await (server as any).ready;
     process.env.NODE_ENV = prevEnv;
 
     try {

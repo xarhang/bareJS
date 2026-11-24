@@ -128,12 +128,16 @@ describe('Node Runtime Driver (nodeDriver)', () => {
     const events: string[] = [];
     const mockSocket: any = { send: (m: any) => events.push(`send:${m}`) };
     const origDeno = (globalThis as any).Deno;
-    (globalThis as any).Deno = {
-      upgradeWebSocket: () => ({
-        socket: mockSocket,
-        response: new Response(null, { status: 200, headers: { 'x-deno-ws': '1' } })
-      })
-    };
+    const origUpgrade = origDeno?.upgradeWebSocket;
+    const mockUpgrade = () => ({
+      socket: mockSocket,
+      response: new Response(null, { status: 200, headers: { 'x-deno-ws': '1' } })
+    });
+    if (origDeno) {
+      origDeno.upgradeWebSocket = mockUpgrade;
+    } else {
+      (globalThis as any).Deno = { upgradeWebSocket: mockUpgrade };
+    }
 
     try {
       const app = new BareJS();
@@ -154,7 +158,7 @@ describe('Node Runtime Driver (nodeDriver)', () => {
       expect(events).toEqual(['open:general', 'send:echo:hello', 'close:1000']);
     } finally {
       if (origDeno === undefined) delete (globalThis as any).Deno;
-      else (globalThis as any).Deno = origDeno;
+      else origDeno.upgradeWebSocket = origUpgrade;
     }
   });
 

@@ -1,29 +1,72 @@
-export {
+import {
   describe,
-  it,
-  it as test,
+  it as bddIt,
   beforeAll,
   afterAll,
   beforeEach,
   afterEach,
 } from "jsr:@std/testing@^1.0.0/bdd";
+export { describe, beforeAll, afterAll, beforeEach, afterEach };
 export { expect } from "jsr:@std/expect@^1.0.0";
-import { spy, stub } from "jsr:@std/testing@^1.0.0/mock";
+import { spy } from "jsr:@std/testing@^1.0.0/mock";
 import * as zlib from "node:zlib";
 import * as path from "node:path";
 import { BareJS } from "../../src/core/bare.ts";
 
+function makeTestFn(base: any) {
+  const fn: any = (...args: any[]) => base(...args);
+  fn.skip = (...args: any[]) => base.skip?.(...args);
+  fn.only = (...args: any[]) => base.only?.(...args);
+  fn.each = (cases: any[]) => (name: string, body: (...args: any[]) => any) => {
+    for (let i = 0; i < cases.length; i++) {
+      const c = cases[i];
+      const args = Array.isArray(c) ? c : [c];
+      let label = name;
+      for (const a of args) {
+        label = label.replace(/%[sdifjoO%]/, String(a));
+      }
+      base(`${label} [${i}]`, () => body(...args));
+    }
+  };
+  return fn;
+}
+
+export const it = makeTestFn(bddIt);
+export const test = it;
+
 export function spyOn(obj: any, method: string) {
-  const s = stub(obj, method as any);
-  return Object.assign(s, {
-    mockImplementation(fn: any) {
-      s.restore();
-      return stub(obj, method as any, fn);
+  const original = obj[method];
+  let impl: (...args: any[]) => any = (...args: any[]) =>
+    typeof original === "function" ? original.apply(obj, args) : undefined;
+  const calls: any[][] = [];
+  const wrapper: any = function (this: any, ...args: any[]) {
+    calls.push(args);
+    return impl.apply(this, args);
+  };
+  obj[method] = wrapper;
+
+  const handle: any = {
+    calls,
+    mockImplementation(fn: (...args: any[]) => any) {
+      impl = fn;
+      return handle;
+    },
+    mockReturnValue(val: any) {
+      impl = () => val;
+      return handle;
+    },
+    mockResolvedValue(val: any) {
+      impl = () => Promise.resolve(val);
+      return handle;
     },
     mockRestore() {
-      s.restore();
+      obj[method] = original;
     },
-  });
+    mockClear() {
+      calls.length = 0;
+    },
+  };
+  return handle;
 }
 
 export const mock = Object.assign(
@@ -60,7 +103,11 @@ if (!(globalThis as any).Bun) {
       }
       throw new Error("zstdDecompressSync not available in this Deno/Node zlib");
     },
-    gc() {},
+    gc() {
+      if (typeof (globalThis as any).gc === "function") {
+        (globalThis as any).gc();
+      }
+    },
     serve(opts: { port?: number; hostname?: string; fetch: (req: Request) => Response | Promise<Response> }) {
       const app = new BareJS({ banner: false });
       app.all("/*", (ctx) => opts.fetch(ctx.req));

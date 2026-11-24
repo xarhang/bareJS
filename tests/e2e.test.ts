@@ -88,6 +88,7 @@ describe("Full Live-Server E2E Test Suite (HTTP + WS + SSE + Security)", () => {
     process.env.NODE_ENV = "production";
     const port = 28000 + Math.floor(Math.random() * 10000);
     server = app.listen(port, "127.0.0.1", false);
+    await (server as any).ready;
     process.env.NODE_ENV = prevEnv;
     baseUrl = `http://127.0.0.1:${port}`;
   });

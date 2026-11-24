@@ -2,6 +2,13 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.61] - 2026-11-23
+
+### Added
+- **Node.js Built-in RFC 6455 WebSocket Fallback** (`src/runtime/node.ts`):
+  - `app.ws()` now works out of the box on Node.js (`>= 20`) without installing `ws`, using a built-in `node:crypto` + `net.Socket` RFC 6455 handler (supporting handshake, text/binary frames, fragmented frames, ping/pong, and close frames). When `ws` is installed, `nodeDriver` continues to use `ws` automatically.
+- **Tests**: Added live WebSocket E2E test on `nodeDriver` without `ws` in `tests/runtime-node.test.ts` (**425 tests / 6,257 assertions**).
+
 ## [0.1.60] - 2026-11-23
 
 ### Added

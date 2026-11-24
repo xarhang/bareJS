@@ -167,7 +167,7 @@ BareJS is a complete, zero-boilerplate backend platform—every module below shi
 
 ## Status, Contributing & License
 
-- **Status:** Active `0.1.x` development. Core features (routing, TypeBox/Zod/Native validation, OpenAPI, JSON-RPC, security, resilience, static files, compression, SSE, uploads, WebSockets, and password hashing) are verified in [CI](./.github/workflows/ci.yml) across **Bun** (`bun test`), **Node.js 20 & 22** (`tests/node-smoke.mjs`), and **Deno 2** (`tests/deno-smoke.ts`).
+- **Status:** Active `0.1.x` development. The full test suite is verified in [CI](./.github/workflows/ci.yml) across **Bun** (`bun test` — 425 tests across 25 files), **Node.js 20 & 22** (`vitest run` — 422 tests across 24 files + `tests/node-smoke.mjs`), and **Deno 2** (`deno test` + `tests/deno-smoke.ts`).
 - **Security:** See [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 - **Contributing:** See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and release workflows.
 - **License:** [MIT](./LICENSE) — Maintained by [xarhang](https://github.com/xarhang).

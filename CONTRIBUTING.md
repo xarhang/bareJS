@@ -35,8 +35,10 @@ cd bareJS
 # Install Bun dependencies
 bun install
 
-# Run tests
+# Run full tests (Bun, Node.js, Deno)
 bun test
+bun run test:node
+bun run test:deno
 
 # Run benchmarks to ensure no performance regression
 bun run bench

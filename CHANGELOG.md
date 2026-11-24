@@ -13,9 +13,13 @@ All notable changes to **BareJS** are documented in this file.
   - Enforces `maxFileSize`, `maxFiles`, `maxFieldSize`, `allowedTypes` (`415`), `safeName` sanitization, and safe skipping of unconsumed streams.
   - Exported `UploadStreamOptions` and `UploadStreamPart` types from `src/index.ts`.
 - **Dev-Mode Context Use-After-Free Guard** (`src/core/bare.ts`):
-  - Added a conditional Proxy guard in `compile()` when `NODE_ENV !== 'production'` that warns (`[BareJS] Use-after-free detected`) if a `Context` reference is accessed after response completion and pool release (even across subsequent pool reuse).
-  - Emits zero guard code when `NODE_ENV === 'production'` (0 ns production overhead).
-- **Tests**: Added `tests/enterprise-features.test.ts` (6 tests, 20 assertions) covering `onDrain()`/`DRAIN_REQUEST`, dev/prod UAF guard behavior, and `ctx.uploadStream()`.
+  - Added a conditional Proxy guard in `compile()` when `NODE_ENV === 'development'` or unset that warns (`[BareJS] Use-after-free detected`) if a `Context` reference is accessed after response completion and pool release (even across subsequent pool reuse).
+  - Emits zero guard code in `NODE_ENV === 'production'` or `test` (0 ns production overhead).
+- **Tests**: Added `tests/enterprise-features.test.ts` (6 tests, 20 assertions) covering `onDrain()`/`DRAIN_REQUEST`, dev/prod UAF guard behavior, and `ctx.uploadStream()` (**419 tests / 6,231 assertions**).
+
+### Fixed
+- **Disturbed Response Idempotency Lock Release** (`src/security/idempotency.ts`):
+  - Checked `resVal.bodyUsed` before `resVal.clone()` in `__idempotencyCommit()` so disturbed responses release the in-flight lock synchronously without leaving subsequent requests stuck at `409`.
 
 ## [0.1.57] - 2026-11-20
 

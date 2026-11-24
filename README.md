@@ -56,7 +56,7 @@ All benchmark numbers below are **automatically generated on every push to `main
 
 <!-- MARKER: PERFORMANCE_TABLE_END -->
 
-> Verified with **413 Automated Tests (6,205 assertions)** and **100.00% Function & 100.00% Line Coverage**.
+> Verified with **419 Automated Tests (6,231 assertions)** and **100.00% Function & 100.00% Line Coverage**.
 >
 > [!TIP]
 > **View our [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/)** for historical data and detailed performance trends.
@@ -74,7 +74,7 @@ All benchmark numbers below are **automatically generated on every push to `main
 * **Built-In Resilience (`circuitBreaker`, `idempotency`, `createSingleflight`, `app.cron`)**: Prevent cascading failures (`503 Retry-After`), double-charges (`409 IDEMPOTENT_IN_FLIGHT`), cache stampedes (100 concurrent calls -> 1 DB hit), and overlapping background jobs.
 * **Native Zero-Dep Gzip (`compress`)**: Compresses responses via Bun's native C/Zig `Bun.gzipSync` with `minSize` threshold and automatic SSE/204/304 bypass.
 * **End-to-End Type Inference (`bareClient(app)`)**: Automatic compile-time inference of route paths (across all HTTP methods on shared paths), `params`, `query`, `headers`, `body`, and `response` types directly from your `BareJS` app or mounted `BareRouter`—with zero runtime overhead.
-* **Concurrency-Safe Object Pooling & Dev UAF Guard**: Recycles `Context` instances through a lazy bounded LIFO stack (`0..65536`) with acquired slot clearing (`pool[slot] = undefined` while in-flight), shared pool-state synchronization across JIT recompilations, and complete framework-managed state cleanup on release. Timed-out contexts are detached and retired from the pool, and in development mode (`NODE_ENV !== 'production'`) a zero-prod-overhead Proxy guard warns if a released `ctx` is accessed after response completion.
+* **Concurrency-Safe Object Pooling & Dev UAF Guard**: Recycles `Context` instances through a lazy bounded LIFO stack (`0..65536`) with acquired slot clearing (`pool[slot] = undefined` while in-flight), shared pool-state synchronization across JIT recompilations, and complete framework-managed state cleanup on release. Timed-out contexts are detached and retired from the pool, and in development mode (`NODE_ENV=development` or unset) a zero-prod-overhead Proxy guard warns if a released `ctx` is accessed after response completion.
 * **Dual Response Ergonomics & Full HTTP Methods**: Return plain objects/strings directly (Elysia style) OR use `ctx.json()`, `ctx.html()`, `ctx.text()`, `ctx.redirect()`, `ctx.send()`, with `get`, `post`, `put`, `patch`, `delete`, `options`, `head`, and `all`.
 * **Unified Schema Validation & Auto-Coercion**: Validate `body`, `query`, `params`, `headers`, `response`, and `maxBodySize` (`413` DoS guard) in one object with **TypeBox**, **Zod**, or **Native JSON Schema**—with automatic `number`/`boolean` coercion on `query` and `params`.
 * **Batteries-Included Zero-Trust Security Suite**: Built-in `securityHeaders()`, `cors()`, `csrf()`, `timeout()`, `rateLimit()`, `trustProxy(false)` anti-spoofing, `maxRequestBodySize` server cap, `bareAuth()` (constant-time HS256 JWT + `revokeToken()` / `isRevoked`), `Hash` (Argon2id), HMAC-signed cookies, `ctx.upload()` / streaming `ctx.uploadStream()`, and symlink-safe `staticFile()`.

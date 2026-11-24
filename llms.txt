@@ -6,7 +6,7 @@
 ```ts
 import { BareJS, Context, Type } from 'barejs';
 
-// Optional poolSize (0..65536, default 1024): lazy bounded LIFO Context pool with in-flight slot clearing & shared state across JIT recompiles
+// Optional poolSize (0..65536, default 1024): lazy bounded LIFO Context pool with in-flight slot clearing, shared state across JIT recompiles, & dev-mode UAF guard (0 overhead in prod)
 const app = new BareJS();
 
 // Direct return (Elysia style — auto-detects JSON, text, or Response)

@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795504461211,
+  "lastUpdate": 1795508852682,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4210,6 +4210,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3934.274779659132,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "9c7ca42fe4a9a6dec747e6a46fe4e6046d0e08e6",
+          "message": "docs: add Full Capabilities matrix in README and docs/integrations.md",
+          "timestamp": "2026-11-24T08:26:37Z",
+          "tree_id": "37f14e030e351f971e91de95ce595f4e135186bd",
+          "url": "https://github.com/xarhang/bareJS/commit/9c7ca42fe4a9a6dec747e6a46fe4e6046d0e08e6"
+        },
+        "date": 1795508852139,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1787.6648153449758,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1907.1799578355588,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5885.392147919444,
             "unit": "undefined"
           }
         ]

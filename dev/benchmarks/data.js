@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795485241308,
+  "lastUpdate": 1795485705658,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3820,6 +3820,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5406.569469409494,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "noreply@github.com",
+            "name": "Antigravity",
+            "username": "web-flow"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "Antigravity",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7293b42c1a347f1701667e0a92bdec2beac507ea",
+          "message": "docs: update README, CHANGELOG, and llms.txt for v0.1.58",
+          "timestamp": "2026-11-24T02:00:54Z",
+          "tree_id": "3d7a7192ce66a7023158fa3fb735eff51c3e0100",
+          "url": "https://github.com/xarhang/bareJS/commit/7293b42c1a347f1701667e0a92bdec2beac507ea"
+        },
+        "date": 1795485705287,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 750.2163519184652,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 977.8418219015829,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3552.858590674422,
             "unit": "undefined"
           }
         ]

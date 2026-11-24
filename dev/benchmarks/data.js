@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795484053305,
+  "lastUpdate": 1795485241308,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3781,6 +3781,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 4038.3043871040595,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "noreply@github.com",
+            "name": "Antigravity",
+            "username": "web-flow"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "Antigravity",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5d4384a2f3a2509a1f45bceff1e3bad7867ab15d",
+          "message": "fix: scope dev UAF proxy to dev/default env and release idempotency lock on bodyUsed response",
+          "timestamp": "2026-11-24T01:53:11Z",
+          "tree_id": "62f87d70893695592fe635011939b1fa6e27d2d3",
+          "url": "https://github.com/xarhang/bareJS/commit/5d4384a2f3a2509a1f45bceff1e3bad7867ab15d"
+        },
+        "date": 1795485241069,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1460.2697477845943,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1626.0618486199633,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5406.569469409494,
             "unit": "undefined"
           }
         ]

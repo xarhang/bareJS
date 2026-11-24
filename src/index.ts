@@ -27,7 +27,9 @@ export type {
   CookieOptions,
   UploadOptions,
   UploadedFile,
-  UploadResult
+  UploadResult,
+  UploadStreamOptions,
+  UploadStreamPart
 } from './core/context';
 
 // --- 3. The Validation Suite (Builders - สำหรับสร้าง Schema) ---

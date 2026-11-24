@@ -74,11 +74,11 @@ All benchmark numbers below are **automatically generated on every push to `main
 * **Built-In Resilience (`circuitBreaker`, `idempotency`, `createSingleflight`, `app.cron`)**: Prevent cascading failures (`503 Retry-After`), double-charges (`409 IDEMPOTENT_IN_FLIGHT`), cache stampedes (100 concurrent calls -> 1 DB hit), and overlapping background jobs.
 * **Native Zero-Dep Gzip (`compress`)**: Compresses responses via Bun's native C/Zig `Bun.gzipSync` with `minSize` threshold and automatic SSE/204/304 bypass.
 * **End-to-End Type Inference (`bareClient(app)`)**: Automatic compile-time inference of route paths (across all HTTP methods on shared paths), `params`, `query`, `headers`, `body`, and `response` types directly from your `BareJS` app or mounted `BareRouter`—with zero runtime overhead.
-* **Concurrency-Safe Object Pooling**: Recycles `Context` instances through a lazy bounded LIFO stack (`0..65536`) with acquired slot clearing (`pool[slot] = undefined` while in-flight), shared pool-state synchronization across JIT recompilations, and complete framework-managed state cleanup on release. Timed-out contexts are detached and retired from the pool to prevent reuse while asynchronous work may still be running.
+* **Concurrency-Safe Object Pooling & Dev UAF Guard**: Recycles `Context` instances through a lazy bounded LIFO stack (`0..65536`) with acquired slot clearing (`pool[slot] = undefined` while in-flight), shared pool-state synchronization across JIT recompilations, and complete framework-managed state cleanup on release. Timed-out contexts are detached and retired from the pool, and in development mode (`NODE_ENV !== 'production'`) a zero-prod-overhead Proxy guard warns if a released `ctx` is accessed after response completion.
 * **Dual Response Ergonomics & Full HTTP Methods**: Return plain objects/strings directly (Elysia style) OR use `ctx.json()`, `ctx.html()`, `ctx.text()`, `ctx.redirect()`, `ctx.send()`, with `get`, `post`, `put`, `patch`, `delete`, `options`, `head`, and `all`.
 * **Unified Schema Validation & Auto-Coercion**: Validate `body`, `query`, `params`, `headers`, `response`, and `maxBodySize` (`413` DoS guard) in one object with **TypeBox**, **Zod**, or **Native JSON Schema**—with automatic `number`/`boolean` coercion on `query` and `params`.
-* **Batteries-Included Zero-Trust Security Suite**: Built-in `securityHeaders()`, `cors()`, `csrf()`, `timeout()`, `rateLimit()`, `trustProxy(false)` anti-spoofing, `maxRequestBodySize` server cap, `bareAuth()` (constant-time HS256 JWT + `revokeToken()` / `isRevoked`), `Hash` (Argon2id), HMAC-signed cookies, `ctx.upload()`, and symlink-safe `staticFile()`.
-* **Observability, Real-Time, RPC & OpenAPI 3.1**: Built-in `logger()` (`pretty`/`json` + `X-Request-Id`), `healthcheck()` (`/health` + `/ready`), parameterized WebSockets (`app.ws('/ws/:room')`), SSE (`ctx.sse`), JSON-RPC 2.0 (`app.rpc`), and OpenAPI 3.1 (`app.docs`) with `securitySchemes`, `servers`, and `tags`.
+* **Batteries-Included Zero-Trust Security Suite**: Built-in `securityHeaders()`, `cors()`, `csrf()`, `timeout()`, `rateLimit()`, `trustProxy(false)` anti-spoofing, `maxRequestBodySize` server cap, `bareAuth()` (constant-time HS256 JWT + `revokeToken()` / `isRevoked`), `Hash` (Argon2id), HMAC-signed cookies, `ctx.upload()` / streaming `ctx.uploadStream()`, and symlink-safe `staticFile()`.
+* **Observability, Graceful Drain, Real-Time, RPC & OpenAPI 3.1**: Built-in `logger()` (`pretty`/`json` + `X-Request-Id`), `healthcheck()` (`/health` + `/ready`), `app.onDrain()` + IPC `DRAIN_REQUEST` graceful draining, parameterized WebSockets (`app.ws('/ws/:room')`), SSE (`ctx.sse`), JSON-RPC 2.0 (`app.rpc`), and OpenAPI 3.1 (`app.docs`) with `securitySchemes`, `servers`, and `tags`.
 
 ---
 
@@ -187,6 +187,18 @@ app.post('/upload', async (ctx) => {
     uploaded: files.map((f) => ({ safeName: f.safeName, size: f.size, type: f.type }))
   };
 });
+
+// True Streaming Multipart Upload (constant O(chunk) memory for large files)
+app.post('/upload-stream', async (ctx) => {
+  const uploaded: string[] = [];
+  for await (const part of ctx.uploadStream({ maxFileSize: 500 * 1024 * 1024 })) {
+    if (part.type === 'file' && part.stream) {
+      await Bun.write(`./uploads/${part.safeName}`, new Response(part.stream));
+      uploaded.push(part.safeName!);
+    }
+  }
+  return { uploaded };
+});
 ```
 
 ---
@@ -272,6 +284,7 @@ app.use({
 
 // Server Lifecycle & Error Masking
 app.onStart(() => console.log('Database ready'));
+app.onDrain(async () => console.log('Draining in-flight requests...')); // Triggered on app.drain() or IPC DRAIN_REQUEST
 app.onStop(async () => console.log('Cleaned up resources'));
 app.onError((err, ctx) => ctx.status(err.status || 500).json({
   status: 'error',
@@ -370,6 +383,7 @@ app.listen(3000, '0.0.0.0', true, { maxRequestBodySize: 2 * 1024 * 1024 });
 | `ctx.query` / `ctx.getQuery(k)` | Lazy, prototype-pollution-safe parsed query parameters. |
 | `await ctx.jsonBody(maxBytes?)` | Parses & caches JSON body (enforces `413` limit, default 1MB). |
 | `await ctx.upload(options?)` | Safe `multipart/form-data` upload parser (`maxFileSize`, `maxFiles`, `allowedTypes`). |
+| `ctx.uploadStream(options?)` | True streaming `multipart/form-data` async generator (`ReadableStream` per file part, $O(\text{chunk})$ memory). |
 | `ctx.cookies` | Lazy parsed request cookies (`Record<string, string>`). |
 | `await ctx.setCookie(k, v, opts?)` | Sets a cookie (`HttpOnly; SameSite=Lax` default, optional HMAC `secret`). |
 | `await ctx.getSignedCookie(k, s)` | Verifies HMAC-SHA256 signed cookie in constant time. |

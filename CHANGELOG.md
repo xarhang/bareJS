@@ -2,6 +2,21 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.58] - 2026-11-23
+
+### Added
+- **Graceful Drain Lifecycle & IPC `DRAIN_REQUEST`** (`src/core/bare.ts`):
+  - Added `app.onDrain(fn)` and idempotent `app.drain(closeActiveConnections?)` to run drain hooks before stopping the server (`stop(false)`).
+  - Registered an IPC `process.on('message')` listener in `app.listen()` for `'DRAIN_REQUEST'` / `{ type: 'DRAIN_REQUEST' }` messages (automatically cleaned up in `app.stop()`).
+- **True Streaming Multipart Upload (`ctx.uploadStream()`)** (`src/core/context.ts`, `src/index.ts`):
+  - Added `ctx.uploadStream(options?)` async generator yielding text fields and backpressure-driven `ReadableStream<Uint8Array>` file parts with $O(\text{chunk})$ memory usage.
+  - Enforces `maxFileSize`, `maxFiles`, `maxFieldSize`, `allowedTypes` (`415`), `safeName` sanitization, and safe skipping of unconsumed streams.
+  - Exported `UploadStreamOptions` and `UploadStreamPart` types from `src/index.ts`.
+- **Dev-Mode Context Use-After-Free Guard** (`src/core/bare.ts`):
+  - Added a conditional Proxy guard in `compile()` when `NODE_ENV !== 'production'` that warns (`[BareJS] Use-after-free detected`) if a `Context` reference is accessed after response completion and pool release (even across subsequent pool reuse).
+  - Emits zero guard code when `NODE_ENV === 'production'` (0 ns production overhead).
+- **Tests**: Added `tests/enterprise-features.test.ts` (6 tests, 20 assertions) covering `onDrain()`/`DRAIN_REQUEST`, dev/prod UAF guard behavior, and `ctx.uploadStream()`.
+
 ## [0.1.57] - 2026-11-20
 
 ### Performance

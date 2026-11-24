@@ -61,6 +61,27 @@ export interface UploadResult {
   files: UploadedFile[];
 }
 
+export interface UploadStreamOptions {
+  /** Max size per file in bytes (default: 100MB) */
+  maxFileSize?: number;
+  /** Max number of uploaded files (default: 10) */
+  maxFiles?: number;
+  /** Max size per text field in bytes (default: 1MB) */
+  maxFieldSize?: number;
+  /** Allowed MIME types (e.g. ['image/png', 'application/octet-stream']) */
+  allowedTypes?: string[];
+}
+
+export interface UploadStreamPart {
+  type: 'file' | 'field';
+  fieldName: string;
+  filename?: string;
+  safeName?: string;
+  contentType?: string;
+  stream?: ReadableStream<Uint8Array>;
+  value?: string;
+}
+
 export class Context {
   public req!: Request;
   public params: Params = {};
@@ -655,5 +676,274 @@ export class Context {
     }
 
     return { fields, files };
+  }
+
+  /**
+   * True streaming multipart/form-data parser.
+   * Streams file parts chunk-by-chunk with backpressure and constant O(chunk) memory usage.
+   */
+  public async *uploadStream(options: UploadStreamOptions = {}): AsyncGenerator<UploadStreamPart> {
+    const maxFileSize = options.maxFileSize ?? 100 * 1024 * 1024;
+    const maxFiles = options.maxFiles ?? 10;
+    const maxFieldSize = options.maxFieldSize ?? 1024 * 1024;
+    const allowed = options.allowedTypes
+      ? new Set(options.allowedTypes.map((t) => t.trim().toLowerCase()))
+      : null;
+
+    const ct = this.req?.headers?.get('content-type') || '';
+    if (!ct.toLowerCase().includes('multipart/form-data')) {
+      throw Object.assign(new Error('Expected multipart/form-data'), { status: 400 });
+    }
+    const bMatch = ct.match(/boundary=(?:"([^"]+)"|([^;\s]+))/i);
+    const boundary = bMatch?.[1] || bMatch?.[2];
+    if (!boundary) {
+      throw Object.assign(new Error('Missing multipart boundary'), { status: 400 });
+    }
+
+    if (!this.req.body) return;
+
+    const encoder = new TextEncoder();
+    const firstBoundary = encoder.encode(`--${boundary}`);
+    const partBoundary = encoder.encode(`\r\n--${boundary}`);
+    const crlfcrlf = encoder.encode('\r\n\r\n');
+
+    const indexOfBytes = (haystack: Uint8Array, needle: Uint8Array, from = 0): number => {
+      const nLen = needle.byteLength;
+      const limit = haystack.byteLength - nLen;
+      const first = needle[0]!;
+      let i = from;
+      while (i <= limit) {
+        const pos = haystack.indexOf(first, i);
+        if (pos === -1 || pos > limit) return -1;
+        let match = true;
+        for (let j = 1; j < nLen; j++) {
+          if (haystack[pos + j] !== needle[j]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) return pos;
+        i = pos + 1;
+      }
+      return -1;
+    };
+
+    const concatBytes = (a: Uint8Array, b: Uint8Array): Uint8Array => {
+      if (a.byteLength === 0) return b;
+      if (b.byteLength === 0) return a;
+      const out = new Uint8Array(a.byteLength + b.byteLength);
+      out.set(a, 0);
+      out.set(b, a.byteLength);
+      return out;
+    };
+
+    const reader = this.req.body.getReader();
+    let buf: Uint8Array = new Uint8Array(0);
+    let eof = false;
+
+    const readMore = async (): Promise<boolean> => {
+      if (eof) return false;
+      const { done, value } = await reader.read();
+      if (done || !value) {
+        eof = true;
+        return false;
+      }
+      buf = concatBytes(buf, value);
+      return true;
+    };
+
+    const ensureBytes = async (minLen: number): Promise<boolean> => {
+      while (buf.byteLength < minLen) {
+        if (!(await readMore())) return false;
+      }
+      return true;
+    };
+
+    let fileCount = 0;
+
+    try {
+      // 1. Find initial boundary
+      while (true) {
+        const idx = indexOfBytes(buf, firstBoundary);
+        if (idx !== -1) {
+          buf = buf.subarray(idx + firstBoundary.byteLength);
+          break;
+        }
+        if (buf.byteLength > firstBoundary.byteLength) {
+          buf = buf.subarray(buf.byteLength - firstBoundary.byteLength);
+        }
+        if (!(await readMore())) {
+          throw Object.assign(new Error('Malformed multipart/form-data payload'), { status: 400 });
+        }
+      }
+
+      // Check for immediate closing "--" or "\r\n"
+      while (true) {
+        if (!(await ensureBytes(2))) {
+          throw Object.assign(new Error('Malformed multipart/form-data payload'), { status: 400 });
+        }
+        if (buf[0] === 0x2d && buf[1] === 0x2d) {
+          return; // "--" end of multipart
+        }
+        if (buf[0] === 0x0d && buf[1] === 0x0a) {
+          buf = buf.subarray(2);
+        } else if (buf[0] === 0x0a) {
+          buf = buf.subarray(1);
+        } else {
+          throw Object.assign(new Error('Malformed multipart/form-data payload'), { status: 400 });
+        }
+
+        // 2. Read part headers up to \r\n\r\n (cap at 16KB)
+        let hdrEnd = -1;
+        while (true) {
+          hdrEnd = indexOfBytes(buf, crlfcrlf);
+          if (hdrEnd !== -1) break;
+          if (buf.byteLength > 16384) {
+            throw Object.assign(new Error('Multipart header too large'), { status: 400 });
+          }
+          if (!(await readMore())) {
+            throw Object.assign(new Error('Malformed multipart/form-data payload'), { status: 400 });
+          }
+        }
+
+        const headerText = _sharedTextDecoder.decode(buf.subarray(0, hdrEnd));
+        buf = buf.subarray(hdrEnd + 4);
+
+        let fieldName = '';
+        let filename: string | undefined;
+        let partContentType = 'application/octet-stream';
+
+        for (const line of headerText.split('\r\n')) {
+          const colon = line.indexOf(':');
+          if (colon === -1) continue;
+          const k = line.slice(0, colon).trim().toLowerCase();
+          const v = line.slice(colon + 1).trim();
+          if (k === 'content-disposition') {
+            const nameMatch = v.match(/;\s*name="([^"]*)"/i);
+            if (nameMatch) fieldName = nameMatch[1]!;
+            const fileMatch = v.match(/;\s*filename="([^"]*)"/i);
+            if (fileMatch) filename = fileMatch[1]!;
+          } else if (k === 'content-type') {
+            partContentType = v;
+          }
+        }
+
+        if (filename === undefined) {
+          // 3a. Text field part
+          while (true) {
+            const bIdx = indexOfBytes(buf, partBoundary);
+            if (bIdx !== -1) {
+              if (bIdx > maxFieldSize) {
+                throw Object.assign(new Error(`Field size exceeds ${maxFieldSize} bytes`), { status: 413 });
+              }
+              const val = _sharedTextDecoder.decode(buf.subarray(0, bIdx));
+              buf = buf.subarray(bIdx + partBoundary.byteLength);
+              if (fieldName !== '__proto__' && fieldName !== 'constructor' && fieldName !== 'prototype') {
+                yield { type: 'field', fieldName, value: val };
+              }
+              break;
+            }
+            if (buf.byteLength - partBoundary.byteLength > maxFieldSize) {
+              throw Object.assign(new Error(`Field size exceeds ${maxFieldSize} bytes`), { status: 413 });
+            }
+            if (!(await readMore())) {
+              throw Object.assign(new Error('Malformed multipart/form-data payload'), { status: 400 });
+            }
+          }
+        } else {
+          // 3b. File part (streamed with backpressure)
+          if (fileCount >= maxFiles) {
+            throw Object.assign(new Error(`Too many files (max ${maxFiles})`), { status: 413 });
+          }
+          fileCount++;
+
+          const mime = (partContentType || '').split(';')[0]!.trim().toLowerCase();
+          if (allowed && !allowed.has(mime)) {
+            throw Object.assign(new Error(`Unsupported file type: ${partContentType || 'unknown'}`), { status: 415 });
+          }
+
+          const baseName = filename.split(/[\\/]/).pop() || 'file';
+          const safeName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '') || 'file';
+
+          let fileBytes = 0;
+          let streamDone = false;
+          let streamErrored: any = null;
+          const keepTail = partBoundary.byteLength - 1;
+
+          const stream = new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              while (true) {
+                const bIdx = indexOfBytes(buf, partBoundary);
+                if (bIdx !== -1) {
+                  const slice = buf.subarray(0, bIdx);
+                  fileBytes += slice.byteLength;
+                  if (fileBytes > maxFileSize) {
+                    streamErrored = Object.assign(new Error(`File exceeds max size of ${maxFileSize} bytes`), { status: 413 });
+                    controller.error(streamErrored);
+                    return;
+                  }
+                  if (slice.byteLength > 0) controller.enqueue(slice);
+                  buf = buf.subarray(bIdx + partBoundary.byteLength);
+                  streamDone = true;
+                  controller.close();
+                  return;
+                }
+
+                const safeLen = buf.byteLength - keepTail;
+                if (safeLen > 0) {
+                  const slice = buf.subarray(0, safeLen);
+                  fileBytes += slice.byteLength;
+                  if (fileBytes > maxFileSize) {
+                    streamErrored = Object.assign(new Error(`File exceeds max size of ${maxFileSize} bytes`), { status: 413 });
+                    controller.error(streamErrored);
+                    return;
+                  }
+                  buf = buf.subarray(safeLen);
+                  controller.enqueue(slice);
+                  return;
+                }
+
+                if (!(await readMore())) {
+                  streamErrored = Object.assign(new Error('Malformed multipart/form-data payload'), { status: 400 });
+                  controller.error(streamErrored);
+                  return;
+                }
+              }
+            },
+            cancel() {
+              streamDone = true;
+            }
+          });
+
+          yield {
+            type: 'file',
+            fieldName,
+            filename,
+            safeName,
+            contentType: partContentType,
+            stream
+          };
+
+          if (streamErrored) throw streamErrored;
+
+          // If consumer didn't drain the stream, skip remaining bytes up to next boundary
+          if (!streamDone) {
+            try {
+              const sr = stream.getReader();
+              while (true) {
+                const { done } = await sr.read();
+                if (done) break;
+              }
+              sr.releaseLock();
+            } catch (e) {
+              if (streamErrored) throw streamErrored;
+              throw e;
+            }
+          }
+        }
+      }
+    } finally {
+      try { reader.releaseLock(); } catch { /* ignore */ }
+    }
   }
 }

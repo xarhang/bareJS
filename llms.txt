@@ -57,6 +57,7 @@ const typedApp = app.route('/api/v1', api); // or app.use('/api/v1', api)
 - `ctx.query` / `ctx.getQuery(key)` / `ctx.queryAll(key)`: Lazy, prototype-pollution-safe query parser (fast-path when no `%` or `+`) with repeated query key support.
 - `await ctx.jsonBody(maxBytes = 1048576)`: Cached JSON body parser with native fast-path and `413` DoS limit.
 - `await ctx.upload({ maxFileSize, maxFiles, allowedTypes })`: Safe `multipart/form-data` parser; returns `{ fields, files }` with `safeName` (sanitized against path traversal) and enforces `413` (size/count) and `415` (MIME type).
+- `ctx.uploadStream({ maxFileSize, maxFiles, maxFieldSize, allowedTypes })`: True streaming `multipart/form-data` async generator yielding `{ type: 'field', fieldName, value }` and `{ type: 'file', fieldName, filename, safeName, contentType, stream }` (`ReadableStream<Uint8Array>`, $O(\text{chunk})$ memory).
 - `ctx.cookies`: Lazy parsed request cookies (`Record<string, string>`).
 - `await ctx.setCookie(name, value, { secret?, httpOnly?, sameSite?, secure?, maxAge?, expires?, domain?, path? })`: Defaults to `HttpOnly; SameSite=Lax; Path=/`. Pass `secret` for HMAC-SHA256 signing.
 - `await ctx.getSignedCookie(name, secret)`: Verifies HMAC signature with `timingSafeEqual`; returns `null` if tampered or missing.
@@ -130,6 +131,7 @@ app.get('/sso', bareAuth({ algorithms: ['RS256', 'ES256'], jwksUri: 'https://aut
 ## 7. Lifecycle & Error Handling
 ```ts
 app.onStart(() => console.log('Server started'));
+app.onDrain(async () => console.log('Draining...')); // Also triggered by IPC DRAIN_REQUEST
 app.onStop(async () => await db.close());
 app.onError((err, ctx) => ctx.status(err.status || 500).json({ error: err.message, requestId: ctx.requestId }));
 app.setNotFound(() => ({ status: 404, message: 'Custom Not Found' }));

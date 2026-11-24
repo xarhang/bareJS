@@ -92,9 +92,12 @@ export class BareJS<
   private wsRoutes = new Map<string, WebSocketRouteHandler>();
   private startHooks: (() => void | Promise<void>)[] = [];
   private stopHooks: (() => void | Promise<void>)[] = [];
+  private drainHooks: (() => void | Promise<void>)[] = [];
   private crons: Array<{ name: string; timer: ReturnType<typeof setInterval> }> = [];
   private server?: ReturnType<typeof Bun.serve>;
   private shutdownHandler?: () => Promise<void>;
+  private ipcDrainHandler?: (msg: any) => void;
+  private _draining = false;
   private wsAdapter = {
     open(ws: any) { ws.data?.open?.(ws); },
     message(ws: any, msg: any) { ws.data?.message?.(ws, msg); },
@@ -116,6 +119,28 @@ export class BareJS<
   public onStop(fn: () => void | Promise<void>): this {
     this.stopHooks.push(fn);
     return this;
+  }
+
+  public onDrain(fn: () => void | Promise<void>): this {
+    this.drainHooks.push(fn);
+    return this;
+  }
+
+  /**
+   * Gracefully drains the server by running all onDrain hooks and stopping
+   * the server while allowing in-flight requests to complete.
+   */
+  public async drain(closeActiveConnections = false): Promise<void> {
+    if (this._draining) return;
+    this._draining = true;
+    for (const hook of this.drainHooks) {
+      try {
+        await hook();
+      } catch (e) {
+        console.error(`[${this.name}] onDrain error:`, e);
+      }
+    }
+    await this.stop(closeActiveConnections);
   }
 
   /**
@@ -161,6 +186,10 @@ export class BareJS<
       process.off("SIGINT", this.shutdownHandler);
       process.off("SIGTERM", this.shutdownHandler);
       this.shutdownHandler = undefined;
+    }
+    if (this.ipcDrainHandler) {
+      process.off("message", this.ipcDrainHandler);
+      this.ipcDrainHandler = undefined;
     }
     if (this.server) {
       this.server.stop(closeActiveConnections);
@@ -798,26 +827,60 @@ export class BareJS<
       ? `if (ctx._idempotencyKey) { if (ctx._idemInFlight) ctx._idemInFlight.delete(ctx._idempotencyKey); ctx._idempotencyKey = undefined; ctx._idemInFlight = undefined; }`
       : '';
 
+    const isDevUaf = process.env.NODE_ENV !== 'production';
+    const ctxVar = isDevUaf ? 'rawCtx' : 'ctx';
+    const wrapUaf = isDevUaf
+      ? (rawCtx: Context, state: { released: boolean }): Context => {
+          const warn = (prop: string | symbol) => {
+            console.warn(
+              `[BareJS] Use-after-free detected: Context.${String(prop)} accessed after response was sent and Context was released to pool.`
+            );
+          };
+          const proxy: any = new Proxy(rawCtx, {
+            get(target: any, prop) {
+              if (state.released && prop !== Symbol.toStringTag && prop !== 'then') {
+                warn(prop);
+              }
+              const val = target[prop];
+              if (typeof val === 'function') {
+                return function (this: any, ...args: any[]) {
+                  const ret = val.apply(target, args);
+                  return ret === target ? proxy : ret;
+                };
+              }
+              return val;
+            },
+            set(target: any, prop, value) {
+              if (state.released) warn(prop);
+              target[prop] = value;
+              return true;
+            }
+          });
+          return proxy;
+        }
+      : undefined;
+
     const releaseCode = `
-      if (!ctx._detached) {
-        if (ctx.store.size > 0) ctx.store.clear();
-        ${deriveCleanup}
-        ${idemCleanup}
-        ctx.req = undefined;
-        ctx._status = 200;
-        ctx.body = undefined;
-        ctx._query = undefined;
-        ctx._cookies = undefined;
-        ctx._setCookies = undefined;
-        ctx._headers = undefined;
-        ctx._requestId = undefined;
-        ctx._peerIp = undefined;
-        ctx.params = EMPTY_PARAMS;
-        if (poolState.top < maxPool) pool[poolState.top++] = ctx;
+      if (!${ctxVar}._detached) {
+        ${isDevUaf ? '_uaf.released = true;' : ''}
+        if (${ctxVar}.store.size > 0) ${ctxVar}.store.clear();
+        ${deriveCleanup.replaceAll('ctx.', `${ctxVar}.`).replaceAll('[ctx.', `[${ctxVar}.`)}
+        ${idemCleanup.replaceAll('ctx.', `${ctxVar}.`)}
+        ${ctxVar}.req = undefined;
+        ${ctxVar}._status = 200;
+        ${ctxVar}.body = undefined;
+        ${ctxVar}._query = undefined;
+        ${ctxVar}._cookies = undefined;
+        ${ctxVar}._setCookies = undefined;
+        ${ctxVar}._headers = undefined;
+        ${ctxVar}._requestId = undefined;
+        ${ctxVar}._peerIp = undefined;
+        ${ctxVar}.params = EMPTY_PARAMS;
+        if (poolState.top < maxPool) pool[poolState.top++] = ${ctxVar};
       }
     `;
 
-    const handleErrCode = `const errRes = hError(e, ctx);
+    const handleErrCode = `const errRes = hError(e, ${ctxVar});
       if (errRes && errRes.then) return errRes.then((r) => { ${isLog ? 'doLog(r.status || 500);' : ''} ${releaseCode} return r; });
       ${isLog ? 'doLog(errRes.status || 500);' : ''}
       ${releaseCode}
@@ -825,11 +888,13 @@ export class BareJS<
 
     const callSuffix = isLog ? '(ctx, doLog)' : '(ctx)';
     const useCompactEmit = this.routes.length > 16;
+    const relArgs = isDevUaf ? 'rawCtx, _uaf' : 'ctx';
+    const errArgs = isDevUaf ? `e, rawCtx, _uaf${isLog ? ', doLog' : ''}` : `e, ctx${isLog ? ', doLog' : ''}`;
     const routerCode = tree.jitCompile(register, 0, 'url', 's', [], (hName: string) =>
       useCompactEmit
         ? `out = ${hName}${callSuffix};
-       if (out && out.then) return out.then((v) => { _rel(ctx); return v; }, (e) => _onErr(e, ctx${isLog ? ', doLog' : ''}));
-       _rel(ctx);
+       if (out && out.then) return out.then((v) => { _rel(${relArgs}); return v; }, (e) => _onErr(${errArgs}));
+       _rel(${relArgs});
        return out;`
         : `out = ${hName}${callSuffix};
        if (out && out.then) return out.then((v) => { ${releaseCode} return v; }, (e) => { ${handleErrCode} });
@@ -936,8 +1001,8 @@ export class BareJS<
 
     const poolState = this._poolState;
     const trustProxyBox = this._trustProxyBox;
-    const args = ['pool', 'poolState', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyBox', ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...(apply404Cors ? ['apply404Cors'] : []), ...hNames];
-    const values = [pool, poolState, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyBox, ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...(apply404Cors ? [apply404Cors] : []), ...hoistedHandlers];
+    const args = ['pool', 'poolState', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyBox', ...(isDevUaf ? ['wrapUaf'] : []), ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...(apply404Cors ? ['apply404Cors'] : []), ...hNames];
+    const values = [pool, poolState, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyBox, ...(isDevUaf ? [wrapUaf] : []), ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...(apply404Cors ? [apply404Cors] : []), ...hoistedHandlers];
 
     const logInit = isLog ? `
     const start = performance.now();
@@ -954,8 +1019,8 @@ export class BareJS<
 
     const compactHelpers = useCompactEmit
       ? `
-  const _rel = (ctx) => { ${releaseCode} };
-  const _onErr = (e, ctx${isLog ? ', doLog' : ''}) => { ${handleErrCode} };`
+  const _rel = (${relArgs}) => { ${releaseCode} };
+  const _onErr = (${errArgs}) => { ${handleErrCode} };`
       : '';
     const fnBody = `${compactHelpers}
   return function(req, peerIp) {
@@ -967,20 +1032,21 @@ export class BareJS<
     else s = urlLen;
 
     const method = req.method;
-    let ctx;
+    let ${ctxVar};
     if (poolState.top > 0) {
       const slot = --poolState.top;
-      ctx = pool[slot];
+      ${ctxVar} = pool[slot];
       pool[slot] = undefined;
     } else {
-      ctx = new Context(trustProxyBox.val);
+      ${ctxVar} = new Context(trustProxyBox.val);
     }
+    ${isDevUaf ? 'const _uaf = { released: false }; const ctx = wrapUaf(rawCtx, _uaf);' : ''}
     let out;
     ${logInit}
 
     try {
-      ctx.req = req;
-      ctx._peerIp = peerIp;
+      ${ctxVar}.req = req;
+      ${ctxVar}._peerIp = peerIp;
 
       ${routerCode}
 
@@ -990,7 +1056,7 @@ export class BareJS<
 
       const errorBody = hNotFound();
       const status = errorBody.status || 404;
-      const nfRes = ${apply404Cors ? 'apply404Cors(Response.json(errorBody, { status }), ctx)' : 'applyCtxHeaders(Response.json(errorBody, { status }), ctx)'};
+      const nfRes = ${apply404Cors ? `apply404Cors(Response.json(errorBody, { status }), ${ctxVar})` : `applyCtxHeaders(Response.json(errorBody, { status }), ${ctxVar})`};
       ${isLog ? 'doLog(status);' : ''}
       ${releaseCode}
       return nfRes;
@@ -1158,9 +1224,19 @@ export class BareJS<
       process.exit(0);
     };
 
+    this._draining = false;
     this.shutdownHandler = shutdown;
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
+
+    const onIpcMessage = async (msg: any) => {
+      if (msg === "DRAIN_REQUEST" || msg?.type === "DRAIN_REQUEST") {
+        await this.drain(false);
+        process.exit(0);
+      }
+    };
+    this.ipcDrainHandler = onIpcMessage;
+    process.on("message", onIpcMessage);
     return server;
   }
 }

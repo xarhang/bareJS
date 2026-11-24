@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795167355588,
+  "lastUpdate": 1795484053305,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3742,6 +3742,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5232.123584873779,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "noreply@github.com",
+            "name": "Antigravity",
+            "username": "web-flow"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "Antigravity",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8470eba5bc9460ad5ebeb7aaba9425578e37bad3",
+          "message": "feat: add onDrain/IPC DRAIN_REQUEST, dev UAF guard, and streaming uploadStream (v0.1.58)",
+          "timestamp": "2026-11-24T01:33:17Z",
+          "tree_id": "7b35ecda8dc207f3fee5b90da24705e457a82d61",
+          "url": "https://github.com/xarhang/bareJS/commit/8470eba5bc9460ad5ebeb7aaba9425578e37bad3"
+        },
+        "date": 1795484052725,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1016.075584004535,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1162.1917409021987,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 4038.3043871040595,
             "unit": "undefined"
           }
         ]

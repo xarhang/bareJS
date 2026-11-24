@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795509328070,
+  "lastUpdate": 1795509943153,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4288,6 +4288,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5731.267166822966,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "5b3645a720e4c8547da2f0aac0d60de74811f753",
+          "message": "docs(bench): add 5% variance threshold for bolding, clarify smoke-tested CI, and restore competitor notes",
+          "timestamp": "2026-11-24T08:44:48Z",
+          "tree_id": "edb3ea466639774f9c92f454ee307e96b5d45ffa",
+          "url": "https://github.com/xarhang/bareJS/commit/5b3645a720e4c8547da2f0aac0d60de74811f753"
+        },
+        "date": 1795509942556,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 643.8995752166824,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 772.398162494817,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 2844.62025726679,
             "unit": "undefined"
           }
         ]

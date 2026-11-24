@@ -8,7 +8,7 @@ All numbers below are measured with [`mitata`](https://github.com/evanwash/mitat
 
 ## Full 7-Scenario Results (Bun)
 
-Bold values indicate the fastest **mean** latency in each scenario.
+Bold values indicate a **mean** latency more than 10% faster than the runner-up; differences within ~10% vary between GitHub Actions runs and are unbolded (treated as ties).
 
 <!-- MARKER: MULTI_BENCH_START -->
 
@@ -17,7 +17,7 @@ Bold values indicate the fastest **mean** latency in each scenario.
 | **1. 100 Routes + Dynamic Params** | **`1.40 µs`**<br><sub>`p99: 8.86 µs`</sub> | `1.81 µs`<br><sub>`p99: 9.05 µs`</sub> | `3.88 µs`<br><sub>`p99: 15.27 µs`</sub> |
 | **2. 10 Middlewares + Deep Path** | **`1.32 µs`**<br><sub>`p99: 7.33 µs`</sub> | `1.85 µs`<br><sub>`p99: 8.94 µs`</sub> | `4.17 µs`<br><sub>`p99: 16.23 µs`</sub> |
 | **3. POST JSON + Schema Validation** | **`3.87 µs`**<br><sub>`p99: 14.05 µs`</sub> | `4.54 µs`<br><sub>`p99: 14.51 µs`</sub> | `4.94 µs`<br><sub>`p99: 18.04 µs`</sub> |
-| **4. Async Handler + Query Parsing** | **`2.10 µs`**<br><sub>`p99: 9.46 µs`</sub> | `2.32 µs`<br><sub>`p99: 10.02 µs`</sub> | `2.89 µs`<br><sub>`p99: 11.78 µs`</sub> |
+| **4. Async Handler + Query Parsing** | `2.10 µs`<br><sub>`p99: 9.46 µs`</sub> | `2.32 µs`<br><sub>`p99: 10.02 µs`</sub> | `2.89 µs`<br><sub>`p99: 11.78 µs`</sub> |
 | **5. Response Schema Secret Stripping** | **`1.08 µs`**<br><sub>`p99: 6.71 µs`</sub> | `1.62 µs`<br><sub>`p99: 7.33 µs`</sub> | — |
 | **6. SQLite Report (`SUM`/`AVG`/`GROUP BY`)** | `22.34 µs`<br><sub>`p99: 38.27 µs`</sub> | `22.22 µs`<br><sub>`p99: 40.28 µs`</sub> | `28.24 µs`<br><sub>`p99: 60.27 µs`</sub> |
 | **7. SQLite Write (`POST` + Validate + `INSERT`)** | `14.35 µs`<br><sub>`p99: 34.26 µs`</sub> | `19.28 µs`<br><sub>`p99: 50.46 µs`</sub> | `14.68 µs`<br><sub>`p99: 15.13 µs`</sub> |
@@ -27,10 +27,10 @@ Bold values indicate the fastest **mean** latency in each scenario.
 <!-- MARKER: MULTI_BENCH_END -->
 
 ### Notes on the Results & Where Competitors Are Faster or Tied
-- **Variance & Near-Ties (< 5%):** Bold highlights a **mean** latency that is more than 5% faster than the runner-up. Differences under ~5% (commonly **Scenario 4: Async Handler + Query Parsing** and **Scenario 6: SQLite Report**) vary between GitHub Actions runs and are treated as ties.
-- **Where Elysia Is Faster or Tied:** In **Scenario 6 (SQLite Report)**, SQLite aggregation time dominates framework overhead so Elysia and BareJS are effectively tied (and Elysia often leads slightly on mean). On individual runs, Elysia can also show lower `p99` tail latency in **Scenario 1 (100 Routes + Dynamic Params)** and **Scenario 5 (Response Schema Secret Stripping)**.
+- **Variance & Ties (< 10%):** Shared CI runners exhibit up to ~10% run-to-run variance on micro-benchmarks. Any unbolded row is within the 10% threshold and should be treated as a tie.
+- **Where Elysia Is Faster or Tied:** In **Scenario 6 (SQLite Report)**, SQLite aggregation time dominates framework overhead so Elysia and BareJS are effectively tied (and Elysia often leads slightly on mean). On individual runs, Elysia can also show lower `p99` tail latency in routing/stripping scenarios or tie within variance on **Scenario 4 (Async Handler + Query Parsing)**.
 - **Scenario 5 (`—` for Hono):** Hono does not ship built-in response schema filtering / secret-field stripping out of the box, so it is omitted (`—`) in this scenario.
-- **Single-Run Consistency:** All three frameworks are benchmarked in the same process and run inside [`benchmarks/fair-suite.ts`](./benchmarks/fair-suite.ts) and [`benchmarks/production-bench.ts`](./benchmarks/production-bench.ts) using identical fresh `Request` objects.
+- **Single-Run Consistency & Verification:** All three frameworks are benchmarked in the same process inside [`benchmarks/fair-suite.ts`](./benchmarks/fair-suite.ts) and [`benchmarks/production-bench.ts`](./benchmarks/production-bench.ts) using identical fresh `Request` objects, with pre-flight 200 status checks and post-run SQLite `INSERT` row-count verification.
 
 ---
 

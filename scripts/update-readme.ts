@@ -94,7 +94,7 @@ try {
           .sort((a, b) => a - b);
         const minAvg = validAvgs[0] ?? 0;
         const secondAvg = validAvgs[1] ?? Infinity;
-        const clearWinner = minAvg > 0 && secondAvg > minAvg * 1.05;
+        const clearWinner = minAvg > 0 && secondAvg > minAvg * 1.10;
 
         const bareCell = fmtCell(bare, clearWinner && bare?.avg === minAvg);
         const elysiaCell = fmtCell(elysia, clearWinner && elysia?.avg === minAvg);

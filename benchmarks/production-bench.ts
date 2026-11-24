@@ -129,8 +129,44 @@ function extractStats(b: any) {
   };
 }
 
+async function verifyPreFlight() {
+  for (const [name, fn] of [
+    ["BareJS", (r: Request) => bareApp.fetch(r)],
+    ["Elysia", (r: Request) => elysiaApp.handle(r)],
+    ["Hono", (r: Request) => honoApp.fetch(r)],
+  ] as const) {
+    const rep = await fn(reqReport);
+    if (rep.status !== 200) throw new Error(`${name} /reports returned ${rep.status}`);
+    const repJson: any = await rep.json();
+    if (!repJson?.report || repJson.report.count !== 100) {
+      throw new Error(`${name} /reports unexpected body: ${JSON.stringify(repJson)}`);
+    }
+
+    const ins = await fn(makeOrderReq());
+    if (ins.status !== 200) throw new Error(`${name} POST /orders returned ${ins.status}`);
+    const insJson: any = await ins.json();
+    if (!insJson?.ok || typeof insJson.id !== "number") {
+      throw new Error(`${name} POST /orders unexpected body: ${JSON.stringify(insJson)}`);
+    }
+  }
+}
+
+function verifyPostRunInserts() {
+  for (const [name, db] of [
+    ["BareJS", dbBare],
+    ["Elysia", dbElysia],
+    ["Hono", dbHono],
+  ] as const) {
+    const row = db.query("SELECT COUNT(*) as c FROM orders").get() as { c: number };
+    if (!row || row.c <= 300) {
+      throw new Error(`${name} SQLite INSERT verification failed: expected > 300 rows, got ${row?.c}`);
+    }
+  }
+}
+
 async function main() {
   console.log("🚀 Production DB Benchmark (SQLite + Security Headers + Validation + Reports)\n");
+  await verifyPreFlight();
 
   group("6. SQLite Report (SUM/AVG/GROUP BY)", () => {
     bench("BareJS", () => bareApp.fetch(reqReport));
@@ -145,6 +181,7 @@ async function main() {
   });
 
   const results: any = await run();
+  verifyPostRunInserts();
   const benches = (results?.benchmarks || []).map(extractStats);
 
   const scenarios = [
@@ -153,7 +190,7 @@ async function main() {
   ];
 
   writeFileSync("production-result.json", JSON.stringify(scenarios, null, 2));
-  console.log("✅ production-result.json generated successfully.");
+  console.log("✅ production-result.json generated and SQLite row counts verified.");
 
   dbBare.close();
   dbElysia.close();

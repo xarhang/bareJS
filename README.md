@@ -119,7 +119,7 @@ Deno.serve({ port: 3000 }, (req, info) => app.fetch(req, info.remoteAddr.hostnam
 
 ## Benchmarks (Bun)
 
-Measured in-process on **Bun** with [`mitata`](https://github.com/evanwash/mitata) (`benchmarks/fair-suite.ts`). Bold values indicate a **mean** latency more than 5% faster than the runner-up; differences under ~5% vary between GitHub Actions runs and are left unbolded. These micro-benchmarks measure framework overhead rather than end-to-end network HTTP throughput, and do not represent Node.js or Deno latency.
+Measured in-process on **Bun** with [`mitata`](https://github.com/evanwash/mitata) (`benchmarks/fair-suite.ts`). Bold values indicate a **mean** latency more than 10% faster than the runner-up; differences under ~10% vary between GitHub Actions runs and are left unbolded (treated as ties). These micro-benchmarks measure framework overhead rather than end-to-end network HTTP throughput, and do not represent Node.js or Deno latency.
 
 <!-- MARKER: MULTI_BENCH_SUMMARY_START -->
 
@@ -128,7 +128,7 @@ Measured in-process on **Bun** with [`mitata`](https://github.com/evanwash/mitat
 | **1. 100 Routes + Dynamic Params** | **`1.40 µs`**<br><sub>`p99: 8.86 µs`</sub> | `1.81 µs`<br><sub>`p99: 9.05 µs`</sub> | `3.88 µs`<br><sub>`p99: 15.27 µs`</sub> |
 | **2. 10 Middlewares + Deep Path** | **`1.32 µs`**<br><sub>`p99: 7.33 µs`</sub> | `1.85 µs`<br><sub>`p99: 8.94 µs`</sub> | `4.17 µs`<br><sub>`p99: 16.23 µs`</sub> |
 | **3. POST JSON + Schema Validation** | **`3.87 µs`**<br><sub>`p99: 14.05 µs`</sub> | `4.54 µs`<br><sub>`p99: 14.51 µs`</sub> | `4.94 µs`<br><sub>`p99: 18.04 µs`</sub> |
-| **4. Async Handler + Query Parsing** | **`2.10 µs`**<br><sub>`p99: 9.46 µs`</sub> | `2.32 µs`<br><sub>`p99: 10.02 µs`</sub> | `2.89 µs`<br><sub>`p99: 11.78 µs`</sub> |
+| **4. Async Handler + Query Parsing** | `2.10 µs`<br><sub>`p99: 9.46 µs`</sub> | `2.32 µs`<br><sub>`p99: 10.02 µs`</sub> | `2.89 µs`<br><sub>`p99: 11.78 µs`</sub> |
 
 > Last Updated: 2026-11-24 (github action — `linux`, AMD EPYC 7763 64-Core Processor, Bun `1.4.5`, Elysia `1.4.21`, Hono `4.11.4`)
 
@@ -168,7 +168,7 @@ BareJS is a complete, zero-boilerplate backend platform—every module below shi
 
 ## Status, Contributing & License
 
-- **Status:** Active `0.1.x` development. The full test suite is verified in [CI](./.github/workflows/ci.yml) across **Bun** (`bun test` — 425 tests across 25 files), **Node.js 20 & 22** (`vitest run` — 422 tests across 24 files + `tests/node-smoke.mjs`), and **Deno 2** (`deno test` + `tests/deno-smoke.ts`).
+- **Status:** Active `0.1.x` development. The test suite is verified in [CI](./.github/workflows/ci.yml) across **Bun** (`bun test`), **Node.js 20 & 22** (`vitest run` + `tests/node-smoke.mjs`; Node 20 skips `production-db.test.ts` which requires `node:sqlite`), and **Deno 2** (`deno test` + `tests/deno-smoke.ts`; skips `playwright.test.ts` and `production-db.test.ts`).
 - **Security:** See [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 - **Contributing:** See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and release workflows.
 - **License:** [MIT](./LICENSE) — Maintained by [xarhang](https://github.com/xarhang).

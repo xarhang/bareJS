@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795514586001,
+  "lastUpdate": 1795514670508,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4756,6 +4756,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 4359.778140788144,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "f23516c875056137d660fdcde2c37091ff0a675e",
+          "message": "docs: update llms.txt with multi-runtime CI test coverage and WS/SSE notes",
+          "timestamp": "2026-11-24T10:03:39Z",
+          "tree_id": "3f6b1cd94b24d35336dfebb804c18738c4aeffda",
+          "url": "https://github.com/xarhang/bareJS/commit/f23516c875056137d660fdcde2c37091ff0a675e"
+        },
+        "date": 1795514670259,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1780.943864189543,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2201.7424748139756,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5426.516477875501,
             "unit": "undefined"
           }
         ]

@@ -274,7 +274,9 @@ export const idempotency = (options: IdempotencyOptions = {}): Middleware => {
     if (!(ctx as any)._detached && !isStream && status >= 200 && status < 300) {
       if (isResp) {
         let cloned: any = null;
-        try { cloned = resVal.clone(); } catch { cloned = null; }
+        if (!resVal.bodyUsed) {
+          try { cloned = resVal.clone(); } catch { cloned = null; }
+        }
         if (cloned) {
           const ct = cloned.headers.get('content-type') || 'application/json';
           return cloned.arrayBuffer().then((buf: ArrayBuffer) => {

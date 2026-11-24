@@ -827,7 +827,7 @@ export class BareJS<
       ? `if (ctx._idempotencyKey) { if (ctx._idemInFlight) ctx._idemInFlight.delete(ctx._idempotencyKey); ctx._idempotencyKey = undefined; ctx._idemInFlight = undefined; }`
       : '';
 
-    const isDevUaf = process.env.NODE_ENV !== 'production';
+    const isDevUaf = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
     const ctxVar = isDevUaf ? 'rawCtx' : 'ctx';
     const wrapUaf = isDevUaf
       ? (rawCtx: Context, state: { released: boolean }): Context => {

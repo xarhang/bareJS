@@ -32,7 +32,8 @@ describe("Audit Fixes (trustProxy, peerIp, error headers, async onError, prefix 
     app.get("/who", (ctx) => ({ ip: ctx.ip }));
     const prevEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
-    const srv = app.listen(0, "127.0.0.1", false);
+    const srv: any = app.listen(0, "127.0.0.1", false);
+    await srv.ready;
     process.env.NODE_ENV = prevEnv;
 
     try {

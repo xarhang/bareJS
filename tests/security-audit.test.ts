@@ -258,11 +258,12 @@ describe("Security Audit, Vulnerability Hunt & 100% Coverage Suite", () => {
     });
 
     const server = app.listen(0);
+    await (server as any).ready;
     try {
       // Non-matching WS path should fall back to normal HTTP 404
-      const miss = await fetch(`http://localhost:${server.port}/ws/other/a/b`, {
+      const miss = await app.fetch(new Request(`http://localhost:${server.port}/ws/other/a/b`, {
         headers: { upgrade: "websocket" }
-      });
+      }));
       expect(miss.status).toBe(404);
 
       const ws = new WebSocket(`ws://localhost:${server.port}/ws/files/docs/readme.md`);
@@ -351,6 +352,7 @@ describe("Security Audit, Vulnerability Hunt & 100% Coverage Suite", () => {
   test("13. listen() enforces maxRequestBodySize and trustProxy option at server level", async () => {
     const app = new BareJS().post("/body", async (ctx) => ({ len: (await ctx.req.text()).length }));
     const server = app.listen(0, "127.0.0.1", false, { maxRequestBodySize: 64, trustProxy: false });
+    await (server as any).ready;
     try {
       const ok = await fetch(`http://127.0.0.1:${server.port}/body`, { method: "POST", body: "small" });
       expect(ok.status).toBe(200);

@@ -37,6 +37,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: bun install
       - run: bun run build
+      - run: node ./node_modules/.bin/vitest run
       - run: node tests/node-smoke.mjs
 
   test-deno:
@@ -52,4 +53,5 @@ jobs:
           deno-version: v2.x
       - run: bun install
       - run: bun run build
+      - run: deno test --allow-all --unstable-sloppy-imports --no-check --config deno.test.json --ignore=tests/playwright.test.ts,tests/production-db.test.ts tests/
       - run: deno run --allow-net --allow-read --allow-write --allow-env tests/deno-smoke.ts

@@ -74,6 +74,7 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
       return { trust: ctx._trustProxy, ip: ctx.ip };
     });
     const server = app.listen(0, "127.0.0.1", false, { trustProxy: true });
+    await (server as any).ready;
     try {
       const url = `http://127.0.0.1:${server.port}/ip`;
       const [r1, r2] = await Promise.all([
@@ -965,7 +966,8 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     expect(vary).toContain("accept-encoding");
     expect(vary).toContain("origin");
 
-    const srv = app.listen(0);
+    const srv: any = app.listen(0);
+    await srv.ready;
     try {
       expect(srv.port).not.toBe(3000);
       expect(srv.port).toBeGreaterThan(0);
@@ -1053,8 +1055,9 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
     const req = new Request("http://localhost/up", {
       method: "POST",
       headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
-      body: stream
-    });
+      body: stream,
+      duplex: "half"
+    } as any);
     const res = await app.fetch(req);
     expect(res.status).toBe(413);
   });
@@ -1304,8 +1307,9 @@ describe("Production & Security Sign-Off Suite (10-Agent Empirical Verification)
       new Request("http://localhost/j", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: bigStream
-      })
+        body: bigStream,
+        duplex: "half"
+      } as any)
     );
     await expect(ctx.jsonBody(100)).rejects.toMatchObject({ status: 413 });
     expect(chunksRead).toBeLessThan(10);
@@ -1746,7 +1750,8 @@ describe("Pool size normalization & lazy bounded LIFO retention", () => {
     // 3) Live HTTP server via app.listen(0) delegates dynamically to this.fetch on hot recompilation
     const liveApp = new BareJS(2);
     liveApp.get("/live-a", () => "LIVE_A");
-    const srv = liveApp.listen(0);
+    const srv: any = liveApp.listen(0);
+    await srv.ready;
     try {
       const baseUrl = `http://127.0.0.1:${srv.port}`;
       const r1 = await fetch(`${baseUrl}/live-a`);

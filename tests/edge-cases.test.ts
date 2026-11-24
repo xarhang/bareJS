@@ -182,8 +182,8 @@ describe("Security & Edge-Case Hardening Suite", () => {
     expect(r2.headers.get("access-control-allow-origin")).toBe("https://portal.barejs.dev");
   });
 
-  test("RadixNode.lookup interpreter mode matches static, multi-static, and param routes", () => {
-    const { RadixNode } = require("../src/core/radix");
+  test("RadixNode.lookup interpreter mode matches static, multi-static, and param routes", async () => {
+    const { RadixNode } = await import("../src/core/radix");
     const tree = new RadixNode();
     const hSingle = () => "single";
     const hMultiA = () => "multiA";

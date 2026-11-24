@@ -55,6 +55,7 @@ describe("Real-World Production Simulation (Security, Concurrency & Performance)
       });
 
     const server = app.listen(0);
+    await (server as any).ready;
     const base = `http://localhost:${server.port}`;
 
     try {

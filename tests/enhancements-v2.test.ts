@@ -418,6 +418,7 @@ describe("Enhancements v2", () => {
           return Response.json({ keys });
         },
       });
+      await (jwksServer as any).ready;
 
       try {
         const app = new BareJS();

@@ -60,8 +60,8 @@ describe("BareJS Ultra-Accuracy Suite - Extended", () => {
       const data = await res.json();
       expect(data.msg).toBe("Bearer token required");
     });
-    test("Exports - Typebox Available", () => {
-      const { typebox, t } = require("../src/core/bare");
+    test("Exports - Typebox Available", async () => {
+      const { typebox, t } = await import("../src/core/bare");
       expect(typebox).toBeDefined();
       expect(t).toBeDefined();
       expect(t.String).toBeDefined();

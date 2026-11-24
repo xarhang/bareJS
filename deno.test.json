@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "bun:test": "./tests/shims/bun-test-deno.ts",
+    "bun:sqlite": "./tests/shims/bun-sqlite-deno.ts",
+    "@std/testing/bdd": "jsr:@std/testing/bdd@^1.0.0",
+    "@std/testing/mock": "jsr:@std/testing/mock@^1.0.0",
+    "@std/expect": "jsr:@std/expect@^1.0.0"
+  },
+  "nodeModulesDir": "auto"
+}

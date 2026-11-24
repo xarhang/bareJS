@@ -67,7 +67,7 @@
     "zod": "^3.0.0",
     "ws": "^8.0.0",
     "@node-rs/argon2": "^2.0.0",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": ""
   },
   "peerDependenciesMeta": {
     "@sinclair/typebox": {
@@ -89,11 +89,13 @@
   "devDependencies": {
     "@sinclair/typebox": "^0.34.47",
     "@types/bun": "^1.3.5",
+    "bcryptjs": "^2.4.3",
     "elysia": "latest",
     "hono": "latest",
     "mitata": "^1.0.34",
     "playwright-core": "^1.65.1",
     "typescript": "latest",
+    "vitest": "^5.1.1",
     "zod": "^3.25.76"
   },
   "files": [

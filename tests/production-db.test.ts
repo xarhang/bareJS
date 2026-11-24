@@ -21,7 +21,7 @@ describe("Real-World Production Test: SQLite DB + Processing + Reports + Concurr
   const JWT_SECRET = "prod_test_jwt_secret_key_32chars!";
   const COOKIE_SECRET = "prod_test_cookie_secret_32chars!";
 
-  beforeAll(() => {
+  beforeAll(async () => {
     db = new Database(":memory:");
     db.exec(`
       CREATE TABLE users (
@@ -188,6 +188,7 @@ describe("Real-World Production Test: SQLite DB + Processing + Reports + Concurr
     const prevEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
     server = app.listen(0, "127.0.0.1", false);
+    await (server as any).ready;
     process.env.NODE_ENV = prevEnv;
     baseUrl = `http://127.0.0.1:${server.port}`;
   });

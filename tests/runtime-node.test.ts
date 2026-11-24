@@ -110,14 +110,18 @@ describe('Node Runtime Driver (nodeDriver)', () => {
     }
   });
 
-  it('throws clear error when nodeDriver password peer dependencies are missing', async () => {
+  it('supports zero-dep scrypt fallback and bcryptjs when installed (or throws clear error if missing)', async () => {
     const scryptHash = await nodeDriver.password.hash('secret', { algorithm: 'argon2id', memoryCost: 65536, timeCost: 2 });
     expect(scryptHash.startsWith('$scrypt$')).toBe(true);
     expect(await nodeDriver.password.verify('secret', scryptHash)).toBe(true);
     expect(await nodeDriver.password.verify('wrong', scryptHash)).toBe(false);
-    await expect(
-      nodeDriver.password.hash('secret', { algorithm: 'bcrypt', memoryCost: 65536, timeCost: 10 })
-    ).rejects.toThrow('bcryptjs');
+    try {
+      const bcryptHash = await nodeDriver.password.hash('secret', { algorithm: 'bcrypt', memoryCost: 65536, timeCost: 10 });
+      expect(bcryptHash.startsWith('$2')).toBe(true);
+      expect(await nodeDriver.password.verify('secret', bcryptHash)).toBe(true);
+    } catch (err: any) {
+      expect(err?.message).toContain('bcryptjs');
+    }
   });
 
   it('upgrades WebSocket natively via Deno.upgradeWebSocket when running on Deno', async () => {

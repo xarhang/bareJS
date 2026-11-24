@@ -22,6 +22,7 @@ describe('Enterprise Features: Graceful Drain, Dev UAF Guard & Streaming Upload'
 
     app.get('/ping', () => 'pong');
     const server = app.listen(0);
+    await (server as any).ready;
     const res = await fetch(`http://localhost:${server.port}/ping`);
     expect(await res.text()).toBe('pong');
 
@@ -185,8 +186,9 @@ describe('Enterprise Features: Graceful Drain, Dev UAF Guard & Streaming Upload'
       new Request('http://localhost/stream-upload', {
         method: 'POST',
         headers: { 'content-type': `multipart/form-data; boundary="${boundary}"` },
-        body: bodyStream
-      })
+        body: bodyStream,
+        duplex: 'half'
+      } as any)
     );
 
     expect(res.status).toBe(200);

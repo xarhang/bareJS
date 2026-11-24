@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { createReadStream } from 'node:fs';
 import { extname } from 'node:path';
 import { Readable } from 'node:stream';
-import { gzipSync } from 'node:zlib';
+import * as zlib from 'node:zlib';
 import type { RuntimeDriver, RuntimeFileHandle, RuntimePasswordConfig, ServeOptions, ServerHandle } from './types';
 import { matchWsRoute } from '../core/ws-match';
 
@@ -452,26 +452,46 @@ export const nodeDriver: RuntimeDriver = {
     }
     server.listen(listenOpts);
 
-    const addr = server.address();
-    const boundPort = typeof addr === 'object' && addr ? addr.port : opts.port;
+    const ready = new Promise<void>((resolve) => {
+      if (server.listening) resolve();
+      else server.once('listening', () => resolve());
+    });
+
+    const stopFn = (closeActiveConnections = false) =>
+      new Promise<void>((resolve) => {
+        if (closeActiveConnections && typeof (server as any).closeAllConnections === 'function') {
+          (server as any).closeAllConnections();
+        }
+        server.close(() => resolve());
+      });
+
+    Object.defineProperty(server, 'port', {
+      get() {
+        const a = server.address();
+        return typeof a === 'object' && a ? a.port : opts.port;
+      },
+      configurable: true
+    });
+    (server as any).stop = stopFn;
+    (server as any).ready = ready;
 
     return {
-      stop(closeActiveConnections = false) {
-        return new Promise<void>((resolve) => {
-          if (closeActiveConnections && typeof (server as any).closeAllConnections === 'function') {
-            (server as any).closeAllConnections();
-          }
-          server.close(() => resolve());
-        });
+      stop: stopFn,
+      get port() {
+        const a = server.address();
+        return typeof a === 'object' && a ? a.port : opts.port;
       },
-      port: boundPort,
       raw: server
     };
   },
 
   gzip(data: Uint8Array, level: number): Uint8Array {
-    return new Uint8Array(gzipSync(data, { level }));
+    return new Uint8Array(zlib.gzipSync(data, { level }));
   },
+
+  zstd: typeof (zlib as any).zstdCompressSync === 'function'
+    ? (data: Uint8Array): Uint8Array => new Uint8Array((zlib as any).zstdCompressSync(data))
+    : undefined,
 
   openFile(path: string): RuntimeFileHandle {
     const ext = extname(path).toLowerCase();

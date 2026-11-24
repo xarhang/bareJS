@@ -173,6 +173,7 @@ describe("BareJS Enhancements & Fixes", () => {
     });
 
     const server = app.listen(0);
+    await (server as any).ready;
     try {
       const ws = new WebSocket(`ws://localhost:${server.port}/ws/lounge`);
       const messages: string[] = [];

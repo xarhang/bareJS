@@ -257,7 +257,8 @@ describe("100% Line & Function Coverage + 200+ Total Tests Suite (50 Tests)", ()
 
     const app = new BareJS(4);
     app.onStart(() => Promise.reject(new Error("non-fatal start hook error")));
-    const srv = app.listen(0);
+    const srv: any = app.listen(0);
+    await srv.ready;
     try {
       expect(srv.port).toBeGreaterThan(0);
       await new Promise((r) => setTimeout(r, 5));
@@ -316,6 +317,7 @@ describe("100% Line & Function Coverage + 200+ Total Tests Suite (50 Tests)", ()
     };
     app.ws("/ws-live", handler);
     const srv: any = app.listen(0);
+    await srv.ready;
     try {
       // Connect a WebSocket client and also invoke drain hook
       const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws-live`);

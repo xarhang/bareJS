@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795514670508,
+  "lastUpdate": 1795515571181,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4795,6 +4795,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5426.516477875501,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "424eb9c7c1acfa9bcb44d7da134f807f8ac24bb3",
+          "message": "bench: verify SQLite inserts, raise tie threshold to 10%, and clean up docs",
+          "timestamp": "2026-11-24T10:18:35Z",
+          "tree_id": "92e9fc6e111dd8761f84a693251207e619255264",
+          "url": "https://github.com/xarhang/bareJS/commit/424eb9c7c1acfa9bcb44d7da134f807f8ac24bb3"
+        },
+        "date": 1795515570708,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 616.8700384457467,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 795.003103967307,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 2903.0314069385377,
             "unit": "undefined"
           }
         ]

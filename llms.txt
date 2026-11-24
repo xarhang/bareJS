@@ -1,6 +1,6 @@
 # BareJS (`barejs`) — AI Quick Reference (`llms.txt`)
 
-> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`), **Node.js** (`>= 20` via `barejs/node`), and **Deno** with built-in security (Argon2id/scrypt, HS256/RS256/ES256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip/Brotli/Zstd `compress`, `app.cron`, Security Headers, DoS limits) and **100% Function & Line Test Coverage (424 tests / 6,253 assertions)**.
+> BareJS is an ultra-fast, zero-allocation JIT-compiled web framework for **Bun** (`>= 1.1`), **Node.js** (`>= 20` via `barejs/node`), and **Deno** with built-in security (Argon2id/scrypt, HS256/RS256/ES256 JWT, HMAC-signed HttpOnly cookies, CSRF, Rate Limiting, Circuit Breaker, Idempotency-Key double-charge protection, Singleflight request coalescing, Mass-Assignment `stripUnknown`, Native Gzip/Brotli/Zstd `compress`, `app.cron`, Security Headers, DoS limits) and **Full Multi-Runtime Test Suite (425 tests / 6,255 assertions verified in CI across Bun, Node.js 20/22, and Deno 2)**.
 
 ## 1. Installation & Minimal App (Bun, Node.js, Deno)
 ```ts
@@ -121,7 +121,8 @@ app.get('/sso', bareAuth({ algorithms: ['RS256', 'ES256'], jwksUri: 'https://aut
 ```
 
 ## 6. Real-Time, RPC, OpenAPI & Client
-- **WebSocket**: `app.ws('/ws/chat', { open(ws){}, message(ws, msg){}, close(ws){}, drain(ws){} })`
+- **WebSocket**: `app.ws('/ws/chat', { open(ws){}, message(ws, msg){}, close(ws){}, drain(ws){} })` (Native on Bun, built-in RFC 6455 or optional `ws` on Node.js, `Deno.upgradeWebSocket` on Deno)
+- **SSE**: `ctx.sse(async (send, close) => { send(data, event?, id?); })` or `ctx.sse(asyncIterable)` (works across Bun, Node.js, Deno)
 - **JSON-RPC 2.0**: `app.rpc('/rpc', { add: ({ a, b }, ctx) => a + b })` (supports single, batch, notifications, and standard `-32700`/`-32600`/`-32601`/`-32603` error codes)
 - **OpenAPI 3.1 + Scalar UI**: `app.docs('/docs', { title: 'My API', version: '1.0.0' })` (serves `/docs` & `/docs/json` with full `params`, `query`, `headers`, `body`, `response`, and `detail`)
 - **Type-Safe Client (URL or Zero-Network In-Memory `app`)**:

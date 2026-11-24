@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795512385457,
+  "lastUpdate": 1795512457984,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4639,6 +4639,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5392.941079202241,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "0af5a4bf29dbc9b95a11bfb5a0faf317f88e4d20",
+          "message": "test: wrap spy matchers in Proxy instead of mutating @std/expect Proxy",
+          "timestamp": "2026-11-24T09:26:46Z",
+          "tree_id": "d301629b7468eee67b6ae71696f9ab06df1e70c2",
+          "url": "https://github.com/xarhang/bareJS/commit/0af5a4bf29dbc9b95a11bfb5a0faf317f88e4d20"
+        },
+        "date": 1795512457754,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1393.4372629889003,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1745.3632413947753,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5147.627241929055,
             "unit": "undefined"
           }
         ]

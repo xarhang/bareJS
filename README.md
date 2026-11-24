@@ -2,7 +2,7 @@
 <br />
 <h1>Bare<span style="color: #F7DF1E;">JS</span></h1>
 <p><strong>The batteries-included web framework for Bun, Node.js, and Deno, engineered for minimal overhead.</strong></p>
-<p><i>Built-in TypeBox &amp; Zod validation, end-to-end RPC client inference, OpenAPI 3.1, WebSockets, JSON-RPC 2.0, and zero-trust security — powered by a JIT-compiled O(1) radix router and LIFO context pooling.</i></p>
+<p><i>Built-in TypeBox, Zod &amp; JSON Schema validation, end-to-end RPC client inference, OpenAPI 3.1, WebSockets, SSE, Streaming Uploads, JSON-RPC 2.0, Cron, Resilience, and Zero-Trust Security — powered by a JIT-compiled O(1) radix router and LIFO context pooling.</i></p>
 
 <p>
 <a href="https://www.npmjs.com/package/barejs"><img src="https://img.shields.io/npm/v/barejs?style=for-the-badge&logo=npm&color=CB3837" alt="NPM Version"></a>
@@ -36,12 +36,12 @@ app.listen(3000);
 
 ## Why BareJS?
 
-- **O(1) JIT Router & Pooling:** Compiles static routes into an inline `switch` fast-path and dynamic routes into a radix jump-table with a lazy LIFO `Context` pool (`0..65536`) and dev-mode Use-After-Free Proxy guard.
-- **Unified Schema Validation:** Declarative `body`, `query`, `params`, `headers`, and `response` schemas with **TypeBox**, **Zod**, or **Native JSON Schema** — including auto-coercion, `413` `maxBodySize` guards, and automatic secret-field stripping.
+- **O(1) JIT Router, Sub-Routing & Pooling:** Compiles static routes into an inline `switch` fast-path and dynamic routes into a radix jump-table (`:params`, `*` wildcards, `BareRouter` sub-app mounting) with a lazy LIFO `Context` pool (`0..65536`) and dev-mode Use-After-Free Proxy guard.
+- **Unified Schema Validation:** Declarative `body`, `query`, `params`, `headers`, and `response` schemas with **TypeBox**, **Zod**, or **Native JSON Schema** — including auto-coercion, `stripUnknown` Mass-Assignment protection, `413` `maxBodySize` guards, and automatic secret-field stripping.
 - **End-to-End Type Safety:** `bareClient(app)` provides compile-time route, param, query, body, and response inference over HTTP or zero-network in-memory calls.
-- **Batteries Included:** Auto-generated **OpenAPI 3.1** + Scalar UI (`app.docs`), **JSON-RPC 2.0** (`app.rpc`), **WebSockets** (`app.ws`), **SSE** (`ctx.sse`), **Compression** (`compress`), and **Static Files** (`staticFile`).
-- **Zero-Trust Security & Resilience:** Built-in `bareAuth` (HS256/RS256/ES256/JWKS), `Hash` (Argon2id/bcrypt), HMAC-signed cookies, `cors`, `csrf`, `rateLimit`, `idempotency`, `circuitBreaker`, `createSingleflight`, and `app.onDrain`.
-- **Multi-Runtime:** Startup driver selection (`bunDriver` / `nodeDriver`) keeps Bun native performance untouched while running the same app on Node.js (`>=20`) and Deno (`>=2.0`).
+- **Batteries Included:** Auto-generated **OpenAPI 3.1** + Scalar UI (`app.docs`), **JSON-RPC 2.0** (`app.rpc`), **WebSockets** (`app.ws`), **SSE** (`ctx.sse`), **Streaming Uploads** (`ctx.upload` / `ctx.uploadStream`), **Compression** (`compress` — `zstd`/`br`/`gzip`), **Static Files** (`staticFile` with ETag/`304`/Range `206`), `app.derive`, `app.cron`, `logger`, and `healthcheck`.
+- **Zero-Trust Security & Resilience:** Built-in `bareAuth` (HS256/RS256/ES256/JWKS + `revokeToken`), `basicAuth`, `hasRole`, `Hash` (Argon2id/bcrypt/scrypt), HMAC-signed cookies, `cors`, `csrf`, `rateLimit`, `idempotency`, `circuitBreaker`, `createSingleflight`, `timeout`, `redisStore`, and `app.onDrain`.
+- **Multi-Runtime & Web Standard Interop:** Zero-dep native drivers for **Bun**, **Node.js >= 20** (`barejs/node` with built-in RFC 6455 WebSockets & `scrypt`), and **Deno >= 2.0** (`Deno.upgradeWebSocket`). Standard `Request`/`Response` (`ctx.req`) works directly with **Better-Auth**, **Auth0**, **Clerk**, **GraphQL Yoga**, **Sentry**, and **OpenTelemetry**.
 
 ---
 
@@ -69,7 +69,8 @@ app.listen(3000);
 
 ```bash
 npm install barejs
-# Optional peer dependencies if using WebSockets or password hashing:
+# Zero-dep native WebSockets (RFC 6455) & scrypt hashing work out of the box!
+# Optional peer dependencies only if you prefer `ws` or Argon2id:
 npm install ws @node-rs/argon2
 ```
 
@@ -110,7 +111,7 @@ Deno.serve({ port: 3000 }, (req, info) => app.fetch(req, info.remoteAddr.hostnam
 | **Security Middlewares (`cors`, `csrf`, `rateLimit`, `bareAuth`, `idempotency`)** | ✅ | ✅ | ✅ |
 | **Streaming (`ctx.sse`, `ctx.upload`, `ctx.uploadStream`)** | ✅ | ✅ | ✅ |
 | **Static Files (`staticFile`)** | ✅ | ✅ | ✅ |
-| **Compression (`compress` — `gzip` / `br` / `zstd`)** | ✅ | ✅ (`gzip` / `br`) | ✅ (`gzip` / `br`) |
+| **Compression (`compress` — `gzip` / `br` / `zstd`)** | ✅ | ✅ (`gzip` / `br`, + `zstd` on Node >= 22.15) | ✅ (`gzip` / `br`) |
 | **WebSockets (`app.ws`)** | ✅ Native | ✅ Native (RFC 6455) · Optional `ws` | ✅ Native (`Deno.upgradeWebSocket`) |
 | **Password Hashing (`Hash`)** | ✅ Native (`Argon2id` / `bcrypt`) | ✅ Native (`scrypt`) · Optional `Argon2id` | ✅ Native (`scrypt`) · Optional `Argon2id` |
 

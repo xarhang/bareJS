@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795511945597,
+  "lastUpdate": 1795512260772,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4522,6 +4522,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3236.913765088208,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "4d31504c8762dc7ebf3e53ff2cf70c1fc532119f",
+          "message": "test: fix Node 20 NODE_OPTIONS=--expose-gc and Deno spyOn/test.each/ready/Deno.upgradeWebSocket",
+          "timestamp": "2026-11-24T09:23:27Z",
+          "tree_id": "6c694467adf1d5f117f48a70c55232b2c857090d",
+          "url": "https://github.com/xarhang/bareJS/commit/4d31504c8762dc7ebf3e53ff2cf70c1fc532119f"
+        },
+        "date": 1795512260273,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 979.9966953617462,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1217.8160004881918,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 4685.046846188638,
             "unit": "undefined"
           }
         ]

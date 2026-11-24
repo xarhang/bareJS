@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795488986780,
+  "lastUpdate": 1795492518531,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -3898,6 +3898,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3088.379659349762,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "3dba89a8f18f7738308a52bccb599a6c587f8d5f",
+          "message": "docs: reframe README and metadata as batteries-included zero-overhead framework",
+          "timestamp": "2026-11-24T03:54:26Z",
+          "tree_id": "8b81b35270a61a07eaa394f801fa891c1454939f",
+          "url": "https://github.com/xarhang/bareJS/commit/3dba89a8f18f7738308a52bccb599a6c587f8d5f"
+        },
+        "date": 1795492518290,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1658.687091687317,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1911.6133261443288,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5422.343541631764,
             "unit": "undefined"
           }
         ]

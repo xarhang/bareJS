@@ -118,7 +118,7 @@ Deno.serve({ port: 3000 }, (req, info) => app.fetch(req, info.remoteAddr.hostnam
 
 ## Benchmarks (Bun)
 
-Measured in-process on **Bun** with [`mitata`](https://github.com/evanwash/mitata) (`benchmarks/fair-suite.ts`). Bold values indicate the fastest **mean** latency. These micro-benchmarks measure framework overhead rather than end-to-end network HTTP throughput, and do not represent Node.js or Deno latency.
+Measured in-process on **Bun** with [`mitata`](https://github.com/evanwash/mitata) (`benchmarks/fair-suite.ts`). Bold values indicate a **mean** latency more than 5% faster than the runner-up; differences under ~5% vary between GitHub Actions runs and are left unbolded. These micro-benchmarks measure framework overhead rather than end-to-end network HTTP throughput, and do not represent Node.js or Deno latency.
 
 <!-- MARKER: MULTI_BENCH_SUMMARY_START -->
 
@@ -167,7 +167,7 @@ BareJS is a complete, zero-boilerplate backend platform—every module below shi
 
 ## Status, Contributing & License
 
-- **Status:** Active `0.1.x` development. Verified in [CI](./.github/workflows/ci.yml) across **Bun** (`bun test`), **Node.js 20 & 22** (`tests/node-smoke.mjs`), and **Deno 2** (`tests/deno-smoke.ts`); Node.js and Deno runtime drivers were introduced in `v0.1.59` and are under active hardening.
+- **Status:** Active `0.1.x` development. Full test suite verified in [CI](./.github/workflows/ci.yml) on **Bun** (`bun test`), and **smoke-tested in CI** on **Node.js 20 & 22** (`tests/node-smoke.mjs`) and **Deno 2** (`tests/deno-smoke.ts`); Node.js and Deno runtime drivers were introduced in `v0.1.59` and are under active hardening.
 - **Security:** See [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 - **Contributing:** See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and release workflows.
 - **License:** [MIT](./LICENSE) — Maintained by [xarhang](https://github.com/xarhang).

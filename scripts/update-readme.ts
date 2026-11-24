@@ -89,12 +89,16 @@ try {
         const elysia = list.find((r: any) => r.name.toLowerCase().includes('elysia'));
         const hono = list.find((r: any) => r.name.toLowerCase().includes('hono'));
 
-        const validAvgs = [bare?.avg, elysia?.avg, hono?.avg].filter((v): v is number => typeof v === 'number' && v > 0);
-        const minAvg = validAvgs.length > 0 ? Math.min(...validAvgs) : 0;
+        const validAvgs = [bare?.avg, elysia?.avg, hono?.avg]
+          .filter((v): v is number => typeof v === 'number' && v > 0)
+          .sort((a, b) => a - b);
+        const minAvg = validAvgs[0] ?? 0;
+        const secondAvg = validAvgs[1] ?? Infinity;
+        const clearWinner = minAvg > 0 && secondAvg > minAvg * 1.05;
 
-        const bareCell = fmtCell(bare, bare?.avg === minAvg);
-        const elysiaCell = fmtCell(elysia, elysia?.avg === minAvg);
-        const honoCell = fmtCell(hono, hono?.avg === minAvg);
+        const bareCell = fmtCell(bare, clearWinner && bare?.avg === minAvg);
+        const elysiaCell = fmtCell(elysia, clearWinner && elysia?.avg === minAvg);
+        const honoCell = fmtCell(hono, clearWinner && hono?.avg === minAvg);
 
         return `| **${s.scenario}** | ${bareCell} | ${elysiaCell} | ${honoCell} |`;
       });

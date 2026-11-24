@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795512457984,
+  "lastUpdate": 1795514116631,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4678,6 +4678,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5147.627241929055,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "f412b3eb7d925be1b1324e5e74df85655660fc02",
+          "message": "docs: update README, CONTRIBUTING, and package.json for full Bun/Node/Deno test suite",
+          "timestamp": "2026-11-24T09:54:24Z",
+          "tree_id": "dc7da72b7734df56133dfa73b39ce5bc5603ffb5",
+          "url": "https://github.com/xarhang/bareJS/commit/f412b3eb7d925be1b1324e5e74df85655660fc02"
+        },
+        "date": 1795514116390,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1461.4383637829872,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 2073.8039652092425,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5823.188530973452,
             "unit": "undefined"
           }
         ]

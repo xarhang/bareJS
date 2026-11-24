@@ -52,4 +52,4 @@ jobs:
           deno-version: v2.x
       - run: bun install
       - run: bun run build
-      - run: deno run --allow-net --allow-read --allow-env tests/deno-smoke.ts
+      - run: deno run --allow-net --allow-read --allow-write --allow-env tests/deno-smoke.ts

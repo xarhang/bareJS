@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795511619282,
+  "lastUpdate": 1795511788570,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4444,6 +4444,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5559.088532281644,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "6c461dacf627b9a7a3794ed527c7ded659dedc98",
+          "message": "test: support Node 20 (Vitest 3 + ws polyfill) and fix Deno JSR specifiers",
+          "timestamp": "2026-11-24T09:15:37Z",
+          "tree_id": "3effe1c393c74cfb415935234acb2013e73eb61c",
+          "url": "https://github.com/xarhang/bareJS/commit/6c461dacf627b9a7a3794ed527c7ded659dedc98"
+        },
+        "date": 1795511788182,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1437.5649255989217,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1626.5884896417722,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5252.824757543103,
             "unit": "undefined"
           }
         ]

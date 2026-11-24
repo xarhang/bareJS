@@ -14,7 +14,6 @@ import * as path from "node:path";
 import { BareJS } from "../../src/core/bare.ts";
 
 export function expect(received: any): any {
-  const base = stdExpect(received);
   if (received && received.__isBareSpy) {
     const checkCalls = (negate: boolean) => ({
       toHaveBeenCalled() {
@@ -34,11 +33,22 @@ export function expect(received: any): any {
         if (negate ? ok : !ok) throw new Error(`Expected spy ${negate ? "not " : ""}to have been called with ${JSON.stringify(expected)}`);
       },
     });
-    return Object.assign(base, checkCalls(false), {
-      not: Object.assign(base.not, checkCalls(true)),
+    const pos = checkCalls(false);
+    const neg = checkCalls(true);
+    return new Proxy(pos, {
+      get(target, prop) {
+        if (prop === "not") {
+          return new Proxy(neg, {
+            get(nt, nprop) {
+              return nprop in nt ? (nt as any)[nprop] : stdExpect(received).not[nprop];
+            },
+          });
+        }
+        return prop in target ? (target as any)[prop] : stdExpect(received)[prop];
+      },
     });
   }
-  return base;
+  return stdExpect(received);
 }
 
 function makeTestFn(base: any) {

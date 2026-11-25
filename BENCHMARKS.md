@@ -14,15 +14,15 @@ Bold values indicate a **mean** latency more than 10% faster than the runner-up;
 
 | Scenario | **BareJS** | **ElysiaJS** | **Hono** |
 | :--- | :---: | :---: | :---: |
-| **1. 100 Routes + Dynamic Params** | **`1.53 µs`**<br><sub>`p99: 9.34 µs`</sub> | `1.80 µs`<br><sub>`p99: 8.24 µs`</sub> | `4.41 µs`<br><sub>`p99: 17.66 µs`</sub> |
-| **2. 10 Middlewares + Deep Path** | **`1.49 µs`**<br><sub>`p99: 8.48 µs`</sub> | `2.05 µs`<br><sub>`p99: 9.92 µs`</sub> | `4.42 µs`<br><sub>`p99: 17.44 µs`</sub> |
-| **3. POST JSON + Schema Validation** | `4.51 µs`<br><sub>`p99: 17.53 µs`</sub> | `4.80 µs`<br><sub>`p99: 15.95 µs`</sub> | `4.90 µs`<br><sub>`p99: 16.37 µs`</sub> |
-| **4. Async Handler + Query Parsing** | `2.31 µs`<br><sub>`p99: 10.40 µs`</sub> | `2.47 µs`<br><sub>`p99: 10.60 µs`</sub> | `3.38 µs`<br><sub>`p99: 14.50 µs`</sub> |
-| **5. Response Schema Secret Stripping** | **`1.30 µs`**<br><sub>`p99: 7.71 µs`</sub> | `1.75 µs`<br><sub>`p99: 8.11 µs`</sub> | — |
-| **6. SQLite Report (`SUM`/`AVG`/`GROUP BY`)** | `20.32 µs`<br><sub>`p99: 20.65 µs`</sub> | `20.49 µs`<br><sub>`p99: 21.41 µs`</sub> | `25.12 µs`<br><sub>`p99: 26.18 µs`</sub> |
-| **7. SQLite Write (`POST` + Validate + `INSERT`)** | **`8.42 µs`**<br><sub>`p99: 8.93 µs`</sub> | `19.82 µs`<br><sub>`p99: 51.89 µs`</sub> | `15.15 µs`<br><sub>`p99: 15.23 µs`</sub> |
+| **1. 100 Routes + Dynamic Params** | **`659 ns`**<br><sub>`p99: 3.53 µs`</sub> | `913 ns`<br><sub>`p99: 4.17 µs`</sub> | `2.06 µs`<br><sub>`p99: 9.35 µs`</sub> |
+| **2. 10 Middlewares + Deep Path** | **`625 ns`**<br><sub>`p99: 3.14 µs`</sub> | `895 ns`<br><sub>`p99: 4.29 µs`</sub> | `2.45 µs`<br><sub>`p99: 10.45 µs`</sub> |
+| **3. POST JSON + Schema Validation** | **`1.89 µs`**<br><sub>`p99: 9.53 µs`</sub> | `2.27 µs`<br><sub>`p99: 10.02 µs`</sub> | `2.34 µs`<br><sub>`p99: 11.63 µs`</sub> |
+| **4. Async Handler + Query Parsing** | `1.05 µs`<br><sub>`p99: 3.96 µs`</sub> | `1.13 µs`<br><sub>`p99: 4.21 µs`</sub> | `1.56 µs`<br><sub>`p99: 7.26 µs`</sub> |
+| **5. Response Schema Secret Stripping** | **`562 ns`**<br><sub>`p99: 3.12 µs`</sub> | `803 ns`<br><sub>`p99: 3.52 µs`</sub> | — |
+| **6. SQLite Report (`SUM`/`AVG`/`GROUP BY`)** | `14.82 µs`<br><sub>`p99: 15.62 µs`</sub> | `15.12 µs`<br><sub>`p99: 15.65 µs`</sub> | `17.89 µs`<br><sub>`p99: 18.84 µs`</sub> |
+| **7. SQLite Write (`POST` + Validate + `INSERT`)** | **`5.22 µs`**<br><sub>`p99: 5.57 µs`</sub> | `6.33 µs`<br><sub>`p99: 6.86 µs`</sub> | `8.60 µs`<br><sub>`p99: 8.76 µs`</sub> |
 
-> Last Updated: 2026-11-25 (github action — `linux`, AMD EPYC 7763 64-Core Processor, Bun `1.4.5`, Elysia `1.4.21`, Hono `4.11.4`)
+> Last Updated: 2026-11-25 (github action — `linux`, Intel(R) Xeon(R) 6975P-C, Bun `1.4.5`, Elysia `1.4.21`, Hono `4.11.4`)
 
 <!-- MARKER: MULTI_BENCH_END -->
 

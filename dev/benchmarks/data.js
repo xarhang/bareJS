@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795578115916,
+  "lastUpdate": 1795599394481,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4912,6 +4912,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5392.35520323832,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "60564e5b3631986d88532ad6434c75b811687500",
+          "message": "perf(bun): offload eligible middleware-free routes to Bun.serve({ routes }) (v0.1.63)",
+          "timestamp": "2026-11-25T09:35:35Z",
+          "tree_id": "f2c983ee9ae4b809114227d01bde6c1aa2f5b86f",
+          "url": "https://github.com/xarhang/bareJS/commit/60564e5b3631986d88532ad6434c75b811687500"
+        },
+        "date": 1795599394038,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 630.6720762785496,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 842.196936699202,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 3363.4848567855656,
             "unit": "undefined"
           }
         ]

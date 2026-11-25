@@ -2,7 +2,7 @@
 
 All notable changes to **BareJS** are documented in this file.
 
-## [0.2.0] - 2026-11-25
+## [0.2.1] - 2026-11-25
 
 ### Added
 - **Optional `uWebSockets.js` High-Performance Node.js Driver** (`src/runtime/uws.ts`, `src/runtime/node.ts`, `src/core/bare.ts`, `src/runtime/types.ts`, `scripts/build.ts`):

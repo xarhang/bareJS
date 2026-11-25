@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795599394481,
+  "lastUpdate": 1795601511418,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -4951,6 +4951,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3363.4848567855656,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "12f119aa8df414a92068e364efe5ddb019e0cc01",
+          "message": "feat(node): add optional uWebSockets.js high-performance driver (v0.2.0)",
+          "timestamp": "2026-11-25T10:10:59Z",
+          "tree_id": "c85eaa9e2dcba16e705d91afada397fc9c6cbf7d",
+          "url": "https://github.com/xarhang/bareJS/commit/12f119aa8df414a92068e364efe5ddb019e0cc01"
+        },
+        "date": 1795601511189,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1511.4835949853173,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1696.3310012872894,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5254.057935947844,
             "unit": "undefined"
           }
         ]

@@ -6,7 +6,8 @@
 
 <p>
 <a href="https://www.npmjs.com/package/barejs"><img src="https://img.shields.io/npm/v/barejs?style=for-the-badge&logo=npm&color=CB3837" alt="NPM Version"></a>
-<a href="https://github.com/xarhang/bareJS/actions/workflows/bench.yml"><img src="https://img.shields.io/github/actions/workflow/status/xarhang/bareJS/bench.yml?branch=main&label=CI%20%26%20Bench&style=for-the-badge&logo=github" alt="CI & Benchmarks"></a>
+<a href="https://github.com/xarhang/bareJS/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/xarhang/bareJS/ci.yml?branch=main&label=CI&style=for-the-badge&logo=github" alt="CI"></a>
+<a href="https://github.com/xarhang/bareJS/actions/workflows/bench.yml"><img src="https://img.shields.io/github/actions/workflow/status/xarhang/bareJS/bench.yml?branch=main&label=Benchmarks&style=for-the-badge&logo=github" alt="Benchmarks"></a>
 <a href="https://bun.sh"><img src="https://img.shields.io/badge/Bun-%3E%3D1.1.0-black?style=for-the-badge&logo=bun" alt="Bun"></a>
 <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-%3E%3D20.0.0-339933?style=for-the-badge&logo=nodedotjs" alt="Node.js"></a>
 <a href="https://deno.com"><img src="https://img.shields.io/badge/Deno-%3E%3D2.0-000000?style=for-the-badge&logo=deno" alt="Deno"></a>

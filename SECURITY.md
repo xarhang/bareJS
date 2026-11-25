@@ -17,7 +17,7 @@ We take the security of BareJS seriously. If you find a vulnerability, please do
 
 ## 🚀 Our Security Approach & Built-in Defenses
 * **Zero Runtime Dependencies**: Minimal supply-chain surface using native Bun & Web Crypto APIs.
-* **JIT Router Sandboxing & Null-Prototype Safety**: Strict `JSON.stringify` codegen, `emitCall` callback emission (no regex post-processing on generated code), null-prototype node maps, and safe `__proto__`/`constructor`/`prototype` parameter handling.
+* **JIT Router Sandboxing & Null-Prototype Safety**: Strict `JSON.stringify` codegen, `emitCall` callback emission (no regex post-processing on generated code), null-prototype node maps, safe `__proto__`/`constructor`/`prototype` parameter handling, and strict eligibility guards on `Bun.serve({ routes })` offloading (disabling native offloading whenever global/route middleware, `logger`, custom `onError`, `trustProxy`, or `derive` is active, and verifying empty `()` parameter lists without `arguments` before bypassing `Context` in production).
 * **Authentication & Cryptographic Hardening (`bareAuth`, `Hash`)**:
   * Constant-time HS256/RS256/ES256 & JWKS verification with canonical base64url signature check (rejects trailing-bit and ES256 `(r, s)` / `(r, n-s)` signature malleability on revocation).
   * Iterative deep stripping of `__proto__`, `constructor`, and `prototype` claims from decoded JWT payloads.

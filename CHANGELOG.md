@@ -2,6 +2,15 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.63] - 2026-11-25
+
+### Added & Optimized
+- **Bun Native `Bun.serve({ routes })` Offloading** (`src/core/bare.ts`, `src/runtime/bun.ts`, `src/runtime/types.ts`):
+  - `BareJS.listen()` on Bun now offloads eligible middleware-free static and `:param` routes directly to Bun's native router (`Bun.serve({ routes })`), while automatically falling back to `app.fetch()` for unmatched methods, trailing-slash normalization, wildcards, WebSockets, and routes with middlewares.
+  - Added strict eligibility guards (automatically disables `routes` offloading when global middleware, `logger`, custom `onError`, `trustProxy`, `derive`, or route-level middleware is active).
+  - In `NODE_ENV=production`, pure static string arrow handlers (`() => 'pong'`) are pre-built as native `Response` objects and verified zero-arg handlers (`isTrulyZeroArg`, rejecting `...args` and `arguments`) bypass `Context` pool checkout safely.
+- **Tests**: Added `tests/bun-native-routes.test.ts` verifying Bun native routes parity, rest-args safety, 404/error parity, and middleware guards across Bun and Node.js (**427 tests / 6,279 assertions**).
+
 ## [0.1.62] - 2026-11-24
 
 ### Fixed & Added

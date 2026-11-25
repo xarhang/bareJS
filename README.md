@@ -37,7 +37,7 @@ app.listen(3000);
 
 ## Why BareJS?
 
-- **O(1) JIT Router, Sub-Routing & Pooling:** Compiles static routes into an inline `switch` fast-path and dynamic routes into a radix jump-table (`:params`, `*` wildcards, `BareRouter` sub-app mounting) with a lazy LIFO `Context` pool (`0..65536`) and dev-mode Use-After-Free Proxy guard.
+- **O(1) JIT Router, Bun Native Routes & Pooling:** Compiles static routes into an inline `switch` fast-path and dynamic routes into a radix jump-table (`:params`, `*` wildcards, `BareRouter` sub-app mounting) with a lazy LIFO `Context` pool (`0..65536`) and dev-mode Use-After-Free Proxy guard. On Bun, `app.listen()` also offloads eligible middleware-free routes to `Bun.serve({ routes })` (with pure-static `Response` and `isTrulyZeroArg` fast-paths in `NODE_ENV=production`) while keeping full `fetch()` fallback parity.
 - **Unified Schema Validation:** Declarative `body`, `query`, `params`, `headers`, and `response` schemas with **TypeBox**, **Zod**, or **Native JSON Schema** — including auto-coercion, `stripUnknown` Mass-Assignment protection, `413` `maxBodySize` guards, and automatic secret-field stripping.
 - **End-to-End Type Safety:** `bareClient(app)` provides compile-time route, param, query, body, and response inference over HTTP or zero-network in-memory calls.
 - **Batteries Included:** Auto-generated **OpenAPI 3.1** + Scalar UI (`app.docs`), **JSON-RPC 2.0** (`app.rpc`), **WebSockets** (`app.ws`), **SSE** (`ctx.sse`), **Streaming Uploads** (`ctx.upload` / `ctx.uploadStream`), **Compression** (`compress` — `zstd`/`br`/`gzip`), **Static Files** (`staticFile` with ETag/`304`/Range `206`), `app.derive`, `app.cron`, `logger`, and `healthcheck`.

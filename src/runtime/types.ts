@@ -6,6 +6,7 @@ export interface ServeOptions {
   reusePort: boolean;
   maxRequestBodySize: number;
   fetch: (req: Request, peerIp?: string) => Response | Promise<Response>;
+  routes?: Record<string, any>;
   ws?: {
     routes: Map<string, WebSocketRouteHandler>;
     adapter: {

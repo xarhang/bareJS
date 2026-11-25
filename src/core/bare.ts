@@ -23,6 +23,39 @@ export function normalizePoolSize(
   return Math.min(maximumSize, Math.max(0, requested));
 }
 
+const ZERO_ARG_RE = /^\s*(?:async\s+)?(?:\(\s*\)|function\s*(?:\w+\s*)?\(\s*\))/;
+const PURE_STATIC_STR_RE = /^\s*\(\s*\)\s*=>\s*(?:'[^'\\]*'|"[^"\\]*")\s*$/;
+
+function isTrulyZeroArg(fn: unknown): fn is (...args: any[]) => any {
+  if (typeof fn !== 'function' || fn.length !== 0) return false;
+  const src = fn.toString();
+  return ZERO_ARG_RE.test(src) && !/\barguments\b/.test(src);
+}
+
+function isPureStaticStringFn(fn: unknown): fn is () => string {
+  return typeof fn === 'function' && fn.length === 0 && PURE_STATIC_STR_RE.test(fn.toString());
+}
+
+function toZeroArgResponse(out: any): Response {
+  if (out instanceof Response) return out;
+  if (typeof out === 'string') return new Response(out);
+  return Response.json(out ?? null);
+}
+
+function zeroArgErrorRes(err: any): Response {
+  if (err?.status >= 400 && err?.status < 500) {
+    return Response.json({
+      status: err.status,
+      message: err.message || 'Bad Request'
+    }, { status: err.status });
+  }
+  return Response.json({
+    status: 500,
+    message: process.env.NODE_ENV === 'development' ? (err?.message || "Internal Server Error") : "Internal Server Error",
+    stack: process.env.NODE_ENV === 'development' ? err?.stack : undefined
+  }, { status: 500 });
+}
+
 export interface CronOptions {
   /** Execute the cron job immediately upon registration (default: false) */
   runOnStart?: boolean;
@@ -1188,6 +1221,127 @@ export class BareJS<
     return this;
   }
 
+  private buildBunRoutes(): Record<string, any> | undefined {
+    if (
+      this._useLog ||
+      this.groupMiddleware.length > 0 ||
+      this.errorHandler !== undefined ||
+      this._trustProxyBox.val ||
+      this._hasDerive ||
+      this.routes.length === 0
+    ) {
+      return undefined;
+    }
+
+    const routes: Record<string, Record<string, any>> = {};
+    const pool = this.pool;
+    const poolState = this._poolState;
+    const maxPool = this.maxPool;
+    const isProd = process.env.NODE_ENV === 'production';
+    const normStatic = (p: string) => {
+      const c = p.replace(/\/+/g, '/');
+      return c.length > 1 && c.endsWith('/') ? c.slice(0, -1) : (c || '/');
+    };
+
+    let count = 0;
+    for (const route of this.routes) {
+      if (route.method === 'ALL') continue;
+      if (route.path.includes('*') || route.path.includes('?') || route.path.includes('(')) continue;
+      if (route.handlers.length !== 1) continue;
+
+      const rawHandler = route.handlers[0] as any;
+      if (rawHandler?.__idempotencyCommit || rawHandler?.__isDerive || rawHandler?.__isCors) continue;
+
+      const normPath = normStatic(route.path);
+      if (this.wsRoutes.has(normPath)) continue;
+
+      let methodMap = routes[normPath];
+      if (!methodMap) {
+        methodMap = {};
+        routes[normPath] = methodMap;
+      }
+
+      if (isProd && isPureStaticStringFn(rawHandler)) {
+        methodMap[route.method] = new Response(rawHandler());
+        count++;
+        continue;
+      }
+
+      if (isProd && isTrulyZeroArg(rawHandler)) {
+        const isAsync = rawHandler.constructor?.name === 'AsyncFunction';
+        methodMap[route.method] = isAsync
+          ? () => {
+              try {
+                const out = rawHandler();
+                if (out && typeof out.then === 'function') {
+                  return out.then(toZeroArgResponse, zeroArgErrorRes);
+                }
+                return toZeroArgResponse(out);
+              } catch (e) {
+                return zeroArgErrorRes(e);
+              }
+            }
+          : () => {
+              try {
+                const out = rawHandler();
+                if (typeof out === 'string') return new Response(out);
+                if (out instanceof Response) return out;
+                if (out && typeof out.then === 'function') {
+                  return out.then(toZeroArgResponse, zeroArgErrorRes);
+                }
+                return Response.json(out ?? null);
+              } catch (e) {
+                return zeroArgErrorRes(e);
+              }
+            };
+        count++;
+        continue;
+      }
+
+      const compiledFn = this.compileHandler([rawHandler], false);
+      const hasParams = normPath.includes(':');
+      methodMap[route.method] = (req: any) => {
+        let ctx: Context;
+        if (poolState.top > 0) {
+          const slot = --poolState.top;
+          ctx = pool[slot]!;
+          pool[slot] = undefined;
+        } else {
+          ctx = new Context(false);
+        }
+        ctx.req = req;
+        if (hasParams) ctx.params = req.params;
+        try {
+          const out = compiledFn(ctx);
+          if (out && typeof out.then === 'function') {
+            return out.then(
+              (v: Response) => {
+                ctx.reset(undefined as any);
+                if (poolState.top < maxPool) pool[poolState.top++] = ctx;
+                return v;
+              },
+              (e: any) => {
+                ctx.reset(undefined as any);
+                if (poolState.top < maxPool) pool[poolState.top++] = ctx;
+                return zeroArgErrorRes(e);
+              }
+            );
+          }
+          ctx.reset(undefined as any);
+          if (poolState.top < maxPool) pool[poolState.top++] = ctx;
+          return out;
+        } catch (e) {
+          ctx.reset(undefined as any);
+          if (poolState.top < maxPool) pool[poolState.top++] = ctx;
+          return zeroArgErrorRes(e);
+        }
+      };
+      count++;
+    }
+
+    return count > 0 ? routes : undefined;
+  }
+
   public listen(
     port?: number,
     hostname: string = '0.0.0.0',
@@ -1220,12 +1374,14 @@ export class BareJS<
     const wsRoutes = this.wsRoutes;
     const self = this;
     const hasWs = wsRoutes.size > 0;
+    const bunRoutes = runtime.name === 'bun' ? this.buildBunRoutes() : undefined;
 
     const server = runtime.serve({
       port: finalPort,
       hostname,
       reusePort,
       maxRequestBodySize,
+      routes: bunRoutes,
       fetch(req: Request, peerIp?: string) {
         return self.fetch(req, peerIp);
       },

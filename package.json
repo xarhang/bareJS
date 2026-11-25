@@ -1,6 +1,6 @@
 {
   "name": "barejs",
-  "version": "0.1.62",
+  "version": "0.1.63",
   "author": "xarhang",
   "description": "Batteries-included web framework for Bun, Node.js, and Deno with O(1) JIT routing, TypeBox/Zod validation, OpenAPI 3.1, WebSockets, JSON-RPC 2.0, and built-in security.",
   "main": "./dist/index.js",

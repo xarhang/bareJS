@@ -10,12 +10,14 @@ export const bunDriver: RuntimeDriver = {
 
   serve(opts: ServeOptions): ServerHandle {
     const wsCfg = opts.ws;
+    const routes = opts.routes;
     const server = wsCfg
       ? Bun.serve<WebSocketRouteHandler>({
           port: opts.port,
           hostname: opts.hostname,
           reusePort: opts.reusePort,
           maxRequestBodySize: opts.maxRequestBodySize,
+          ...(routes ? { routes } : {}),
           fetch(req: Request, srv: any) {
             if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
               const matched = matchWsRoute(wsCfg.routes, req.url);
@@ -37,6 +39,7 @@ export const bunDriver: RuntimeDriver = {
           hostname: opts.hostname,
           reusePort: opts.reusePort,
           maxRequestBodySize: opts.maxRequestBodySize,
+          ...(routes ? { routes } : {}),
           fetch(req: Request, srv: any) {
             return opts.fetch(req, srv?.requestIP?.(req)?.address);
           }

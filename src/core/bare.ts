@@ -1342,11 +1342,75 @@ export class BareJS<
     return count > 0 ? routes : undefined;
   }
 
+  private buildUwsRoutes(): Array<{
+    method: string;
+    path: string;
+    paramNames: string[];
+    rawHandler: Function;
+    isPureStaticString: boolean;
+    isTrulyZeroArg: boolean;
+  }> | undefined {
+    if (
+      this._useLog ||
+      this.groupMiddleware.length > 0 ||
+      this.errorHandler !== undefined ||
+      this._trustProxyBox.val ||
+      this._hasDerive ||
+      this.wsRoutes.size > 0 ||
+      this.routes.length === 0
+    ) {
+      return undefined;
+    }
+
+    const uwsRoutes: Array<{
+      method: string;
+      path: string;
+      paramNames: string[];
+      rawHandler: Function;
+      isPureStaticString: boolean;
+      isTrulyZeroArg: boolean;
+    }> = [];
+    const normStatic = (p: string) => {
+      const c = p.replace(/\/+/g, '/');
+      return c.length > 1 && c.endsWith('/') ? c.slice(0, -1) : (c || '/');
+    };
+
+    for (const route of this.routes) {
+      if (route.method !== 'GET' && route.method !== 'HEAD' && route.method !== 'DELETE' && route.method !== 'OPTIONS') continue;
+      if (route.path.includes('*') || route.path.includes('?') || route.path.includes('(')) continue;
+      if (route.handlers.length !== 1) continue;
+
+      const rawHandler = route.handlers[0] as any;
+      if (rawHandler?.__idempotencyCommit || rawHandler?.__isDerive || rawHandler?.__isCors) continue;
+
+      const normPath = normStatic(route.path);
+      const paramNames: string[] = [];
+      if (normPath.includes(':')) {
+        const segs = normPath.split('/');
+        for (let i = 0; i < segs.length; i++) {
+          const seg = segs[i]!;
+          if (seg.startsWith(':')) paramNames.push(seg.slice(1));
+        }
+      }
+
+      uwsRoutes.push({
+        method: route.method,
+        path: normPath,
+        paramNames,
+        rawHandler,
+        isPureStaticString: isPureStaticStringFn(rawHandler),
+        isTrulyZeroArg: isTrulyZeroArg(rawHandler)
+      });
+    }
+
+    return uwsRoutes.length > 0 ? uwsRoutes : undefined;
+  }
+
   public listen(
     port?: number,
     hostname: string = '0.0.0.0',
     reusePort: boolean = true,
-    options: { maxRequestBodySize?: number; trustProxy?: boolean } = {}
+    options: { maxRequestBodySize?: number; trustProxy?: boolean; engine?: 'auto' | 'http' | 'uws' } = {}
   ) {
     if (options.trustProxy !== undefined) {
       this.trustProxy(options.trustProxy);
@@ -1375,6 +1439,7 @@ export class BareJS<
     const self = this;
     const hasWs = wsRoutes.size > 0;
     const bunRoutes = runtime.name === 'bun' ? this.buildBunRoutes() : undefined;
+    const uwsRoutes = runtime.name === 'node' && options.engine !== 'http' ? this.buildUwsRoutes() : undefined;
 
     const server = runtime.serve({
       port: finalPort,
@@ -1382,6 +1447,8 @@ export class BareJS<
       reusePort,
       maxRequestBodySize,
       routes: bunRoutes,
+      engine: options.engine,
+      uwsRoutes,
       fetch(req: Request, peerIp?: string) {
         return self.fetch(req, peerIp);
       },

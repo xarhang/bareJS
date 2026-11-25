@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import * as zlib from 'node:zlib';
 import type { RuntimeDriver, RuntimeFileHandle, RuntimePasswordConfig, ServeOptions, ServerHandle } from './types';
 import { matchWsRoute } from '../core/ws-match';
+import { serveUws, tryLoadUws } from './uws';
 
 const SCRYPT_N = 16384;
 const SCRYPT_R = 8;
@@ -196,6 +197,15 @@ export const nodeDriver: RuntimeDriver = {
   name: 'node',
 
   serve(opts: ServeOptions): ServerHandle {
+    if (opts.engine !== 'http' && !opts.ws) {
+      const uwsMod = tryLoadUws();
+      if (uwsMod) {
+        return serveUws(opts, uwsMod);
+      }
+      if (opts.engine === 'uws') {
+        throw new Error("[BareJS] engine: 'uws' was requested, but 'uWebSockets.js' is not installed.");
+      }
+    }
     const server = createServer(async (req, res) => {
       const parsed = toWebRequest(req, opts.maxRequestBodySize);
       if (parsed.errorStatus === 413 || !parsed.request) {

@@ -10,7 +10,7 @@ const bunBuild = await Bun.build({
   target: 'bun',
   minify: true,
   naming: "[name].[ext]",
-  external: ['ws', '@node-rs/argon2', 'bcryptjs']
+  external: ['ws', '@node-rs/argon2', 'bcryptjs', 'uWebSockets.js']
 });
 
 if (!bunBuild.success) {
@@ -25,7 +25,7 @@ const nodeBuild = await Bun.build({
   target: 'node',
   minify: true,
   naming: "[name].[ext]",
-  external: ['ws', '@node-rs/argon2', 'bcryptjs']
+  external: ['ws', '@node-rs/argon2', 'bcryptjs', 'uWebSockets.js']
 });
 
 if (!nodeBuild.success) {

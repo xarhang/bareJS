@@ -5,6 +5,7 @@ We only provide security updates for the latest stable version of BareJS.
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 0.2.x   | ✅ Supported       |
 | 0.1.x   | ✅ Supported       |
 | < 0.1.0 | ❌ Not Supported   |
 
@@ -17,7 +18,7 @@ We take the security of BareJS seriously. If you find a vulnerability, please do
 
 ## 🚀 Our Security Approach & Built-in Defenses
 * **Zero Runtime Dependencies**: Minimal supply-chain surface using native Bun & Web Crypto APIs.
-* **JIT Router Sandboxing & Null-Prototype Safety**: Strict `JSON.stringify` codegen, `emitCall` callback emission (no regex post-processing on generated code), null-prototype node maps, safe `__proto__`/`constructor`/`prototype` parameter handling, and strict eligibility guards on `Bun.serve({ routes })` offloading (disabling native offloading whenever global/route middleware, `logger`, custom `onError`, `trustProxy`, or `derive` is active, and verifying empty `()` parameter lists without `arguments` before bypassing `Context` in production).
+* **JIT Router Sandboxing & Null-Prototype Safety**: Strict `JSON.stringify` codegen, `emitCall` callback emission (no regex post-processing on generated code), null-prototype node maps, safe `__proto__`/`constructor`/`prototype` parameter handling, and strict eligibility guards on `Bun.serve({ routes })` and optional `uWebSockets.js` offloading (disabling native offloading whenever global/route middleware, `logger`, custom `onError`, `trustProxy`, or `derive` is active, verifying empty `()` parameter lists without `arguments` before bypassing `Context` in production, and enforcing `res.onAborted()`, `res.cork()`, and `maxRequestBodySize` `413` limits on `uWS`).
 * **Authentication & Cryptographic Hardening (`bareAuth`, `Hash`)**:
   * Constant-time HS256/RS256/ES256 & JWKS verification with canonical base64url signature check (rejects trailing-bit and ES256 `(r, s)` / `(r, n-s)` signature malleability on revocation).
   * Iterative deep stripping of `__proto__`, `constructor`, and `prototype` claims from decoded JWT payloads.

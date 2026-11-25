@@ -42,7 +42,7 @@ app.listen(3000);
 - **End-to-End Type Safety:** `bareClient(app)` provides compile-time route, param, query, body, and response inference over HTTP or zero-network in-memory calls.
 - **Batteries Included:** Auto-generated **OpenAPI 3.1** + Scalar UI (`app.docs`), **JSON-RPC 2.0** (`app.rpc`), **WebSockets** (`app.ws`), **SSE** (`ctx.sse`), **Streaming Uploads** (`ctx.upload` / `ctx.uploadStream`), **Compression** (`compress` — `zstd`/`br`/`gzip`), **Static Files** (`staticFile` with ETag/`304`/Range `206`), `app.derive`, `app.cron`, `logger`, and `healthcheck`.
 - **Zero-Trust Security & Resilience:** Built-in `bareAuth` (HS256/RS256/ES256/JWKS + `revokeToken`), `basicAuth`, `hasRole`, `Hash` (Argon2id/bcrypt/scrypt), HMAC-signed cookies, `cors`, `csrf`, `rateLimit`, `idempotency`, `circuitBreaker`, `createSingleflight`, `timeout`, `redisStore`, and `app.onDrain`.
-- **Multi-Runtime & Web Standard Interop:** Zero-dep native drivers for **Bun**, **Node.js >= 20** (`barejs/node` with built-in RFC 6455 WebSockets & `scrypt`), and **Deno >= 2.0** (`Deno.upgradeWebSocket`). Standard `Request`/`Response` (`ctx.req`) works directly with **Better-Auth**, **Auth0**, **Clerk**, **GraphQL Yoga**, **Sentry**, and **OpenTelemetry**.
+- **Multi-Runtime & Web Standard Interop:** Zero-dep native drivers for **Bun** (`Bun.serve({ routes })`), **Node.js >= 20** (`barejs/node` with built-in RFC 6455 WebSockets & `scrypt`, plus optional `uWebSockets.js` auto-detection or `{ engine: 'uws' }`), and **Deno >= 2.0** (`Deno.upgradeWebSocket`). Standard `Request`/`Response` (`ctx.req`) works directly with **Better-Auth**, **Auth0**, **Clerk**, **GraphQL Yoga**, **Sentry**, and **OpenTelemetry**.
 
 ---
 

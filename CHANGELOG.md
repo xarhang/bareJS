@@ -2,6 +2,14 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.2.0] - 2026-11-25
+
+### Added
+- **Optional `uWebSockets.js` High-Performance Node.js Driver** (`src/runtime/uws.ts`, `src/runtime/node.ts`, `src/core/bare.ts`, `src/runtime/types.ts`, `scripts/build.ts`):
+  - `nodeDriver.serve()` now auto-detects `uWebSockets.js` when installed in the user's project (or via `app.listen(port, host, reusePort, { engine: 'uws' })`, with `{ engine: 'http' }` to force `node:http`). Zero dependencies added to `package.json`.
+  - **Tier 1 Direct `uWS` Fast-Path**: Offloads eligible middleware-free `GET`/`HEAD`/`DELETE`/`OPTIONS` static and `:param` routes directly to `uWS.App()`, writing to `uWS.HttpResponse` via pooled `UwsContext` (with `res.onAborted()` + `res.cork()` for `async` handlers, lazy `ctx.req`/`ctx.query`/`ctx.getHeader`, and pre-encoded static `Buffer` responses in `NODE_ENV=production`).
+  - **Tier 2 Full Web Standard Fallback**: Handles `POST`/`PUT`/`PATCH` (`res.onData` with `maxRequestBodySize` `413` enforcement), middlewares, and `404` JSON responses through `app.fetch()`.
+
 ## [0.1.63] - 2026-11-25
 
 ### Added & Optimized

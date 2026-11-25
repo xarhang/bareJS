@@ -7,6 +7,8 @@ export interface ServeOptions {
   maxRequestBodySize: number;
   fetch: (req: Request, peerIp?: string) => Response | Promise<Response>;
   routes?: Record<string, any>;
+  engine?: 'auto' | 'http' | 'uws';
+  uwsRoutes?: any[];
   ws?: {
     routes: Map<string, WebSocketRouteHandler>;
     adapter: {

@@ -2,6 +2,20 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.1.62] - 2026-11-24
+
+### Fixed & Added
+- **Node.js `app.listen()` Server Handle Parity** (`src/runtime/node.ts`):
+  - Attached dynamic `.port` getter, `.stop(closeActiveConnections)`, and `.ready` promise onto the Node.js `http.Server` returned by `app.listen()`, matching Bun's `server.port` and `server.stop()` API.
+- **Node.js `zstd` Compression Support** (`src/runtime/node.ts`):
+  - Wired `zlib.zstdCompressSync` automatically when running on Node.js `>= 22.15`, falling back cleanly to `br`/`gzip` on Node.js 20.
+- **`Hash.make()` & `Hash.needsRehash()` Consistency** (`src/security/hash.ts`):
+  - Rejected empty passwords consistently in `Hash.make("")` across all runtimes and supported `$scrypt$` parameter checking in `Hash.needsRehash()`.
+- **Full Multi-Runtime CI Test Suite** (`.github/workflows/ci.yml`, `vitest.config.ts`, `deno.test.json`):
+  - Expanded CI so **Bun** (`bun test`), **Node.js 20 & 22** (`vitest run` + `tests/node-smoke.mjs`), and **Deno 2** (`deno test` + `tests/deno-smoke.ts`) all run the full test suite.
+- **Benchmark Verification & Documentation**:
+  - Added pre-flight `200` status/body checks and post-run SQLite `INSERT` row-count verification in `benchmarks/production-bench.ts`, raised the `BENCHMARKS.md`/`README.md` clear-winner threshold to `10%`, and expanded `README.md` and `llms.txt`.
+
 ## [0.1.61] - 2026-11-23
 
 ### Added

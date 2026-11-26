@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795659680674,
+  "lastUpdate": 1795673978467,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -5107,6 +5107,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 5083.880819677603,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "5cc24c8b7b198b3ee8f8087a86a4f16f8b1fa217",
+          "message": "feat(security,dx,cluster): add trustProxy CIDR allowlist, OpenAPI auto securitySchemes, prod static cache, listenCluster, uWS drain & EADDRINUSE",
+          "timestamp": "2026-11-26T06:18:46Z",
+          "tree_id": "feb29c74f8cd1bedf60beafed0cfb44dbc423a80",
+          "url": "https://github.com/xarhang/bareJS/commit/5cc24c8b7b198b3ee8f8087a86a4f16f8b1fa217"
+        },
+        "date": 1795673978030,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 700.949850732968,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 840.4653431338875,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 2866.1411954684227,
             "unit": "undefined"
           }
         ]

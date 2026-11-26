@@ -54,4 +54,20 @@ bun run benchmarks/fair-suite.ts
 bun run benchmarks/production-bench.ts
 ```
 
+---
+
+## End-to-End HTTP Throughput (`v0.2.1` — `Bun.serve({ routes })` & Optional `uWebSockets.js`)
+
+Measured on the same Linux x64 cloud VM (single process, 32 concurrent HTTP/1.1 keep-alive connections, 16-request pipeline, `NODE_ENV=production`):
+
+| Endpoint | **BareJS `0.2.1` (Bun)** | Elysia `1.4.32` (Bun) | **BareJS `0.2.1` (Node + uWS)** | Fulmine.js (Node + uWS) |
+| :--- | ---: | ---: | ---: | ---: |
+| `GET /ping` (`() => 'pong'`) | **118,993 – 131,141 req/s** | 57,891 req/s | **322,529 req/s** | 134,712 req/s |
+| `GET /json` | **52,739 – 53,004 req/s** | 44,905 req/s | **259,470 req/s** | 123,838 req/s |
+| `GET /user/:id` | **54,646 – 57,142 req/s** | 43,705 req/s | **252,401 req/s** | 124,870 req/s |
+
+- **Bun:** Eligible middleware-free routes offload to `Bun.serve({ routes })` with pure-static `Response` and `isTrulyZeroArg` fast-paths in `NODE_ENV=production`.
+- **Node.js (`>= 22`):** When `uWebSockets.js` is installed (or `{ engine: 'uws' }`), `nodeDriver` offloads eligible bodyless routes directly to `uWS.HttpResponse` via pooled `UwsContext` while falling back to `app.fetch()` for `POST`/middlewares/SSE/404.
+
+
 View historical trends on the [Continuous Benchmark Dashboard](https://xarhang.github.io/bareJS/dev/benchmarks/).

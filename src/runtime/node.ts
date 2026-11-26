@@ -197,7 +197,7 @@ export const nodeDriver: RuntimeDriver = {
   name: 'node',
 
   serve(opts: ServeOptions): ServerHandle {
-    if (opts.engine !== 'http' && !opts.ws) {
+    if (opts.engine !== 'http') {
       const uwsMod = tryLoadUws();
       if (uwsMod) {
         return serveUws(opts, uwsMod);

@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import type { ServeOptions, ServerHandle } from './types';
+import { matchWsRoute, type WebSocketRouteHandler } from '../core/ws-match';
 
 export interface UwsRouteEntry {
   method: string;
@@ -225,7 +226,7 @@ class UwsContext {
   }
 }
 
-function writeWebResponseToUws(res: any, webRes: Response): void {
+function writeUwsHeaders(res: any, webRes: Response): void {
   const status = webRes.status;
   if (status !== 200) res.writeStatus(statusLine(status));
   webRes.headers.forEach((value, key) => {
@@ -235,23 +236,62 @@ function writeWebResponseToUws(res: any, webRes: Response): void {
   if (typeof anyHeaders.getSetCookie === 'function') {
     const cookies: string[] = anyHeaders.getSetCookie();
     for (let i = 0; i < cookies.length; i++) {
-      res.writeHeader('set-cookie', cookies[i]);
+      res.writeHeader('set-cookie', cookies[i]!);
     }
   }
+}
+
+function writeWebResponseToUws(res: any, webRes: Response, isAborted?: () => boolean): void {
   if (!webRes.body) {
-    res.end();
+    if (isAborted?.()) return;
+    res.cork(() => {
+      writeUwsHeaders(res, webRes);
+      res.end();
+    });
     return;
   }
-  webRes.arrayBuffer().then(
-    (buf) => {
-      res.cork(() => {
-        res.end(Buffer.from(buf));
-      });
-    },
-    () => {
-      try { res.close(); } catch {}
-    }
-  );
+
+  const reader = webRes.body.getReader();
+  let headersSent = false;
+
+  const pump = (): void => {
+    reader.read().then(
+      ({ value, done }) => {
+        if (isAborted?.()) {
+          try { reader.cancel(); } catch {}
+          return;
+        }
+        if (done) {
+          res.cork(() => {
+            if (!headersSent) {
+              writeUwsHeaders(res, webRes);
+              headersSent = true;
+            }
+            res.end();
+          });
+          return;
+        }
+        if (value && value.byteLength > 0) {
+          const chunk = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+          res.cork(() => {
+            if (!headersSent) {
+              writeUwsHeaders(res, webRes);
+              headersSent = true;
+            }
+            res.write(chunk);
+          });
+        }
+        pump();
+      },
+      () => {
+        if (!isAborted?.()) {
+          try { res.close(); } catch {}
+        }
+      }
+    );
+  };
+
+  pump();
 }
 
 function writeOutToUws(res: any, ctx: UwsContext | null, out: any): void {
@@ -442,35 +482,7 @@ export function serveUws(
       Promise.resolve(opts.fetch(webReq, peerIp)).then(
         (webRes) => {
           if (aborted) return;
-          if (!webRes.body) {
-            res.cork(() => {
-              writeWebResponseToUws(res, webRes);
-            });
-            return;
-          }
-          webRes.arrayBuffer().then(
-            (buf) => {
-              if (aborted) return;
-              res.cork(() => {
-                const status = webRes.status;
-                if (status !== 200) res.writeStatus(statusLine(status));
-                webRes.headers.forEach((value, key) => {
-                  res.writeHeader(key, value);
-                });
-                const anyHeaders = webRes.headers as any;
-                if (typeof anyHeaders.getSetCookie === 'function') {
-                  const cookies: string[] = anyHeaders.getSetCookie();
-                  for (let i = 0; i < cookies.length; i++) {
-                    res.writeHeader('set-cookie', cookies[i]);
-                  }
-                }
-                res.end(Buffer.from(buf));
-              });
-            },
-            () => {
-              if (!aborted) try { res.close(); } catch {}
-            }
-          );
+          writeWebResponseToUws(res, webRes, () => aborted);
         },
         (e) => {
           if (!aborted) res.cork(() => writeUwsError(res, e));
@@ -507,6 +519,64 @@ export function serveUws(
       }
     });
   });
+
+  if (opts.ws) {
+    const wsCfg = opts.ws;
+    const getWrapped = (ws: any) => {
+      const ud = ws.getUserData();
+      if (!ud.wrapped) {
+        ud.wrapped = {
+          data: ud.handler,
+          send(data: any, isBinary?: boolean) {
+            return ws.send(data, isBinary ?? (typeof data !== 'string'));
+          },
+          close(code?: number, reason?: string) {
+            if (typeof ws.end === 'function') ws.end(code, reason);
+            else if (typeof ws.close === 'function') ws.close();
+          },
+          raw: ws
+        };
+      }
+      return ud.wrapped;
+    };
+
+    app.ws('/*', {
+      upgrade(res: any, req: any, context: any) {
+        const urlPath = req.getUrl();
+        const queryStr = req.getQuery();
+        const fullUrl = `http://localhost${urlPath}${queryStr ? `?${queryStr}` : ''}`;
+        const matched = matchWsRoute(wsCfg.routes, fullUrl);
+        if (!matched) {
+          res.writeStatus('404 Not Found').end();
+          return;
+        }
+        const handler: any = matched.params
+          ? { ...matched.handler, params: matched.params }
+          : matched.handler;
+        res.upgrade(
+          { handler, wrapped: null },
+          req.getHeader('sec-websocket-key'),
+          req.getHeader('sec-websocket-protocol'),
+          req.getHeader('sec-websocket-extensions'),
+          context
+        );
+      },
+      open(ws: any) {
+        wsCfg.adapter.open(getWrapped(ws));
+      },
+      message(ws: any, msg: ArrayBuffer, isBinary: boolean) {
+        const payload = isBinary ? new Uint8Array(msg) : Buffer.from(msg).toString('utf8');
+        wsCfg.adapter.message(getWrapped(ws), payload);
+      },
+      drain(ws: any) {
+        wsCfg.adapter.drain(getWrapped(ws));
+      },
+      close(ws: any, code: number, message: ArrayBuffer) {
+        const reason = message && message.byteLength > 0 ? Buffer.from(message).toString('utf8') : '';
+        wsCfg.adapter.close(getWrapped(ws), code, reason);
+      }
+    });
+  }
 
   let listenSocket: any = null;
   let boundPort = opts.port;

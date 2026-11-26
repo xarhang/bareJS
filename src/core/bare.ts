@@ -69,6 +69,22 @@ export interface NotFoundResponse {
   [key: string]: any;
 }
 
+export interface UseLogEntry {
+  level: 'info' | 'warn' | 'error';
+  timestamp: string;
+  method: string;
+  path: string;
+  status: number;
+  durationMs: number;
+  ip?: string;
+}
+
+export interface UseLogOptions {
+  enabled?: boolean;
+  format?: 'pretty' | 'json';
+  onLog?: (entry: UseLogEntry) => void;
+}
+
 type TypedRouteHandler<Derived, S extends RouteSchemas, Res> = (
   ctx: Context & Derived & {
     body: S extends { body: infer B } ? InferSchema<B> : any;
@@ -110,6 +126,8 @@ export class BareJS<
   private hotFetch?: (req: Request, peerIp?: string) => any;
   private compiled = false;
   private _useLog: boolean = false;
+  private _logFormat: 'pretty' | 'json' = 'pretty';
+  private _logSink?: (entry: UseLogEntry) => void;
   private _trustProxyBox = { val: false };
 
   protected override _onRouteMutate(): void {
@@ -135,8 +153,16 @@ export class BareJS<
     drain(ws: any) { ws.data?.drain?.(ws); }
   };
 
-  public useLog(enabled: boolean = true): this {
-    this._useLog = enabled;
+  public useLog(enabledOrOptions: boolean | UseLogOptions = true): this {
+    if (typeof enabledOrOptions === 'boolean') {
+      this._useLog = enabledOrOptions;
+      this._logFormat = 'pretty';
+      this._logSink = undefined;
+    } else {
+      this._useLog = enabledOrOptions.enabled ?? true;
+      this._logFormat = enabledOrOptions.format ?? 'pretty';
+      this._logSink = enabledOrOptions.onLog;
+    }
     this._onRouteMutate();
     return this;
   }
@@ -1083,10 +1109,33 @@ export class BareJS<
 
     const poolState = this._poolState;
     const trustProxyBox = this._trustProxyBox;
-    const args = ['pool', 'poolState', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyBox', ...(isDevUaf ? ['wrapUaf'] : []), ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...(apply404Cors ? ['apply404Cors'] : []), ...hNames];
-    const values = [pool, poolState, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyBox, ...(isDevUaf ? [wrapUaf] : []), ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...(apply404Cors ? [apply404Cors] : []), ...hoistedHandlers];
+    const emitStructuredLog = isLog && (this._logFormat === 'json' || this._logSink !== undefined)
+      ? (method: string, rawUrl: string, status: number, durationMs: number, peerIp?: string) => {
+          const idx = rawUrl.indexOf('/', 8);
+          const qIdx = idx === -1 ? -1 : rawUrl.indexOf('?', idx);
+          const path = idx === -1 ? '/' : (qIdx === -1 ? rawUrl.slice(idx) : rawUrl.slice(idx, qIdx));
+          const entry: UseLogEntry = {
+            level: status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info',
+            timestamp: new Date().toISOString(),
+            method,
+            path,
+            status,
+            durationMs: Number(durationMs.toFixed(3)),
+            ...(peerIp ? { ip: peerIp } : {})
+          };
+          if (this._logSink) this._logSink(entry);
+          else console.log(JSON.stringify(entry));
+        }
+      : undefined;
+    const args = ['pool', 'poolState', 'maxPool', 'Context', 'hNotFound', 'hError', 'applyCtxHeaders', 'EMPTY_PARAMS', 'trustProxyBox', ...(emitStructuredLog ? ['emitStructuredLog'] : []), ...(isDevUaf ? ['wrapUaf'] : []), ...(hasGlobalMw ? ['runGlobalOptions'] : []), ...(hasStaticMw ? ['runStatic'] : []), ...(apply404Cors ? ['apply404Cors'] : []), ...hNames];
+    const values = [pool, poolState, maxPool, Context, hNotFound, hError, applyCtxHeaders, EMPTY_PARAMS, trustProxyBox, ...(emitStructuredLog ? [emitStructuredLog] : []), ...(isDevUaf ? [wrapUaf] : []), ...(hasGlobalMw ? [runGlobalOptions] : []), ...(hasStaticMw ? [runStatic] : []), ...(apply404Cors ? [apply404Cors] : []), ...hoistedHandlers];
 
-    const logInit = isLog ? `
+    const logInit = isLog
+      ? emitStructuredLog
+        ? `
+    const start = performance.now();
+    const doLog = (status) => emitStructuredLog(method, url, status, performance.now() - start, peerIp);`
+        : `
     const start = performance.now();
     const doLog = (status) => {
       const duration = (performance.now() - start).toFixed(3);
@@ -1097,7 +1146,8 @@ export class BareJS<
         \`\${status >= 400 ? '\\x1b[33m' : '\\x1b[32m'}\${status}\\x1b[0m \` +
         \`\\x1b[90m(\${duration}ms)\\x1b[0m\`
       );
-    };` : '';
+    };`
+      : '';
 
     const compactHelpers = useCompactEmit
       ? `

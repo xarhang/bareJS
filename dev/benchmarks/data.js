@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795659325961,
+  "lastUpdate": 1795659680674,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -5068,6 +5068,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 2822.0203989783636,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "19c71921c4cbf40d733082535e84b616c1c7ef08",
+          "message": "feat(uws,static,hooks,ci): add uWS backpressure & pub/sub, staticFile spa fallback, onRequest/onResponse hooks, and publish workflow",
+          "timestamp": "2026-11-26T02:20:28Z",
+          "tree_id": "e0f0b2cc4f07a6865e30a4492ce0d15de296c46b",
+          "url": "https://github.com/xarhang/bareJS/commit/19c71921c4cbf40d733082535e84b616c1c7ef08"
+        },
+        "date": 1795659680287,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 1498.098563258474,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 1705.1585334876238,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 5083.880819677603,
             "unit": "undefined"
           }
         ]

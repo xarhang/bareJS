@@ -35,6 +35,7 @@ We take the security of BareJS seriously. If you find a vulnerability, please do
   * JIT-compiled `stripUnknown` and `createResponseFilter` projectors across nested objects, arrays, tuples, `Type.Record`, `Type.Union`, and `Type.Intersect`.
 * **Header, Cookie, CSRF, CORS & Static File Hardening**:
   * CRLF / control-character stripping in `x-request-id`, `setCookie`, and SSE `id`/`event` fields; canonical `getSignedCookie` verification with `timingSafeEqual`.
+  * `trustProxy` CIDR/IP allowlist (`app.trustProxy(['10.0.0.0/8', '127.0.0.1'])`) preventing `x-forwarded-for` spoofing from untrusted peers.
   * Scoped and global `cors()` `Vary` header merging and `OPTIONS` preflight synthesis; `realpath()` symlink defense in `staticFile()`.
 
 ---

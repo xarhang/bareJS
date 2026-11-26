@@ -2,6 +2,24 @@
 
 All notable changes to **BareJS** are documented in this file.
 
+## [0.2.2] - 2026-11-25
+
+### Added & Improved
+- **`uWebSockets.js` Driver Enhancements** (`src/runtime/uws.ts`, `src/runtime/node.ts`):
+  - Added streaming `ReadableStream` responses (SSE / large files) with `res.onWritable()` backpressure handling.
+  - Added native `uWS` WebSocket support (`app.ws()`) with `ws.subscribe()`, `ws.unsubscribe()`, and `ws.publish()`.
+  - Added in-flight request tracking and graceful `drain()` support.
+- **Security & Observability** (`src/core/context.ts`, `src/core/bare.ts`):
+  - `trustProxy()` now accepts a CIDR/IP allowlist (`app.trustProxy(['10.0.0.0/8', '127.0.0.1'])`) to prevent `x-forwarded-for` spoofing.
+  - `app.useLog({ format: 'json', onLog })` adds structured JSON request logging.
+  - Added `app.onRequest()` and `app.onResponse()` lifecycle hooks with zero overhead when unused.
+- **DX, Clustering & OpenAPI** (`src/core/bare.ts`, `src/utils/static.ts`, `src/utils/openapi.ts`, `src/security/auth.ts`, `src/runtime/bun.ts`, `src/runtime/node.ts`):
+  - Added `app.listenCluster()` for one-line multi-core clustering on Bun (`reusePort`) and Node.js (`node:cluster`).
+  - Added `spa: true` (`spaFallback`) option and production default `cacheMetadata` to `staticFile()`.
+  - Auto-detected `bareAuth()` (`bearerAuth`) and `basicAuth()` (`basicAuth`) in `generateOpenAPISpec()`, plus `app.docs(options)` overload.
+  - Added friendly `EADDRINUSE` port-conflict errors on Bun and Node.js, `examples/rest-api.ts`, and `.github/workflows/publish.yml`.
+- **Tests**: Added `tests/uws-driver.test.ts` (**434 tests / 6,321 assertions**).
+
 ## [0.2.1] - 2026-11-25
 
 ### Added

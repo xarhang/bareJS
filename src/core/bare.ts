@@ -128,7 +128,7 @@ export class BareJS<
   private _useLog: boolean = false;
   private _logFormat: 'pretty' | 'json' = 'pretty';
   private _logSink?: (entry: UseLogEntry) => void;
-  private _trustProxyBox = { val: false };
+  private _trustProxyBox: { val: boolean | string[] } = { val: false };
 
   protected override _onRouteMutate(): void {
     if (this.compiled) {
@@ -319,15 +319,17 @@ export class BareJS<
     return this;
   }
 
-  public docs(path: string = '/docs', options: OpenAPIOptions = {}): this {
+  public docs(pathOrOptions: string | OpenAPIOptions = '/docs', options: OpenAPIOptions = {}): this {
+    const path = typeof pathOrOptions === 'string' ? pathOrOptions : '/docs';
+    const opts = typeof pathOrOptions === 'string' ? options : pathOrOptions;
     const basePath = ('/' + path).replace(/\/+/g, '/').replace(/\/$/, '') || '/docs';
     const jsonPath = `${basePath}/json`;
     let cachedSpec: string | null = null;
-    const html = renderDocsHTML(jsonPath, options.title || `${this.name} API Docs`);
+    const html = renderDocsHTML(jsonPath, opts.title || `${this.name} API Docs`);
 
     this.get(jsonPath, () => {
       if (!cachedSpec) {
-        cachedSpec = JSON.stringify(generateOpenAPISpec(this.routes, { title: this.name, excludePaths: [basePath, jsonPath], ...options }));
+        cachedSpec = JSON.stringify(generateOpenAPISpec(this.routes, { title: this.name, excludePaths: [basePath, jsonPath], ...opts }));
       }
       return new Response(cachedSpec, {
         status: 200,
@@ -1300,7 +1302,7 @@ export class BareJS<
   }
   public name: string = "App";
 
-  public trustProxy(enabled: boolean = true): this {
+  public trustProxy(enabled: boolean | string[] = true): this {
     this._trustProxyBox.val = enabled;
     for (let i = 0; i < this.pool.length; i++) {
       const ctx = this.pool[i];
@@ -1502,7 +1504,7 @@ export class BareJS<
     port?: number,
     hostname: string = '0.0.0.0',
     reusePort: boolean = true,
-    options: { maxRequestBodySize?: number; trustProxy?: boolean; engine?: 'auto' | 'http' | 'uws' } = {}
+    options: { maxRequestBodySize?: number; trustProxy?: boolean | string[]; engine?: 'auto' | 'http' | 'uws' } = {}
   ) {
     if (options.trustProxy !== undefined) {
       this.trustProxy(options.trustProxy);
@@ -1584,6 +1586,64 @@ export class BareJS<
     this.ipcDrainHandler = onIpcMessage;
     process.on("message", onIpcMessage);
     return server.raw;
+  }
+
+  public async listenCluster(
+    port?: number,
+    workers?: number,
+    hostname: string = '0.0.0.0',
+    options: { maxRequestBodySize?: number; trustProxy?: boolean | string[]; engine?: 'auto' | 'http' | 'uws' } = {}
+  ): Promise<{ stop: () => Promise<void> | void; workers: number }> {
+    const os = await import('node:os');
+    const count = Math.max(1, workers ?? (typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length));
+
+    if (runtime.name === 'bun') {
+      const bunGlobal = (globalThis as any).Bun;
+      if (process.env.BARE_CLUSTER_WORKER === '1' || count === 1) {
+        this.listen(port, hostname, true, options);
+        return { stop: () => this.stop(false), workers: 1 };
+      }
+      const children: any[] = [];
+      for (let i = 1; i < count; i++) {
+        children.push(
+          bunGlobal.spawn([process.execPath, ...process.argv.slice(1)], {
+            env: { ...process.env, BARE_CLUSTER_WORKER: '1' },
+            stdout: 'inherit',
+            stderr: 'inherit'
+          })
+        );
+      }
+      this.listen(port, hostname, true, options);
+      return {
+        workers: count,
+        stop: async () => {
+          for (const c of children) {
+            try { c.kill(); } catch {}
+          }
+          await this.stop(false);
+        }
+      };
+    }
+
+    const clusterMod: any = await import('node:cluster');
+    const cluster = clusterMod.default ?? clusterMod;
+    if (cluster.isPrimary && count > 1) {
+      const spawned: any[] = [];
+      for (let i = 0; i < count; i++) {
+        spawned.push(cluster.fork());
+      }
+      return {
+        workers: count,
+        stop: () => {
+          for (const w of spawned) {
+            try { w.kill(); } catch {}
+          }
+        }
+      };
+    }
+
+    this.listen(port, hostname, true, options);
+    return { stop: () => this.stop(false), workers: count };
   }
 }
 

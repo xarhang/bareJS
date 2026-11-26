@@ -351,10 +351,11 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
       return checkClaimsAndRevocation(ctx, decoded, token, next);
     };
 
-    if (customRevoked || revocationStore) {
-      return async (ctx: any, next: any) => verifySync(ctx, next);
-    }
-    return verifySync;
+    const mw = customRevoked || revocationStore
+      ? async (ctx: any, next: any) => verifySync(ctx, next)
+      : verifySync;
+    (mw as any).__isBareAuth = true;
+    return mw;
   }
 
   // Asymmetric (RS256 / ES256) and/or JWKS verification path
@@ -426,7 +427,7 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
     return imported;
   };
 
-  return async (ctx: any, next: any) => {
+  const mw = async (ctx: any, next: any) => {
     const authHeader = ctx.req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return ctx.status(401).send("Bearer token required");
@@ -498,6 +499,8 @@ export const bareAuth = (secretOrOpts: string | BareAuthOptions) => {
     }
     return checkClaimsAndRevocation(ctx, decoded, token, next);
   };
+  (mw as any).__isBareAuth = true;
+  return mw;
 };
 
 const sha256 = (value: string): Buffer => createHash('sha256').update(value).digest();
@@ -510,7 +513,7 @@ export const basicAuth = (credentials: { user: string; pass: string }) => {
   const expectedUserHash = sha256(credentials.user);
   const expectedPassHash = sha256(credentials.pass);
 
-  return async (ctx: any, next: Next) => {
+  const mw = async (ctx: any, next: Next) => {
     const authHeader = ctx.req.headers.get('Authorization');
     if (!authHeader?.startsWith('Basic ')) {
       return ctx.status(401).json({ status: 'error', message: 'Basic Auth required' });
@@ -537,6 +540,8 @@ export const basicAuth = (credentials: { user: string; pass: string }) => {
 
     return ctx.status(401).json({ status: 'error', message: 'Invalid credentials' });
   };
+  (mw as any).__isBasicAuth = true;
+  return mw;
 };
 
 /**

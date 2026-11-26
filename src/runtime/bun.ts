@@ -11,39 +11,47 @@ export const bunDriver: RuntimeDriver = {
   serve(opts: ServeOptions): ServerHandle {
     const wsCfg = opts.ws;
     const routes = opts.routes;
-    const server = wsCfg
-      ? Bun.serve<WebSocketRouteHandler>({
-          port: opts.port,
-          hostname: opts.hostname,
-          reusePort: opts.reusePort,
-          maxRequestBodySize: opts.maxRequestBodySize,
-          ...(routes ? { routes } : {}),
-          fetch(req: Request, srv: any) {
-            if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
-              const matched = matchWsRoute(wsCfg.routes, req.url);
-              if (
-                matched &&
-                srv.upgrade(req, {
-                  data: matched.params ? { ...matched.handler, params: matched.params } : matched.handler
-                })
-              ) {
-                return undefined as any;
+    let server: any;
+    try {
+      server = wsCfg
+        ? Bun.serve<WebSocketRouteHandler>({
+            port: opts.port,
+            hostname: opts.hostname,
+            reusePort: opts.reusePort,
+            maxRequestBodySize: opts.maxRequestBodySize,
+            ...(routes ? { routes } : {}),
+            fetch(req: Request, srv: any) {
+              if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+                const matched = matchWsRoute(wsCfg.routes, req.url);
+                if (
+                  matched &&
+                  srv.upgrade(req, {
+                    data: matched.params ? { ...matched.handler, params: matched.params } : matched.handler
+                  })
+                ) {
+                  return undefined as any;
+                }
               }
+              return opts.fetch(req, srv?.requestIP?.(req)?.address);
+            },
+            websocket: wsCfg.adapter
+          })
+        : Bun.serve({
+            port: opts.port,
+            hostname: opts.hostname,
+            reusePort: opts.reusePort,
+            maxRequestBodySize: opts.maxRequestBodySize,
+            ...(routes ? { routes } : {}),
+            fetch(req: Request, srv: any) {
+              return opts.fetch(req, srv?.requestIP?.(req)?.address);
             }
-            return opts.fetch(req, srv?.requestIP?.(req)?.address);
-          },
-          websocket: wsCfg.adapter
-        })
-      : Bun.serve({
-          port: opts.port,
-          hostname: opts.hostname,
-          reusePort: opts.reusePort,
-          maxRequestBodySize: opts.maxRequestBodySize,
-          ...(routes ? { routes } : {}),
-          fetch(req: Request, srv: any) {
-            return opts.fetch(req, srv?.requestIP?.(req)?.address);
-          }
-        });
+          });
+    } catch (err: any) {
+      if (err?.code === 'EADDRINUSE' || /in use/i.test(err?.message || '')) {
+        throw new Error(`[BareJS] Port ${opts.port} is already in use on ${opts.hostname}. Choose a different port or stop the existing process.`);
+      }
+      throw err;
+    }
 
     return {
       stop(closeActiveConnections = false) {

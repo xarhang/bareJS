@@ -35,7 +35,9 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
   const maxAge = options.maxAge ?? 3600;
   const enableEtag = options.etag !== false;
 
-  const cacheOpt = options.cacheMetadata;
+  const cacheOpt = options.cacheMetadata !== undefined
+    ? options.cacheMetadata
+    : process.env.NODE_ENV === 'production';
   const useCache = Boolean(cacheOpt);
   const cacheMax = typeof cacheOpt === 'object' ? (cacheOpt.maxEntries ?? 1000) : 1000;
   const cacheTtl = typeof cacheOpt === 'object' ? (cacheOpt.ttlMs ?? 30_000) : 30_000;

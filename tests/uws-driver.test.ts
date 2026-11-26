@@ -311,3 +311,71 @@ describe('Lifecycle hooks (onRequest / onResponse) & Static SPA fallback', () =>
     }
   });
 });
+
+describe('Security, OpenAPI & Startup DX enhancements', () => {
+  it('trustProxy CIDR/IP allowlist trusts x-forwarded-for only from matching proxy peers', async () => {
+    const app = new BareJS().trustProxy(['10.0.0.0/8', '127.0.0.1']);
+    app.get('/ip', (ctx) => ctx.text(ctx.ip));
+
+    const rTrusted = await app.fetch(
+      new Request('http://localhost/ip', { headers: { 'x-forwarded-for': '198.51.100.7' } }),
+      '10.20.30.40'
+    );
+    expect(await rTrusted.text()).toBe('198.51.100.7');
+
+    const rMapped = await app.fetch(
+      new Request('http://localhost/ip', { headers: { 'x-forwarded-for': '198.51.100.8' } }),
+      '::ffff:127.0.0.1'
+    );
+    expect(await rMapped.text()).toBe('198.51.100.8');
+
+    const rUntrusted = await app.fetch(
+      new Request('http://localhost/ip', { headers: { 'x-forwarded-for': '198.51.100.9' } }),
+      '203.0.113.5'
+    );
+    expect(await rUntrusted.text()).toBe('203.0.113.5');
+  });
+
+  it('auto-detects bareAuth and basicAuth in OpenAPI 3.1 securitySchemes', async () => {
+    const { bareAuth, basicAuth } = await import('../src/security/auth');
+    const app = new BareJS();
+    app.get('/me', bareAuth('secret'), () => ({ ok: true }));
+    app.get('/admin', basicAuth({ user: 'a', pass: 'b' }), () => ({ ok: true }));
+    app.docs({ title: 'Secured API', version: '0.2.2' });
+
+    const res = await app.fetch(new Request('http://localhost/docs/json'));
+    const spec: any = await res.json();
+    expect(spec.components.securitySchemes.bearerAuth).toEqual({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT'
+    });
+    expect(spec.components.securitySchemes.basicAuth).toEqual({
+      type: 'http',
+      scheme: 'basic'
+    });
+    expect(spec.paths['/me'].get.security).toEqual([{ bearerAuth: [] }]);
+    expect(spec.paths['/admin'].get.security).toEqual([{ basicAuth: [] }]);
+  });
+
+  it('throws a friendly EADDRINUSE error when port is already in use', async () => {
+    const app1 = new BareJS();
+    app1.get('/', () => '1');
+    const s1: any = app1.listen(0, '127.0.0.1', false, { engine: 'http' });
+    await s1.ready;
+
+    const app2 = new BareJS();
+    app2.get('/', () => '2');
+    let caught: Error | null = null;
+    try {
+      const s2: any = app2.listen(s1.port, '127.0.0.1', false, { engine: 'http' });
+      await s2.ready;
+    } catch (e: any) {
+      caught = e;
+    } finally {
+      await s1.stop(true);
+    }
+    expect(caught).not.toBeNull();
+    expect(caught!.message).toContain('already in use');
+  });
+});

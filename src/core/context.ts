@@ -84,6 +84,39 @@ export interface UploadStreamPart {
   value?: string;
 }
 
+function ipv4ToInt(ip: string): number | null {
+  const parts = ip.split('.');
+  if (parts.length !== 4) return null;
+  let n = 0;
+  for (let i = 0; i < 4; i++) {
+    const v = Number(parts[i]);
+    if (!Number.isInteger(v) || v < 0 || v > 255) return null;
+    n = (n << 8) | v;
+  }
+  return n >>> 0;
+}
+
+export function isTrustedProxyIp(peerIp: string | undefined, trustProxy: boolean | string[]): boolean {
+  if (trustProxy === true) return true;
+  if (!trustProxy || !Array.isArray(trustProxy) || trustProxy.length === 0 || !peerIp) return false;
+  const normalized = peerIp.startsWith('::ffff:') ? peerIp.slice(7) : peerIp;
+  const peerInt = ipv4ToInt(normalized);
+  for (let i = 0; i < trustProxy.length; i++) {
+    const rule = trustProxy[i]!;
+    if (rule === normalized || rule === peerIp) return true;
+    const slash = rule.indexOf('/');
+    if (slash !== -1 && peerInt !== null) {
+      const baseInt = ipv4ToInt(rule.slice(0, slash));
+      const bits = Number(rule.slice(slash + 1));
+      if (baseInt !== null && Number.isInteger(bits) && bits >= 0 && bits <= 32) {
+        const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+        if ((peerInt & mask) === (baseInt & mask)) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export class Context {
   public req!: Request;
   public params: Params = {};
@@ -96,9 +129,9 @@ export class Context {
   public _setCookies: string[] | undefined = undefined;
   public _requestId: string | undefined = undefined;
   public _peerIp: string | undefined = undefined;
-  public _trustProxy: boolean = false;
+  public _trustProxy: boolean | string[] = false;
   public _detached: boolean = false;
-  constructor(trustProxy: boolean = false) {
+  constructor(trustProxy: boolean | string[] = false) {
     this._trustProxy = trustProxy;
   }
 
@@ -586,7 +619,7 @@ export class Context {
   }
 
   public get ip(): string {
-    if (this._trustProxy) {
+    if (isTrustedProxyIp(this._peerIp, this._trustProxy)) {
       const xff = this.req?.headers?.get('x-forwarded-for');
       if (xff) {
         const first = xff.split(',')[0]?.trim();

@@ -69,6 +69,8 @@ const extractSchema = (schema: any): Record<string, any> => {
 export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {}) => {
   const paths: Record<string, Record<string, any>> = {};
   const excluded = new Set<string>(['/docs', '/docs/json', ...(options.excludePaths || [])]);
+  let usesBearer = false;
+  let usesBasic = false;
 
   for (const route of routes) {
     if (excluded.has(route.path)) continue;
@@ -86,9 +88,18 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
     let responseSchema: any = undefined;
     let detail: any = undefined;
     let paramSchemaObj: Record<string, any> | null = null;
+    const routeSecurity: any[] = [];
 
     for (const h of route.handlers) {
       if (!h) continue;
+      if ((h as any).__isBareAuth) {
+        usesBearer = true;
+        routeSecurity.push({ bearerAuth: [] });
+      }
+      if ((h as any).__isBasicAuth) {
+        usesBasic = true;
+        routeSecurity.push({ basicAuth: [] });
+      }
       const rs = (h as any).__routeSchemas;
       if (rs) {
         if (rs.detail) detail = rs.detail;
@@ -144,6 +155,7 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
       summary: detail?.summary || `${route.method} ${openApiPath}`,
       ...(detail?.description ? { description: detail.description } : {}),
       ...(detail?.tags ? { tags: detail.tags } : {}),
+      ...(routeSecurity.length ? { security: routeSecurity } : {}),
       ...(allParams.length ? { parameters: allParams } : {}),
       ...(requestBody ? { requestBody } : {}),
       responses: {
@@ -157,6 +169,11 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
     };
   }
 
+  const autoSchemes: Record<string, any> = {};
+  if (usesBearer) autoSchemes.bearerAuth = { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' };
+  if (usesBasic) autoSchemes.basicAuth = { type: 'http', scheme: 'basic' };
+  const mergedSchemes = { ...autoSchemes, ...(options.securitySchemes || {}) };
+
   return {
     openapi: '3.1.0',
     info: {
@@ -166,8 +183,8 @@ export const generateOpenAPISpec = (routes: any[], options: OpenAPIOptions = {})
     },
     ...(options.servers?.length ? { servers: options.servers } : {}),
     ...(options.tags?.length ? { tags: options.tags } : {}),
-    ...(options.securitySchemes
-      ? { components: { securitySchemes: options.securitySchemes } }
+    ...(Object.keys(mergedSchemes).length > 0
+      ? { components: { securitySchemes: mergedSchemes } }
       : {}),
     ...(options.security?.length ? { security: options.security } : {}),
     paths

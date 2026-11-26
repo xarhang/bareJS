@@ -462,9 +462,23 @@ export const nodeDriver: RuntimeDriver = {
     }
     server.listen(listenOpts);
 
-    const ready = new Promise<void>((resolve) => {
-      if (server.listening) resolve();
-      else server.once('listening', () => resolve());
+    const ready = new Promise<void>((resolve, reject) => {
+      if (server.listening) {
+        resolve();
+        return;
+      }
+      const onErr = (err: any) => {
+        if (err?.code === 'EADDRINUSE') {
+          reject(new Error(`[BareJS] Port ${opts.port} is already in use on ${opts.hostname}. Choose a different port or stop the existing process.`));
+        } else {
+          reject(err);
+        }
+      };
+      server.once('error', onErr);
+      server.once('listening', () => {
+        server.removeListener('error', onErr);
+        resolve();
+      });
     });
 
     const stopFn = (closeActiveConnections = false) =>

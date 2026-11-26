@@ -350,6 +350,7 @@ export function serveUws(
   const isProd = process.env.NODE_ENV === 'production';
   const pool: UwsContext[] = [];
   const maxPool = 4096;
+  let inFlight = 0;
 
   // Tier 1: Direct uWS fast-path for bodyless methods (GET, HEAD, DELETE, OPTIONS)
   if (opts.uwsRoutes) {
@@ -482,6 +483,7 @@ export function serveUws(
 
     const dispatchFetch = (bodyBuf?: Buffer) => {
       if (aborted) return;
+      inFlight++;
       const webReq = new Request(fullUrl, {
         method,
         headers,
@@ -489,10 +491,12 @@ export function serveUws(
       });
       Promise.resolve(opts.fetch(webReq, peerIp)).then(
         (webRes) => {
+          inFlight = Math.max(0, inFlight - 1);
           if (aborted) return;
           writeWebResponseToUws(res, webRes, () => aborted);
         },
         (e) => {
+          inFlight = Math.max(0, inFlight - 1);
           if (!aborted) res.cork(() => writeUwsError(res, e));
         }
       );
@@ -623,11 +627,20 @@ export function serveUws(
     }
   };
 
+  const drainFn = async (timeoutMs: number = 5000) => {
+    stopFn();
+    const deadline = Date.now() + timeoutMs;
+    while (inFlight > 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  };
+
   Object.defineProperty(app, 'port', {
     get: () => boundPort,
     configurable: true
   });
   app.stop = stopFn;
+  app.drain = drainFn;
   app.ready = ready;
 
   return {
@@ -635,7 +648,8 @@ export function serveUws(
       return boundPort;
     },
     stop: stopFn,
+    drain: drainFn,
     raw: app,
     ready
-  } as ServerHandle & { ready: Promise<void> };
+  } as ServerHandle & { ready: Promise<void>; drain: (timeoutMs?: number) => Promise<void> };
 }

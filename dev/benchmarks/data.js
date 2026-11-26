@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795601834063,
+  "lastUpdate": 1795659325961,
   "repoUrl": "https://github.com/xarhang/bareJS",
   "entries": {
     "BareJS Performance (Latency)": [
@@ -5029,6 +5029,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Hono",
             "value": 3406.0154121863798,
+            "unit": "undefined"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "committer": {
+            "email": "32520448+xarhang@users.noreply.github.com",
+            "name": "xarhang",
+            "username": "xarhang"
+          },
+          "distinct": true,
+          "id": "b520bc94dfb2a0b6bc873ef6a6e3f080586ab9d5",
+          "message": "feat(uws,logger): add uWS streaming/WS, structured JSON useLog, example & benchmarks",
+          "timestamp": "2026-11-26T02:14:36Z",
+          "tree_id": "46ba310374d17eb03ca3b8cca4869ba78e198f13",
+          "url": "https://github.com/xarhang/bareJS/commit/b520bc94dfb2a0b6bc873ef6a6e3f080586ab9d5"
+        },
+        "date": 1795659325574,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "BareJS",
+            "value": 665.8553743634196,
+            "unit": "undefined"
+          },
+          {
+            "name": "Elysia",
+            "value": 784.5187298152429,
+            "unit": "undefined"
+          },
+          {
+            "name": "Hono",
+            "value": 2822.0203989783636,
             "unit": "undefined"
           }
         ]

@@ -251,3 +251,63 @@ describe('Structured JSON useLog()', () => {
     expect(entries[1]).toMatchObject({ level: 'warn', method: 'GET', path: '/fail', status: 400, ip: '10.0.0.2' });
   });
 });
+
+describe('Lifecycle hooks (onRequest / onResponse) & Static SPA fallback', () => {
+  it('runs onRequest short-circuit and onResponse timing hook', async () => {
+    const app = new BareJS();
+    let seenDuration = -1;
+    app.onRequest((req) => {
+      if (new URL(req.url).pathname === '/blocked') {
+        return new Response('blocked', { status: 403 });
+      }
+    });
+    app.onResponse((_req, res, durationMs) => {
+      seenDuration = durationMs;
+      const headers = new Headers(res.headers);
+      headers.set('x-hooked', '1');
+      return new Response(res.body, { status: res.status, headers });
+    });
+    app.get('/hello', () => 'world');
+
+    const r1 = await app.fetch(new Request('http://localhost/blocked'));
+    expect(r1.status).toBe(403);
+    expect(await r1.text()).toBe('blocked');
+
+    const r2 = await app.fetch(new Request('http://localhost/hello'));
+    expect(r2.status).toBe(200);
+    expect(r2.headers.get('x-hooked')).toBe('1');
+    expect(await r2.text()).toBe('world');
+    expect(seenDuration).toBeGreaterThanOrEqual(0);
+  });
+
+  it('serves index.html for unmatched GET routes when staticFile({ spa: true }) is enabled while preserving API routes', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { staticFile } = await import('../src/utils/static');
+
+    const dir = mkdtempSync(join(tmpdir(), 'bare-spa-'));
+    try {
+      writeFileSync(join(dir, 'index.html'), '<html>SPA</html>');
+      writeFileSync(join(dir, 'app.js'), 'console.log(1)');
+
+      const app = new BareJS();
+      app.use(staticFile(dir, { spa: true }));
+      app.get('/api/ping', () => ({ ok: true }));
+
+      const rAsset = await app.fetch(new Request('http://localhost/app.js'));
+      expect(rAsset.status).toBe(200);
+      expect(await rAsset.text()).toBe('console.log(1)');
+
+      const rApi = await app.fetch(new Request('http://localhost/api/ping'));
+      expect(rApi.status).toBe(200);
+      expect(await rApi.json()).toEqual({ ok: true });
+
+      const rSpa = await app.fetch(new Request('http://localhost/dashboard/settings'));
+      expect(rSpa.status).toBe(200);
+      expect(await rSpa.text()).toBe('<html>SPA</html>');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

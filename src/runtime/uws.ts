@@ -273,13 +273,21 @@ function writeWebResponseToUws(res: any, webRes: Response, isAborted?: () => boo
         }
         if (value && value.byteLength > 0) {
           const chunk = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+          let ok = true;
           res.cork(() => {
             if (!headersSent) {
               writeUwsHeaders(res, webRes);
               headersSent = true;
             }
-            res.write(chunk);
+            ok = res.write(chunk);
           });
+          if (!ok && typeof res.onWritable === 'function') {
+            res.onWritable(() => {
+              pump();
+              return true;
+            });
+            return;
+          }
         }
         pump();
       },
@@ -529,6 +537,15 @@ export function serveUws(
           data: ud.handler,
           send(data: any, isBinary?: boolean) {
             return ws.send(data, isBinary ?? (typeof data !== 'string'));
+          },
+          subscribe(topic: string) {
+            return typeof ws.subscribe === 'function' ? ws.subscribe(topic) : false;
+          },
+          unsubscribe(topic: string) {
+            return typeof ws.unsubscribe === 'function' ? ws.unsubscribe(topic) : false;
+          },
+          publish(topic: string, data: any, isBinary?: boolean) {
+            return typeof ws.publish === 'function' ? ws.publish(topic, data, isBinary ?? (typeof data !== 'string')) : false;
           },
           close(code?: number, reason?: string) {
             if (typeof ws.end === 'function') ws.end(code, reason);

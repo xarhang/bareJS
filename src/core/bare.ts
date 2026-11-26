@@ -141,6 +141,8 @@ export class BareJS<
   private startHooks: (() => void | Promise<void>)[] = [];
   private stopHooks: (() => void | Promise<void>)[] = [];
   private drainHooks: (() => void | Promise<void>)[] = [];
+  private requestHooks: Array<(req: Request, peerIp?: string) => void | Response | Promise<void | Response>> = [];
+  private responseHooks: Array<(req: Request, res: Response, durationMs: number) => void | Response | Promise<void | Response>> = [];
   private crons: Array<{ name: string; timer: ReturnType<typeof setInterval> }> = [];
   private server?: ServerHandle;
   private shutdownHandler?: () => Promise<void>;
@@ -179,6 +181,18 @@ export class BareJS<
 
   public onDrain(fn: () => void | Promise<void>): this {
     this.drainHooks.push(fn);
+    return this;
+  }
+
+  public onRequest(fn: (req: Request, peerIp?: string) => void | Response | Promise<void | Response>): this {
+    this.requestHooks.push(fn);
+    this._onRouteMutate();
+    return this;
+  }
+
+  public onResponse(fn: (req: Request, res: Response, durationMs: number) => void | Response | Promise<void | Response>): this {
+    this.responseHooks.push(fn);
+    this._onRouteMutate();
     return this;
   }
 
@@ -1057,6 +1071,7 @@ export class BareJS<
     const hasStaticMw = this.groupMiddleware.some((m: any) => m.__isStatic);
     const runStatic = hasStaticMw
       ? async (ctx: Context) => {
+          (ctx as any)._isStaticFallback = true;
           const mws = this.groupMiddleware;
           const dispatch = async (idx: number): Promise<Response | undefined> => {
             if (idx >= mws.length) return undefined;
@@ -1074,7 +1089,11 @@ export class BareJS<
             if (!nextCalled) return dispatch(idx + 1);
             return undefined;
           };
-          return dispatch(0);
+          try {
+            return await dispatch(0);
+          } finally {
+            (ctx as any)._isStaticFallback = false;
+          }
         }
       : undefined;
 
@@ -1232,6 +1251,25 @@ export class BareJS<
     } else {
       this.hotFetch = compiledFetch;
     }
+    if (this.requestHooks.length > 0 || this.responseHooks.length > 0) {
+      const innerFetch = this.hotFetch!;
+      const reqHooks = this.requestHooks.slice();
+      const resHooks = this.responseHooks.slice();
+      this.hotFetch = async (req: Request, peerIp?: string) => {
+        const start = performance.now();
+        for (let i = 0; i < reqHooks.length; i++) {
+          const maybeRes = await reqHooks[i]!(req, peerIp);
+          if (maybeRes instanceof Response) return maybeRes;
+        }
+        let res: Response = await innerFetch(req, peerIp);
+        const durationMs = performance.now() - start;
+        for (let i = 0; i < resHooks.length; i++) {
+          const updated = await resHooks[i]!(req, res, durationMs);
+          if (updated instanceof Response) res = updated;
+        }
+        return res;
+      };
+    }
     this.compiled = true;
     this.fetch = this.hotFetch!;
   }
@@ -1275,6 +1313,8 @@ export class BareJS<
     if (
       this._useLog ||
       this.groupMiddleware.length > 0 ||
+      this.requestHooks.length > 0 ||
+      this.responseHooks.length > 0 ||
       this.errorHandler !== undefined ||
       this._trustProxyBox.val ||
       this._hasDerive ||
@@ -1403,6 +1443,8 @@ export class BareJS<
     if (
       this._useLog ||
       this.groupMiddleware.length > 0 ||
+      this.requestHooks.length > 0 ||
+      this.responseHooks.length > 0 ||
       this.errorHandler !== undefined ||
       this._trustProxyBox.val ||
       this._hasDerive ||

@@ -14,6 +14,10 @@ export interface StaticOptions {
   etag?: boolean;
   /** Optional LRU metadata cache for realpath, stat, and ETag to avoid repeated syscalls */
   cacheMetadata?: boolean | StaticMetadataCacheOptions;
+  /** Enable Single Page Application fallback to index.html for unmatched GET/HEAD routes */
+  spa?: boolean;
+  /** Custom fallback file relative to root when spa is true (default: 'index.html') */
+  spaFallback?: string;
 }
 
 interface StaticMetaEntry {
@@ -36,6 +40,34 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
   const cacheMax = typeof cacheOpt === 'object' ? (cacheOpt.maxEntries ?? 1000) : 1000;
   const cacheTtl = typeof cacheOpt === 'object' ? (cacheOpt.ttlMs ?? 30_000) : 30_000;
   const metaCache = useCache ? new Map<string, StaticMetaEntry>() : null;
+
+  const serveSpaFallback = async (next: any): Promise<Response | undefined> => {
+    const downstream = await next?.();
+    if (downstream instanceof Response && downstream.status !== 404) return downstream;
+    if (!options.spa) return downstream;
+    const fallbackName = (options.spaFallback ?? 'index.html').replace(/^\/+/, '');
+    const fallbackPath = resolve(rootDir, fallbackName);
+    if (fallbackPath !== rootDir && !fallbackPath.startsWith(rootPrefix)) return downstream;
+    try {
+      const [realRoot, resolvedFallback] = await Promise.all([
+        (realRootPromise ??= realpath(rootDir)),
+        realpath(fallbackPath)
+      ]);
+      const realPrefix = realRoot.endsWith(sep) ? realRoot : realRoot + sep;
+      if (resolvedFallback !== realRoot && !resolvedFallback.startsWith(realPrefix)) return downstream;
+      const st = await stat(resolvedFallback);
+      if (st.isDirectory()) return downstream;
+      const file = runtime.openFile(resolvedFallback);
+      return new Response(file.full(), {
+        headers: {
+          'Content-Type': file.type || 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache'
+        }
+      });
+    } catch {
+      return downstream;
+    }
+  };
 
   const mw = async (ctx: any, next: any) => {
     const method = ctx.req.method;
@@ -91,7 +123,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
           return ctx.status(403).send('Forbidden');
         }
         const st = await stat(resolvedFile);
-        if (st.isDirectory()) return next?.();
+        if (st.isDirectory()) return (options.spa && ctx._isStaticFallback) ? serveSpaFallback(next) : next?.();
         realFile = resolvedFile;
         fileSize = st.size;
         mtimeMs = Math.floor(st.mtimeMs);
@@ -112,7 +144,7 @@ export const staticFile = (root: string = 'public', options: StaticOptions = {})
         }
       } catch {
         realRootPromise = null;
-        return next?.();
+        return (options.spa && ctx._isStaticFallback) ? serveSpaFallback(next) : next?.();
       }
     }
 

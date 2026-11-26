@@ -126,10 +126,10 @@ Measured in-process on **Bun** with [`mitata`](https://github.com/evanwash/mitat
 
 | Scenario | **BareJS** | **ElysiaJS** | **Hono** |
 | :--- | :---: | :---: | :---: |
-| **1. 100 Routes + Dynamic Params** | **`1.44 µs`**<br><sub>`p99: 8.15 µs`</sub> | `1.77 µs`<br><sub>`p99: 8.26 µs`</sub> | `4.04 µs`<br><sub>`p99: 15.97 µs`</sub> |
-| **2. 10 Middlewares + Deep Path** | **`1.39 µs`**<br><sub>`p99: 7.73 µs`</sub> | `1.79 µs`<br><sub>`p99: 7.99 µs`</sub> | `4.02 µs`<br><sub>`p99: 14.25 µs`</sub> |
-| **3. POST JSON + Schema Validation** | **`4.10 µs`**<br><sub>`p99: 13.93 µs`</sub> | `4.74 µs`<br><sub>`p99: 15.54 µs`</sub> | `4.75 µs`<br><sub>`p99: 15.70 µs`</sub> |
-| **4. Async Handler + Query Parsing** | `2.16 µs`<br><sub>`p99: 9.14 µs`</sub> | `2.33 µs`<br><sub>`p99: 10.31 µs`</sub> | `3.05 µs`<br><sub>`p99: 11.71 µs`</sub> |
+| **1. 100 Routes + Dynamic Params** | **`1.46 µs`**<br><sub>`p99: 8.20 µs`</sub> | `1.87 µs`<br><sub>`p99: 8.44 µs`</sub> | `4.45 µs`<br><sub>`p99: 18.55 µs`</sub> |
+| **2. 10 Middlewares + Deep Path** | **`1.48 µs`**<br><sub>`p99: 8.21 µs`</sub> | `1.89 µs`<br><sub>`p99: 8.90 µs`</sub> | `4.13 µs`<br><sub>`p99: 14.78 µs`</sub> |
+| **3. POST JSON + Schema Validation** | **`4.08 µs`**<br><sub>`p99: 14.60 µs`</sub> | `4.65 µs`<br><sub>`p99: 15.04 µs`</sub> | `5.28 µs`<br><sub>`p99: 18.34 µs`</sub> |
+| **4. Async Handler + Query Parsing** | `2.34 µs`<br><sub>`p99: 10.40 µs`</sub> | `2.30 µs`<br><sub>`p99: 9.53 µs`</sub> | `3.17 µs`<br><sub>`p99: 13.02 µs`</sub> |
 
 > Last Updated: 2026-11-26 (github action — `linux`, AMD EPYC 7763 64-Core Processor, Bun `1.4.5`, Elysia `1.4.21`, Hono `4.11.4`)
 
